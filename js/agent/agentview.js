@@ -1890,8 +1890,7 @@ const AgentView = (function () {
             "WHAT IS AROUND ME — named scenery by distance and bearing; "
             + "{visible:true} switches to the camera's on-screen list",
           "atmosphere()":
-            "WHAT IS THE LIGHT DOING — day/night, sun or moon, floodlights, "
-            + "fog visibility, wet road. Raw values kept for measurement",
+            "WHAT IS THE LIGHT DOING — day/night, sun/moon, floodlights, fog, wet road",
           "render({what,cols,ss,...})":
             "SHOW IT — the one optional raster, APPROXIMATE. "
             + "what: 'view'|'map'|'circuit'|'car'. For intuition, not measurement",
@@ -1910,9 +1909,8 @@ const AgentView = (function () {
         },
         know: {
           "trackInfo({what})":
-            "STATIC substrate — corners|sectors|profile|all. Fetch ONCE. Corners "
-            + "carry radius, apexSpeedKph, straightAfterM/exitsOntoStraight (no "
-            + "line), plus bankingDeg/camber, gradientPct/elevation and kerbs",
+            "STATIC substrate — corners|sectors|profile|all. Fetch ONCE. Corners carry "
+            + "radius, apexSpeedKph, exitsOntoStraight, banking, gradient, kerbs",
           "carView({team,parts,bodyStyle,detail})":
             "WHAT AM I DRIVING — team, parts spec + effects, chassis silhouette, "
             + 'measured geometry; detail:"parts" adds per-part boxes',
@@ -1920,18 +1918,16 @@ const AgentView = (function () {
             "IS ANYTHING BROKEN — floating/buried props, props over the line, "
             + "terrain through the road, holes and cliffs",
           "perf()":
-            "GOVERNOR SNAPSHOT — scale/fps/tier/autoTier/autoShed/userTier/strikes "
-            + "(alias of renderScale report)",
+            "GOVERNOR SNAPSHOT — scale/fps/tier/strikes (renderScale report alias)",
           "spatialUpscale(0|1)":
-            "GLX/WGX/TLX SGSR1 (flag OFF by default). active only when on "
-            + "AND renderScale<~1; see UPSCALING-2026-09 §6–7",
+            "SGSR1 upscale (OFF by default); active only when on AND renderScale<~1",
         },
         act: {
           "rollout({seconds,dt,input,policy,policyHz,samples})":
             "drive an interval, return a digest; policy: a function or \"autopilot\"|\"box\"",
           "terminal()": "{done, reason} — retired|finished|wrong_way|rescued|null",
           "ersPlan(plan?)": "sector ERS plan, 3× manual|deploy|save; get/set",
-          "objective()": "WHAT AM I TRYING TO DO — win condition, the trade-offs (track limits, ERS, overtake, parts budget), hard constraints; read once",
+          "objective()": "WHAT AM I TRYING TO DO — win condition, trade-offs, hard constraints; read once",
           // agentHelp() itself is deliberately absent: it is not an act, and an
           // entry describing the call whose output you are already reading is
           // the one line in here that can never tell anybody anything.
@@ -1954,16 +1950,16 @@ const AgentView = (function () {
         fields: {
           "ego.headingErrDeg": "+ = nose right of the road; steer the opposite sign to null it",
           "ego.lateralM": "+ = right of centreline; the road runs out at halfWidthM",
-          "ego.clearLeftM/RightM": "metres to the barrier each side; small = no room to defend",
-          "ego.onTrack": "false means you are on grass — grip is gone, straighten first",
+          "ego.clearLeftM/RightM": "metres to the barrier each side",
+          "ego.onTrack": "false = on grass, grip gone",
           "nextCorner.status": "the braking call — BRAKE NOW means brake this instant",
-          "nextCorner.apexSpeedKph": "roughly the fastest you can be at the apex and still hold it",
+          "nextCorner.apexSpeedKph": "about the fastest you can hold at the apex",
           "nextCorner.exitsOntoStraight": "true = prioritise exit speed over entry speed here",
-          "pacenotes": "the road ahead as a co-driver call: dir + severity 1-6 @ distance",
-          "rivals[].closingMps": "+ = the gap is shrinking, whichever side they are on",
-          "rivals[].pace": "AI skill ~0.92-1.02; a slower car will not hold the position",
-          "terminal.reason": "why the episode ended — retired vs finished vs wrong_way vs rescued",
-          "episodeId": "view-local episode counter; reset increments it and clears the delta baseline",
+          "pacenotes": "co-driver call: dir + severity 1-6 @ distance",
+          "rivals[].closingMps": "+ = the gap is shrinking",
+          "rivals[].pace": "AI skill ~0.92-1.02",
+          "terminal.reason": "why the episode ended",
+          "episodeId": "episode counter; reset increments it, clears the delta baseline",
           "session.seed": "replay this exact episode with reset(frac, speed, x, seed)",
         },
         read: {
@@ -1985,8 +1981,7 @@ const AgentView = (function () {
             + "world()+field()+scene() are the live frame — read per decision",
           "decide vs show": "read world()/scene()/trackInfo()/the read hooks to "
             + "DECIDE; call render() only to SEE — its glyphs are approximate",
-          "lean default, pull detail": "the world is stored in FULL but never "
-            + "dumped; pull with describe(id)/query() where a decision needs it",
+          "lean default, pull detail": "the world is stored FULL, never dumped; pull with describe(id)/query() as needed",
           "per tick": 'world({detail:"brief", since:<seq>}) — ~355 bytes/step, '
             + "34x cheaper than full. detail is the big lever",
         },
@@ -1996,10 +1991,8 @@ const AgentView = (function () {
              + "objective|model|describe|query|render|track|car|survey|rollout> [flags]",
         notes: [
           "agent-view fails as {ok:false}; obs/physState/probe null until armed",
-          "an LLM cannot decide at 60 Hz: rollout runs your policy at policyHz "
-            + "(default 10) while physics runs every tick",
-          "render({what}) and scene({visible:true}) reflect the LAST RENDERED "
-            + "frame and are stale under headless(true) — flagged when so",
+          "rollout runs your policy at policyHz (default 10); physics runs every tick",
+          "render({what}) and scene({visible:true}) show the LAST RENDERED frame; stale under headless(true)",
         ],
       };
     }

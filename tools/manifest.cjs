@@ -1036,6 +1036,7 @@ const LAZY_AGENT = [
   "js/agent/apex-track.js",
   "js/agent/apex-lobby.js",
   "js/agent/apex-play.js",
+  "js/agent/apex-drill.js", // ApexDrill: __apex.drill* flat hooks, def()'d at eval (#7067)
   "js/agent/apex-gpu-capture.js",
   "js/agent/apex-lifecycle.js",
   "js/perf/three-inspector.js", // ThreeInspector: opt-in (?inspector=1) dev panel; apex.js boots it at eval (#4978 row 4)
@@ -1050,6 +1051,8 @@ const LAZY_EDGES = [
   ["js/agent/apex-track.js", "js/agent/apex.js"],
   ["js/agent/apex-lobby.js", "js/agent/apex.js"],
   ["js/agent/apex-play.js", "js/agent/apex.js"],   // def() registry: ApexApi spreads ApexPlay.hooks(G)
+  ["js/agent/apex-play.js", "js/agent/apex-drill.js"],   // ApexDrill calls ApexPlay.def at eval
+  ["js/agent/apex-drill.js", "js/agent/apex.js"],   // its defs exist before ApexApi.create spreads them
   ["js/agent/apex-gpu-capture.js", "js/agent/apex.js"], // __apex.gpuCapture one-line registration
   ["js/perf/three-inspector.js", "js/agent/apex.js"],   // apex.js calls ThreeInspector.boot(gfx) at eval
   ["js/agent/agentview-corners.js", "js/agent/agentview.js"],

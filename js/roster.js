@@ -189,6 +189,7 @@
     "js/agent/apex-track.js",
     "js/agent/apex-lobby.js",
     "js/agent/apex-play.js",
+    "js/agent/apex-drill.js",
     "js/agent/apex-gpu-capture.js",
     "js/agent/apex-lifecycle.js",
     "js/perf/three-inspector.js",
@@ -219,6 +220,14 @@
     ],
     [
       "js/agent/apex-play.js",
+      "js/agent/apex.js"
+    ],
+    [
+      "js/agent/apex-play.js",
+      "js/agent/apex-drill.js"
+    ],
+    [
+      "js/agent/apex-drill.js",
       "js/agent/apex.js"
     ],
     [
