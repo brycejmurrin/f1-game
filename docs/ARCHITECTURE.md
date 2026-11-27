@@ -822,6 +822,7 @@ _Module index over 34 directories, in load order. `tag` = a `<script>` in index.
 | `wake.js` | `WakeDrill` | LAZY_LEARN | WAKE FOOTPRINT: the Chassis X-Ray drill (#6559 step 7, #6555 §1). |
 | `telemetry.js` | `TelemetryDrill` | LAZY_LEARN | TELEMETRY DETECTIVE: compare two runs at the SAME DISTANCE (#6559 step 14, #6551 §4). |
 | `harvest.js` | `HarvestDrill` | LAZY_LEARN | HARVEST STOP: LEARN's brake-blend drill on track (#6559 step 11, #6550 D3a). |
+| `charge.js` | `ChargeDrill` | LAZY_LEARN | CHARGE-SUSTAINING LAP: LEARN's hybrid lesson on track (#6559 step 13, #6550 D2). |
 <!-- /@gen-arch:modules -->
 
 ---

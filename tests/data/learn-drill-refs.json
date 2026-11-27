@@ -651,6 +651,236 @@
       }
     }
   },
+  "charge": {
+    "how": "node tests/helpers/charge-drill-vm.mjs --write: the 27 per-sector plans (MANUAL/DEPLOY/SAVE each sector) of the Monza Charge-Sustaining Lap (20 m past the line at 0.8 vTop, 2.0 Apex MJ store, gate 30 m before the line), one boot, a warm-up lap, then RETRY before each run; test pursuit driver at 1.1 x vTop, BOOST left to the plan",
+    "metric": "mean speed to the gate, dash km/h (js/learn-drills/charge.js score); clean = a clean lap that ends with at least the start store",
+    "rule": "#6550 D2 on lap time over the clean (charge-sustaining) runs: gold within +0.15 s of the best, silver within +0.40 s, bronze the slowest sustaining lap; as mean-speed tiers floored to 0.1 km/h; cleanRequired",
+    "runs": [
+      {
+        "plan": "manual/manual/manual",
+        "kmh": 202.1,
+        "lapS": 121.5,
+        "netMJ": 2,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "plan": "manual/manual/deploy",
+        "kmh": 203.1,
+        "lapS": 120.9,
+        "netMJ": -0.66,
+        "clean": false,
+        "reason": "borrowed 0.66 MJ"
+      },
+      {
+        "plan": "manual/manual/save",
+        "kmh": 202.1,
+        "lapS": 121.5,
+        "netMJ": 2,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "plan": "manual/deploy/manual",
+        "kmh": 203.1,
+        "lapS": 120.9,
+        "netMJ": 1.25,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "plan": "manual/deploy/deploy",
+        "kmh": 203.5,
+        "lapS": 120.7,
+        "netMJ": -0.693,
+        "clean": false,
+        "reason": "borrowed 0.69 MJ"
+      },
+      {
+        "plan": "manual/deploy/save",
+        "kmh": 203.1,
+        "lapS": 120.9,
+        "netMJ": 1.25,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "plan": "manual/save/manual",
+        "kmh": 202.1,
+        "lapS": 121.5,
+        "netMJ": 2,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "plan": "manual/save/deploy",
+        "kmh": 203.1,
+        "lapS": 120.9,
+        "netMJ": -0.66,
+        "clean": false,
+        "reason": "borrowed 0.66 MJ"
+      },
+      {
+        "plan": "manual/save/save",
+        "kmh": 202.1,
+        "lapS": 121.5,
+        "netMJ": 2,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "plan": "deploy/manual/manual",
+        "kmh": 202.4,
+        "lapS": 121.3,
+        "netMJ": 2,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "plan": "deploy/manual/deploy",
+        "kmh": 203.4,
+        "lapS": 120.7,
+        "netMJ": -0.66,
+        "clean": false,
+        "reason": "borrowed 0.66 MJ"
+      },
+      {
+        "plan": "deploy/manual/save",
+        "kmh": 202.4,
+        "lapS": 121.3,
+        "netMJ": 2,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "plan": "deploy/deploy/manual",
+        "kmh": 203.1,
+        "lapS": 120.9,
+        "netMJ": 1.967,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "plan": "deploy/deploy/deploy",
+        "kmh": 203.6,
+        "lapS": 120.6,
+        "netMJ": -0.66,
+        "clean": false,
+        "reason": "borrowed 0.66 MJ"
+      },
+      {
+        "plan": "deploy/deploy/save",
+        "kmh": 203.1,
+        "lapS": 120.9,
+        "netMJ": 1.967,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "plan": "deploy/save/manual",
+        "kmh": 202.4,
+        "lapS": 121.3,
+        "netMJ": 2,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "plan": "deploy/save/deploy",
+        "kmh": 203.4,
+        "lapS": 120.7,
+        "netMJ": -0.66,
+        "clean": false,
+        "reason": "borrowed 0.66 MJ"
+      },
+      {
+        "plan": "deploy/save/save",
+        "kmh": 202.4,
+        "lapS": 121.3,
+        "netMJ": 2,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "plan": "save/manual/manual",
+        "kmh": 202.1,
+        "lapS": 121.5,
+        "netMJ": 2,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "plan": "save/manual/deploy",
+        "kmh": 203.1,
+        "lapS": 120.9,
+        "netMJ": -0.66,
+        "clean": false,
+        "reason": "borrowed 0.66 MJ"
+      },
+      {
+        "plan": "save/manual/save",
+        "kmh": 202.1,
+        "lapS": 121.5,
+        "netMJ": 2,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "plan": "save/deploy/manual",
+        "kmh": 203.1,
+        "lapS": 120.9,
+        "netMJ": 1.25,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "plan": "save/deploy/deploy",
+        "kmh": 203.5,
+        "lapS": 120.7,
+        "netMJ": -0.693,
+        "clean": false,
+        "reason": "borrowed 0.69 MJ"
+      },
+      {
+        "plan": "save/deploy/save",
+        "kmh": 203.1,
+        "lapS": 120.9,
+        "netMJ": 1.25,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "plan": "save/save/manual",
+        "kmh": 202.1,
+        "lapS": 121.5,
+        "netMJ": 2,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "plan": "save/save/deploy",
+        "kmh": 203.1,
+        "lapS": 120.9,
+        "netMJ": -0.66,
+        "clean": false,
+        "reason": "borrowed 0.66 MJ"
+      },
+      {
+        "plan": "save/save/save",
+        "kmh": 202.1,
+        "lapS": 121.5,
+        "netMJ": 2,
+        "clean": true,
+        "reason": ""
+      }
+    ],
+    "tiers": {
+      "bronze": 202.1,
+      "silver": 202.4,
+      "gold": 202.8,
+      "goldClean": true,
+      "cleanRequired": true
+    }
+  },
   "harvest": {
     "how": "node tests/helpers/harvest-drill-vm.mjs --write: the Monza Harvest Stop (20 m past the line at 0.8 vTop, store 0.85, marker 330 m on), one boot, a warm-up run, then RETRY before each run, full throttle, no steering, then the brake held to the stop from one frame; a frame-by-frame sweep finds the stop nearest the marker",
     "metric": "stop accuracy = 100 x (1 - |metres off the marker| / 50), floored at 0 (js/learn-drills/harvest.js score); harvest shown, not scored",
