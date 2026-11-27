@@ -19,7 +19,7 @@ const require = createRequire(import.meta.url);
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 export const REFS = ROOT + "tests/data/learn-drill-refs.json";
 export const DRIVER = Object.freeze({ entry: 45, kp: 0.6, kd: 0.5, look: 15, lift: 1.5, turnIn: 140, trackOut: 300, hw: 8 });
-const LAZY = ["js/learn-drills/registry.js", "js/learn-drills/drill-card.js", "js/ui/learn-door.js", "js/learn-drills/lines.js"];
+const LAZY = ["js/learn-drills/registry.js", "js/learn-drills/drill-card.js", "js/learn-drills/aero.js", "js/ui/learn-door.js", "js/learn-drills/lines.js"];
 
 export async function linesDrill(opts = {}) {
   const { createGame } = require(ROOT + "tools/lib/game-vm.cjs");
