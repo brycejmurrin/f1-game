@@ -104,6 +104,8 @@ export const TWINNED = {
 export const TWIN_SUBSET = {
   "tests/specs/elevation-tracks.spec.js":
     "the 4 banking-geometry audits are pure Tracks math and the per-circuit grade sweep is the same elevation-probes recipe in the twin, which sweeps all of Tracks.LIST; the browser keeps the chase-camera roll and the 2 banked bowls, the only rolled road/camera a render()-only throw could hide in",
+  "tests/specs/longitudinal.spec.js":
+    "every assertion is an __apex JSON read the twin replays verbatim (same thresholds, step counts and PACE pin; 6 of 6); the browser keeps the standing-start smoke so a render()-only throw on a moving car still reds (#7261, the first port under docs/VERIFICATION.md §Porting a logic spec to the VM)",
 };
 const leafTitles = (file) =>
   titlesIn(fs.readFileSync(path.join(ROOT, file), "utf8"), file).map((t) => t.full.split(" › ").pop());
