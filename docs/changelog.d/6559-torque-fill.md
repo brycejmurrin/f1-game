@@ -1,0 +1,1 @@
+New: LEARN → Brake Blend has an on-track drill, Torque Fill Exit (#6559 step 12): a slow Monza corner exit with 2 Apex MJ in the store where you press BOOST as you pick up the throttle; the card scores the seconds it took off the run to the taper, with medals from VM runs.

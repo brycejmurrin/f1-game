@@ -471,6 +471,111 @@
       "goldClean": true
     }
   },
+  "torque": {
+    "how": "node tests/helpers/torque-drill-vm.mjs --write: the Monza Torque Fill Exit (20 m past the line at 18 m/s standard pace, 2 Apex MJ store), one boot, a warm-up run, then RETRY before each run, full throttle, no steering; one run without BOOST, then BOOST pressed once at 0.0 to 2.5 s",
+    "metric": "seconds gained = base - the exit time to vStd 41 (RaceInsights' torque goal), base = the run without BOOST",
+    "rule": "gold / silver / bronze = 90 / 70 / 40 % of the best gain over the clean runs, floored to 0.01 s",
+    "base": 5.9,
+    "runs": [
+      {
+        "pressAt": 0,
+        "seconds": 3.7,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "pressAt": 0.5,
+        "seconds": 3.5,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "pressAt": 1,
+        "seconds": 3.7,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "pressAt": 1.5,
+        "seconds": 3.9,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "pressAt": 2,
+        "seconds": 4.1,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "pressAt": 2.5,
+        "seconds": 4.4,
+        "clean": true,
+        "reason": ""
+      }
+    ],
+    "tiers": {
+      "bronze": 0.96,
+      "silver": 1.68,
+      "gold": 2.16,
+      "goldClean": true
+    }
+  },
+  "wake": {
+    "how": "node tests/helpers/wake-drill-vm.mjs --write: 7 runs of the Monza Wake Footprint drill (18 m behind, Classic dirty air), one boot, RETRY between runs, flat out, a scripted follow at 0 to 3 m to the rival's side",
+    "metric": "grip retained = time-weighted mean of c._dirtyAirMul over the Curva Grande window, % (js/learn-drills/wake.js score)",
+    "rule": "bronze = the centred follow; gold = the 2 m offset (one car-width aside); silver = halfway; floored to 0.1 %",
+    "runs": [
+      {
+        "offset": 0,
+        "value": 92.2,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "offset": 0.5,
+        "value": 92.9,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "offset": 1,
+        "value": 93.8,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "offset": 1.5,
+        "value": 94.8,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "offset": 2,
+        "value": 95.8,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "offset": 2.5,
+        "value": 96.8,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "offset": 3,
+        "value": 97.7,
+        "clean": true,
+        "reason": ""
+      }
+    ],
+    "tiers": {
+      "bronze": 92.2,
+      "silver": 94,
+      "gold": 95.8,
+      "goldClean": true
+    }
+  },
   "charge": {
     "how": "node tests/helpers/charge-drill-vm.mjs --write: the 27 per-sector plans (MANUAL/DEPLOY/SAVE each sector) of the Monza Charge-Sustaining Lap (20 m past the line at 0.8 vTop, 2.0 Apex MJ store, gate 30 m before the line), one boot, a warm-up lap, then RETRY before each run; test pursuit driver at 1.1 x vTop, BOOST left to the plan",
     "metric": "mean speed to the gate, dash km/h (js/learn-drills/charge.js score); clean = a clean lap that ends with at least the start store",
