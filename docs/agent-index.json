@@ -1201,6 +1201,7 @@
       "kind": "browser",
       "files": [
         "tests/specs/ctx-lost-retry.spec.js",
+        "tests/specs/glx-fallback.spec.js",
         "tests/specs/hud-mirror.spec.js",
         "tests/specs/image-grade-visual.spec.js",
         "tests/specs/instanced-draw.spec.js",
