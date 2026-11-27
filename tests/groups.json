@@ -2723,6 +2723,7 @@
         "tests/unit/input-coarse-switch-vm.test.mjs",
         "tests/unit/input-hud-properties.test.mjs",
         "tests/unit/key-binds-calibration.test.mjs",
+        "tests/unit/key-binds-clear-slot.test.mjs",
         "tests/unit/key-binds-hunt.test.mjs",
         "tests/unit/key-binds-ownership.test.mjs",
         "tests/unit/key-binds-pad-menu.test.mjs",
