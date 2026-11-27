@@ -11,8 +11,8 @@ const _rmq = (typeof window !== "undefined" && window.matchMedia)
   ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
 // SHIFT LIGHTS (#7096): lit LEDs (of LED_N) from 80 % of MAX_RPM to the shift point, which IS the redline latch.
 const LED_N = 10, LED_FROM = 0.80, LED_SHIFT = 0.92;
-function shiftLeds(rpm, latched) { const f = (+rpm || 0) / MAX_RPM;
-  return latched ? { lit: LED_N, flash: true } : { lit: f > LED_FROM ? Math.min(LED_N, Math.ceil(((f - LED_FROM) / (LED_SHIFT - LED_FROM)) * LED_N - 1e-9)) : 0, flash: false }; }
+function shiftLeds(rpm, latched) { const f = ((+rpm || 0) / MAX_RPM - LED_FROM) / (LED_SHIFT - LED_FROM);
+  return { lit: latched ? LED_N : f > 0 ? Math.min(LED_N, Math.ceil(f * LED_N - 1e-9)) : 0, flash: !!latched }; }
 function motionReduced() { return typeof TitleFx !== "undefined" && typeof TitleFx.mode === "function" ? TitleFx.mode() === "reduce" : !!(_rmq && _rmq.matches)
   || (typeof document !== "undefined" && !!document.documentElement && document.documentElement.dataset.motion === "reduce"); }
 // F-01: browsers without Element.currentCSSZoom (iOS Safari < 26.4, Firefox < 126)
@@ -66,7 +66,7 @@ let _flagSaid = "";   // the caution text last sent to #announce-live
 let _teamSkin = null;         // last team id pushed to <html data-team> (skins the HUD accent)
 let _teamSkinRev = -1;        // …and the store rev it was written at (a CUSTOM team's colour is editable)
 let _redline = false;         // tach redline latch: on above 92% of MAX_RPM, off again below 89%
-let _leds = null, _gearShown = "", _popOdd = false;   // shift-light <i>s (built on first paint); gear last painted; pop a|b
+let _leds = null, _tachOn, _gearShown = "", _popOdd = false;   // shift-light <i>s; gear chip painted?; gear last painted; pop a|b
 // Where the tyre bar turns amber. 70% of the set's life is the point a stop
 // stops being hypothetical — F1 games teach "pit before 65-75% wear" and it is
 // far enough out that a player still has a lap or two to act on it.
@@ -1601,28 +1601,28 @@ function speedUnitEl() {
   if (els.speed && els.speed.parentElement) _speedUnitEl = els.speed.parentElement.querySelector(".hud-unit");
   return _speedUnitEl;
 }
-function ledEls() {   // the shift-light strip, built into #hud-tach on first paint (aria-hidden: the digit and tach carry it)
+function ledEls() {   // the shift-light strip, built into #hud-tach on first paint (aria-hidden)
   if (_leds || !els.tach) return _leds;
-  const strip = els.tach.appendChild(document.createElement("b")); strip.setAttribute("aria-hidden", "true");
-  return (_leds = Object.assign(Array.from({ length: LED_N }, () => strip.appendChild(document.createElement("i"))), { strip }));
+  const b = els.tach.appendChild(document.createElement("b")); b.setAttribute("aria-hidden", "true");
+  return (_leds = Object.assign(Array.from({ length: LED_N }, () => b.appendChild(document.createElement("i"))), { strip: b }));
 }
+function paintDash(p) { paintInstruments(p); const l = _tachOn && ledEls(), s = shiftLeds(p.rpm, _redline);   // LEDs outside paintInstruments: its VM test
+  if (l) { for (let i = 0; i < LED_N; i++) hToggle(l[i], "on", i < s.lit); hData(l.strip, "flash", s.flash ? "" : null); } }
 function paintInstruments(player) {
   // HYSTERESIS: a single 0.92 threshold flickered the class (and restarted its
   // pulse animation) every tick the needle hovered on the line, which is
   // exactly where a driver holding a gear sits. Enter at 92%, leave at 89%.
   _redline = player.rpm > MAX_RPM * (_redline ? 0.89 : 0.92);
-  if ((typeof HudElements === "undefined" || HudElements.isOn("gear")) && !document.body.classList.contains("cockpit-cam")) {
+  if ((_tachOn = (typeof HudElements === "undefined" || HudElements.isOn("gear")) && !document.body.classList.contains("cockpit-cam"))) {
     const rpmFrac = clamp((player.rpm - IDLE_RPM) / (MAX_RPM - IDLE_RPM), 0, 1);
     const g = "" + player.gear;   // GEAR POP on a shift (not the first paint); none under Reduce Motion
-    if (g !== _gearShown && _gearShown !== "" && !motionReduced()) hData(els.gear, "pop", (_popOdd = !_popOdd) ? "a" : "b");
+    if (g !== _gearShown && _gearShown && !motionReduced()) hData(els.gear, "pop", (_popOdd = !_popOdd) ? "a" : "b");
     hText(els.gear, g);
     const pct = Math.round(rpmFrac * 100);
     // --rpm (0..1, 1 % steps), not width: the fill spans the whole tach and is
     // clipped, so its colour stops sit on fixed RPM (css/hud.css #hud-rpm-fill).
     if (pct !== _rpmPct || !(pct >= 0)) { _rpmPct = pct; hStyle(els.rpmFill, "--rpm", (pct / 100).toFixed(2)); }
     hToggle(els.tach, "redline", _redline);
-    const leds = ledEls(), st = shiftLeds(player.rpm, _redline);
-    if (leds) { for (let i = 0; i < LED_N; i++) hToggle(leds[i], "on", i < st.lit); hData(leds.strip, "flash", st.flash ? "" : null); }
   }
   _gearShown = "" + player.gear;   // tracked while hidden too: a gear change under cockpit-cam is no pop on the way out
   if (typeof HudElements !== "undefined" && !HudElements.isOn("speed")) return;
@@ -1843,7 +1843,7 @@ function updateHud(force, dtMs) {
   // ON A TICK FRAME THEY PAINT AFTER fitHud's READS, not before: written first,
   // they dirtied the tree and the fit's first rect / viewport read forced a
   // synchronous layout on every tick on a phone. Same writes, same frame.
-  if (!tick) paintInstruments(player);
+  if (!tick) paintDash(player);
   if (typeof HudInputs !== "undefined") HudInputs.frame(G, player, dtMs);
   if (!tick) return;
   syncHudLayoutClasses();      // before fitHud: show/hide/park changes what gets measured
@@ -1864,7 +1864,7 @@ function updateHud(force, dtMs) {
   if (rank && _lastRank && rank !== _lastRank) { els.pos.dataset.delta = rank < _lastRank ? "up" : "down"; _posFlashT = 600; }
   else if (_posFlashT > 0 && (_posFlashT -= HUD_TICK_MS) <= 0) { _posFlashT = 0; delete els.pos.dataset.delta; }
   if (rank) _lastRank = rank;
-  paintInstruments(player);   // this tick frame's instruments, after fitHud's reads (see the top)
+  paintDash(player);   // this tick frame's instruments, after fitHud's reads (see the top)
   hText(els.lap, Math.min(player.lap || 1, G.lapsTarget) + "/" + G.lapsTarget);
   if (typeof HudDamage !== "undefined") HudDamage.sync(player);   // DAMAGE chip (js/ui/hud-damage.js) — display only
   // THE LAP JUST DRIVEN. A race showed only the running clock, which snaps to
