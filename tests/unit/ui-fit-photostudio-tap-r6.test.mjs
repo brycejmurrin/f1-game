@@ -63,3 +63,27 @@ test("portrait studio centres each export guide on the full canvas behind the sh
     assert.equal(decl(rules, selector, "height", phone), null);
   }
 });
+
+test("#7017 portrait DOCK top / HIDE: the sheet leaves the 4:5 guide's lower half clear and the sticks follow", () => {
+  const phone = { context: /max-width:\s*640px/ };
+  assert.equal(decl(rules, '#photo-studio[data-dock="top"] #ps-panel', "bottom", phone), "auto");
+  assert.equal(decl(rules, '#photo-studio[data-dock="top"] #ps-panel', "top", phone), "calc(var(--safe-t) / var(--sheet-scale, var(--ui-scale)))");
+  assert.equal(decl(rules, '#photo-studio[data-dock="top"]', "padding-top", phone), "0");
+  assert.equal(decl(rules, '#photo-studio[data-dock="top"]', "padding-bottom", phone), "calc(100svh - 42svh - var(--safe-t))");
+  assert.equal(decl(rules, '#photo-studio[data-sheet="collapsed"] #ps-body', "display", phone), "none");
+  assert.equal(decl(rules, '#photo-studio[data-sheet="collapsed"] #ps-panel', "height", phone), "auto");
+  assert.equal(decl(rules, 'body.photo-mode.photo-studio-open[data-ps-dock="top"] :is(.pc-stickwrap, .pc-altcol)', "bottom", phone),
+    "calc((var(--safe-b) + var(--gap)) / var(--ps-touch-z))", "sticks drop to the bottom edge under a top sheet");
+  assert.equal(decl(rules, "#ps-sheet-tools", "display"), "none", "landscape / desktop keep the side dock without the controls");
+  assert.equal(decl(rules, "#ps-sheet-tools", "display", phone), "flex");
+  assert.equal(decl(rules, "#ps-panel #ps-sheet-tools > button", "min-width"), "var(--tap)");
+  assert.equal(decl(rules, "#ps-panel #ps-sheet-tools > button", "min-width", { context: /pointer:\s*coarse/ }), "var(--tap-paint)");
+  // The arithmetic the CSS encodes, at each portrait window (tests/data/phone-windows.json + 390/360 class).
+  assert.equal(decl(rules, "#ps-panel", "height", phone), "calc(42svh / var(--sheet-scale, var(--ui-scale)))");
+  for (const [w, h, t, bot] of [[393, 852, 59, 34], [390, 844, 59, 34], [360, 780, 47, 34]]) {
+    const guideH = Math.min(h, 1.25 * w), guideMid = h / 2;   // centred 4:5 guide
+    const topSheetBottom = t + 0.42 * h, bottomSheetTop = h - bot - 0.42 * h;
+    assert.ok(topSheetBottom <= guideMid, `${w}x${h}: top sheet ends ${topSheetBottom} above the guide middle ${guideMid}`);
+    assert.ok(bottomSheetTop < guideMid + guideH / 2, `${w}x${h}: the bottom sheet does cover the lower half (the reported bug)`);
+  }
+});

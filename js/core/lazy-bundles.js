@@ -216,8 +216,8 @@ function fetchScenery(id) {
   return p;
 }
 // LAZY_TRACK_BUILD (tools/manifest.cjs): the ~535 KB build toolkit (models,
-// themes, kits, nature/city/structures/identity/pits/venue, hidden-faces,
-// build-props). Title boots without them; every path that reaches Tracks.build
+// themes, graph, kits, nature/city/structures/identity/pits/venue,
+// hidden-faces, build-props). Title boots without them; every path that reaches Tracks.build
 // awaits ensureScenery first (UI Start Race, __apex.race, quick race,
 // multiplayer, track switch, garage/home world, replay, idle prefetch).
 const TRACK_BUILD_FILES = ApexRoster.LAZY_TRACK_BUILD || [];
@@ -227,7 +227,8 @@ let trackBuildLoad = null;
 function trackBuildResident() {
   return typeof TrackBuildProps !== "undefined" && !!TrackBuildProps &&
     typeof TrackModels !== "undefined" && !!TrackModels &&
-    typeof TrackHiddenFaces !== "undefined" && !!TrackHiddenFaces;
+    typeof TrackHiddenFaces !== "undefined" && !!TrackHiddenFaces &&
+    typeof TrackGraph !== "undefined" && !!TrackGraph;
 }
 function ensureTrackBuild() {
   if (trackBuildResident() && (!TRACK_BUILD_FILES.length || TRACK_BUILD_FILES.every((f) => trackBuildLoaded.has(f)))) {
@@ -247,6 +248,7 @@ function ensureTrackBuild() {
       if (src === "js/track/scenery/build-props.js") return typeof TrackBuildProps !== "undefined" && !!TrackBuildProps;
       if (src === "js/track/scenery/models.js") return typeof TrackModels !== "undefined" && !!TrackModels;
       if (src === "js/track/core/hidden-faces.js") return typeof TrackHiddenFaces !== "undefined" && !!TrackHiddenFaces;
+      if (src === "js/track/scenery/graph.js") return typeof TrackGraph !== "undefined" && !!TrackGraph;
       return true;
     },
   }).then((ok) => {
@@ -1161,7 +1163,7 @@ watchRouteCss();
 // After every const above (loadBackendScripts reads AUDIO_FILES): a flag-gated inject, never awaited.
 bootDevPanels();
 mountBridgeLinkDoor();
-return { bootPerfRig, ensurePerfRig, openBridgeLink, ensureGarageExterior, SCENERY_DIR, CIRCUITS_DIR, sceneryResident, circuitResident, raceAssets, ensureCircuit, ensureScenery, ensureTrackBuild, trackBuildResident, ensureDataHub, ensureRealRace, ensureReplayBroadcast, ensureNet, ensureAudio, adoptAudio, audioHandle, ensureRaceSession, ensureLightPresets, ensureGarageData, ensureResultsSheet, ensureRouteCss, ensureSavesData, wantAgentSurface, loadAgentSurface, bootAgentSurface, bootDesktopAudio, awaitPackSettled };
+return { bootPerfRig, ensurePerfRig, openBridgeLink, ensureGarageExterior, SCENERY_DIR, CIRCUITS_DIR, sceneryResident, raceAssets, ensureCircuit, ensureScenery, ensureTrackBuild, trackBuildResident, ensureDataHub, ensureRealRace, ensureReplayBroadcast, ensureNet, ensureAudio, adoptAudio, audioHandle, ensureRaceSession, ensureLightPresets, ensureGarageData, ensureResultsSheet, ensureRouteCss, ensureSavesData, wantAgentSurface, loadAgentSurface, bootAgentSurface, awaitPackSettled };
 }
   // The instance game.js made, for modules that load outside it (#5555): the global is only this factory.
   let live = null;

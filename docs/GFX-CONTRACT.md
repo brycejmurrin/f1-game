@@ -29,6 +29,22 @@ NO build step, no ES modules: "use strict" IIFE assigning one global `Gfx`.
 load time.
 
 ─────────────────────────────────────────────────────────────────────────────
+BACKEND ROLES (D-058, #6861 option B)
+─────────────────────────────────────────────────────────────────────────────
+  TLX  ships. New looks and knobs land here first (D-013 player path).
+  GLX  SAFE MODE. Boots and races correctly on any WebGL2 device; today's
+       feature set is its FLOOR LOOK (.claude/rules/render-glx.md). Takes
+       crash, correctness and phone-safety fixes; gaps vs TLX are recorded in
+       docs/ARCHITECTURE.md §Backend gap table, not ported.
+  WGX  FROZEN (D-049): crash and validation fixes only.
+The interface is the FROZEN name list BACKEND_SURFACE in
+docs/backend-surface.txt, not "whatever GLX exports".
+tests/unit/backend-surface-parity.test.mjs checks that GLX, TLX and WGX each
+declare every listed name as an own property (`name: undefined,` is a legal
+declaration) and that GLX publishes no name outside the list. Adding a name
+means editing the list and all three backends in one PR.
+
+─────────────────────────────────────────────────────────────────────────────
 THE BACKEND INTERFACE CONTRACT (the "seam")
 ─────────────────────────────────────────────────────────────────────────────
 GLX, TLX and WGX each expose the SAME renderer surface. The game talks to

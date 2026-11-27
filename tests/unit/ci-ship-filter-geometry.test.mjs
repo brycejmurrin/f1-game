@@ -14,14 +14,31 @@ import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 // Hermetic step env (#6977): the real workflow steps run with ONLY PATH, HOME and what a test sets, so no
 // CI-runner variable a step reads (PATHS_FILE, IS_PR, PR_FROM, PR_CHANGED, HIT, API, DEPLOYMENTS_FILE,
 // STATUSES_URL, LIVE, CHANGED, GITHUB_API_URL...) can leak into a fixture through `...process.env`.
-const stepEnv = (extra) => ({ PATH: process.env.PATH, HOME: process.env.HOME, ...extra });
+// The runner's own git config (/etc/gitconfig, ~/.gitconfig: git 2.56.1 on ubuntu-latest vs 2.43 here) is shut out
+// too, so a fixture repo answers the same on both (#6977 recurrence, run 45902482125).
+const GIT_HERMETIC = { GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: "/dev/null" };
+const stepEnv = (extra) => ({ PATH: process.env.PATH, HOME: process.env.HOME, ...GIT_HERMETIC, ...extra });
+// Fixture-side git: the same minimal env, every default that moved between git 2.43 and 2.56 pinned by `-c`, and
+// a fixed author/committer date one second later on every call, so no two fixture commits share a timestamp.
+const GIT_PINS = ["-c", "init.defaultBranch=deploy", "-c", "merge.ff=true", "-c", "merge.autoStash=false",
+  "-c", "commit.gpgSign=false", "-c", "core.hooksPath=/dev/null", "-c", "maintenance.auto=false", "-c", "gc.auto=0",
+  "-c", "core.fsmonitor=false", "-c", "core.untrackedCache=false", "-c", "core.autocrlf=false", "-c", "diff.renames=false",
+  "-c", "user.email=t@t", "-c", "user.name=t"];
+const fixtureGit = (dir) => {
+  let tick = 0;
+  return (...a) => {
+    const date = `${1767225600 + tick++} +0000`; // 2026-01-01T00:00:00Z, then +1 s per call
+    return cp.execFileSync("git", [...GIT_PINS, ...a], { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+      env: stepEnv({ GIT_AUTHOR_DATE: date, GIT_COMMITTER_DATE: date }) }).trim();
+  };
+};
 
 test("ship-filter: a ready PR skips smoke only when neither its own diff nor its base ships anything new (C2a)", () => {
   const step = parseYAML(ciWorkflow).jobs.select.steps.find((st) => st.id === "shipfilter");
   assert.ok(step && step.run, "the ship filter step is gone");
   const dir = mkTmpDir("ship-filter-");
   try {
-    const git = (...a) => cp.execFileSync("git", a, { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+    const git = fixtureGit(dir);
     const write = (f, s) => { fs.mkdirSync(path.dirname(path.join(dir, f)), { recursive: true }); fs.writeFileSync(path.join(dir, f), s); };
     git("init", "-q", "-b", "deploy"); git("config", "user.email", "t@t"); git("config", "user.name", "t");
     // The filter's two repo inputs: the staged allow-list (stubbed: a file and
@@ -62,7 +79,7 @@ test("ship-filter: a ready PR skips smoke only when neither its own diff nor its
           RUNNER_TEMP: dir, GH_TOKEN: "t", CALLED: "false", FAKE_LIVE: LIVE, PR_BASE: "", ...env }) });
       assert.equal(r.status, 0, r.stderr + r.stdout);
       const ships = /ships=(true|false)/.exec(fs.existsSync(out) ? fs.readFileSync(out, "utf8") : "")?.[1];
-      return { ships, log: r.stdout, api: fs.existsSync(calls) ? fs.readFileSync(calls, "utf8").trim().split("\n").filter(Boolean).length : 0 };
+      return { ships, log: r.stdout + r.stderr, api: fs.existsSync(calls) ? fs.readFileSync(calls, "utf8").trim().split("\n").filter(Boolean).length : 0 };
     };
     const pr = (base, head) => run(merge(base, head), { EVENT: "pull_request", PR_BASE: base });
 
@@ -70,7 +87,9 @@ test("ship-filter: a ready PR skips smoke only when neither its own diff nor its
     assert.equal(docsOnLive.ships, "false", docsOnLive.log);
     assert.match(docsOnLive.log, /SKIPPING SMOKE/);
     const docsOnAhead = pr(AHEAD, "docs");
-    assert.equal(docsOnAhead.ships, "true", "a docs PR on a base with an unpublished app/ (js/) change still boots it: pages.yml may reuse this run as the gate");
+    // The step log rides in the message: the two CI reds (runs 45787142997, 45902482125) printed only 'false' !== 'true'.
+    assert.equal(docsOnAhead.ships, "true", "a docs PR on a base with an unpublished app/ (js/) change still boots it: pages.yml may reuse this run as the gate\n" +
+      `LIVE=${LIVE} AHEAD=${AHEAD} ${git("--version")}\n${docsOnAhead.log}`);
     assert.match(docsOnAhead.log, /the diff touches a shipped path \(app\)/);
     const code = pr(LIVE, "code");
     assert.equal(code.ships, "true");

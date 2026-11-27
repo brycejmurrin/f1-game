@@ -438,7 +438,6 @@ const GarageArrival = (function () {
     o.x = side * (OUT_R * (1 - Math.cos(th)) + past * Math.sin(th)); o.z = z; o.yaw = side * th;
     return o;
   }
-  const EYE_L = CAMS.left, EYE_R = CAMS.right;
   // @blender-rigs-index:start
   // tools/gen/blender/garage-camera-rigs.py: each rig's label and sample count; the samples are js/garage/garage-data.js (lazy).
   const RIGS = {"crane":{"label":"CRANE","n":49},"orbit":{"label":"ORBIT","n":49},"dolly":{"label":"DOLLY","n":49},"rear":{"label":"REAR TRACK","n":49},"drone":{"label":"DRONE","n":49},"steadicam":{"label":"STEADICAM","n":49}};
@@ -919,6 +918,6 @@ const GarageArrival = (function () {
     if (m === "flash") return Math.floor((p.seconds || 0) * 8) % 2 === 0;   // ~4 Hz
     return m === "auto" && !!wet;
   }
-  return Object.freeze({ PIT_EXIT_RATE: 1.6, EDIT_MOMENT, create, pose, poseOut, poseHome, poseFor, duration, timeline, rate, wallSeconds, wallLeft, slowWindow, crewFor, carryPlayback, lightFor, cueFor, rearLightOn, angleMap, shotsFor, resultKind, MOVES, REAR,
-    CAMS, CAM_IDS, ANGLES: ALL_ANGLES, RIG_IDS, RIG_LABEL, rigSample, rigU, RESULTS, RACES, STYLES, applyStyle, styleOf, homeTitle, DURATION, OUT_DURATION, OUT_SETTLE, DEFAULT, settings, plays, bindSettings });
+  return Object.freeze({ PIT_EXIT_RATE: 1.6, EDIT_MOMENT, create, pose, poseOut, poseHome, poseFor, duration, timeline, rate, wallSeconds, wallLeft, slowWindow, crewFor, carryPlayback, lightFor, rearLightOn, angleMap, shotsFor, resultKind, MOVES, REAR,
+    CAMS, CAM_IDS, ANGLES: ALL_ANGLES, RIG_IDS, RIG_LABEL, rigSample, rigU, RESULTS, RACES, STYLES, applyStyle, styleOf, DURATION, OUT_DURATION, OUT_SETTLE, DEFAULT, settings, plays, bindSettings });
 })();

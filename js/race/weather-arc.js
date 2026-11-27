@@ -128,13 +128,15 @@ const WeatherArc = (function () {
     // Live time-of-day + weather for player UI (lighting tuner) and __apex. The
     // agent surface is absent on GitHub Pages, so anything player-facing must go
     // through G — not window.__apex.
-    function setTimeOfDay(tod) {
+    // opt.defer (the lighting tuner's TIME chips, #6896): a day<->dark world rebuild goes to
+    // game.js rebuildWorldDeferred (one stepped build, never on this frame) instead of a sync build.
+    function setTimeOfDay(tod, opt) {
       if (tod === undefined) return G.raceTimeOfDay;
       const valid = ["default", "dawn", "day", "dusk", "night"];
       const next = valid.includes(tod) ? tod : "default";
       if (next === G.raceTimeOfDay) return next;
       G.raceTimeOfDay = next;
-      G.loadTrack(G.trackIdx);
+      G.loadTrack(G.trackIdx, !!(opt && opt.defer));
       G.applyRaceSettings();
       return G.raceTimeOfDay;
     }
