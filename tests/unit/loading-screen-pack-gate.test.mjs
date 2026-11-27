@@ -17,8 +17,8 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 const CARD = readFileSync(path.join(ROOT, "js/ui/loading-card.js"), "utf8");
 const SRC = readFileSync(path.join(ROOT, "js/ui/loading-screen.js"), "utf8");
 
-function load() {
-  const sandbox = { console, performance: { now: () => 0 } };
+function load(extra = {}) {
+  const sandbox = { console, performance: { now: () => 0 }, ...extra };
   sandbox.globalThis = sandbox;
   sandbox.window = sandbox;
   vm.runInNewContext(CARD.replace(/^const\b/m, "var"), sandbox, { filename: absSrc("js/ui/loading-card.js") });
@@ -71,4 +71,31 @@ test("startRaceBody arms count without awaiting pack; requestWarm is packSettled
   assert.match(body, /const tlxEarly = gfx\.backend === "three" && [^\n]*apex26\.tlxWarmBeforePack"\) !== "0"/,
     "TLX warms before the pack settles unless the knob is 0");
   assert.match(body, /if \(!settled \|\| settled\(packState\) \|\| tlxEarly\) \{/, "the gate admits TLX early");
+});
+
+// #7233 (#7230 row 2): a card painted from a meta-only circuit stub repaints once the payload hydrates.
+const el = () => new Proxy({ dataset: {}, style: {}, classList: { add() {}, remove() {}, toggle() {} }, children: [] }, {
+  get(t, k) { return k in t ? t[k] : (typeof k === "string" ? () => el() : undefined); },
+  set(t, k, v) { t[k] = v; return true; },
+});
+
+test("a meta stub paints without sectors, then repaints with them after ensureCircuit", async () => {
+  const LS = load({ Promise, M4: { isNight: () => false }, setTimeout, clearTimeout, requestAnimationFrame: () => 0, cancelAnimationFrame() {}, addEventListener() {}, removeEventListener() {}, document: { createElement: () => el() } });
+  const nodes = new Map();
+  const $ = (id) => { if (!nodes.has(id)) nodes.set(id, el()); return nodes.get(id); };
+  const t = { id: "x", name: "X", country: "UK", _metaOnly: true };
+  const Tracks = { LIST: [t], isNight: () => false };
+  const TrackMaps = {
+    corners: () => [], drsZones: () => [], cornerSpeed: () => NaN, fitCanvas: () => ({ w: 10, h: 10 }),
+    sectorColors: () => ["a", "b", "c"], draw() {},
+  };
+  let release;
+  const ensureCircuit = () => new Promise((r) => { release = r; }).then(() => { delete t._metaOnly; t.sectors = [1, 2]; });
+  const ls = LS.create({ $, Tracks, TrackMaps, Flags: { svg: () => "" }, store: { get: () => null, set() {} }, ensureCircuit });
+  const mode = () => $("ld-map").dataset.mode;
+  ls.building({ track: t, tod: "default" });
+  assert.equal(mode(), "layout", "stub paints the layout map");
+  release(); await new Promise((r) => setTimeout(r, 0));
+  assert.equal(mode(), "sectors", "after hydration the sectors map mode is offered");
+  assert.equal(ls.phase(), "build");
 });
