@@ -243,6 +243,7 @@ const LearnDoor = (function () {
       score: scoreAero,
       medals: AERO_MEDALS,
     });
+    if (typeof LinesDrill !== "undefined") LinesDrill.define();   // js/learn-drills/lines.js, when it evaluated first
   }
 
   // Read-only on the cars (#6559 §1e rule 1): the gap to the rival, its nearest point and the tow actually felt.

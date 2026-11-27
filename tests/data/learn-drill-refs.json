@@ -132,5 +132,52 @@
       "gold": 15.7,
       "goldClean": true
     }
+  },
+  "lines": {
+    "how": "node tests/helpers/lines-drill-vm.mjs --write: one boot, one run per cone (EARLY, GEOMETRIC, LATE) by the helper's pursuit driver (DRIVER), RETRY between runs",
+    "metric": "per run: cone miss (m), minimum speed and exit speed at +320 m (m/s), time to the +650 m gate (s) (js/learn-drills/lines.js score)",
+    "rule": "the medal is a stage, not a threshold: bronze = all three cones within 1.5 m; silver = plus the right answer (the fastest gate); gold = plus a later run on the winner within 0.5 m that beats its best gate. These runs prove each cone is reachable within 1.5 m and that LATE exits faster than EARLY",
+    "driver": {
+      "entry": 45,
+      "kp": 0.6,
+      "kd": 0.5,
+      "look": 15,
+      "lift": 1.5,
+      "turnIn": 140,
+      "trackOut": 300,
+      "hw": 8
+    },
+    "runs": [
+      {
+        "variant": "early",
+        "counted": true,
+        "miss": 1.36,
+        "vMin": 22.52,
+        "vExit": 44.72,
+        "gateS": 25.68
+      },
+      {
+        "variant": "geometric",
+        "counted": true,
+        "miss": 0.96,
+        "vMin": 24.1,
+        "vExit": 44.62,
+        "gateS": 24.92
+      },
+      {
+        "variant": "late",
+        "counted": true,
+        "miss": 0.82,
+        "vMin": 28.85,
+        "vExit": 45.25,
+        "gateS": 23.69
+      }
+    ],
+    "tiers": {
+      "bronze": 1,
+      "silver": 2,
+      "gold": 3,
+      "goldClean": true
+    }
   }
 }

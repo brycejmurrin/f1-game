@@ -2,7 +2,9 @@
 "use strict";
 const RaceInsights = (function () {
   const DRILLS = Object.freeze({ free: "Free practice", sector: "Finish this sector cleanly", corner: "Drive through the next corner",
-    lap: "One full lap from the line", cooling: "Measure a cooling lap on this tyre set", braking: "Brake to a controlled stop", trail: "Release the brake into a turn",
+    lap: "One full lap from the line",
+    apex: "Drive the next turn and on down the straight",   // js/learn-drills/lines.js
+    cooling: "Measure a cooling lap on this tyre set", braking: "Brake to a controlled stop", trail: "Release the brake into a turn",
     slalom: "Six clean direction changes", launch: "Standing start to racing speed",
     start: "Gain a place off the line",
     // THE RIVAL DRILLS. Every drill above judges the car against the road; these
@@ -54,6 +56,7 @@ const RaceInsights = (function () {
   // DEFEND arms only against a car that could actually pass: a fraction of
   // vTop(), the same shape AiDrive.otWant uses for its own margin.
   const THREAT = 0.02;
+  const APEX_RUNOUT = 670;     // m past the turn: the apex drill ends just past lines.js's gate
   const HOLD_CAP = 30;         // seconds of pressure that count as a full defence
   const BRAKE_REF = 50;        // m/s: a braking score is the stop scaled to this entry speed (v², #5888)
   const SLOW = 0.06, TRAFFIC_N = 3;   // a "backmarker" is 6% down on your own _vmaxNow; three of them is a stint through traffic
@@ -164,6 +167,13 @@ const RaceInsights = (function () {
         attacked: false, conceded: false, gifted: false, gaveUp: false, cleared: 0,
         passing: new Set(), clearedIds: new Set(),
         clean: true, reason: "", done: false };
+      // APEX: the next curated turn (def.turns metadata, never the arc), finished APEX_RUNOUT m past it.
+      if (mode === "apex") {
+        const L = G.track && G.track.total, turns = (G.track && G.track.def && G.track.def.turns) || [];
+        const ahead = L > 0 ? Math.min(...turns.map(f => ((f * L - c.s) % L + L) % L).filter(d => d > 1)) : Infinity;
+        if (!Number.isFinite(ahead)) { drill = null; return false; }
+        drill.endProg = c.prog + ahead + APEX_RUNOUT;
+      }
       if (mode === "cooling") drill.cooling = { car: c, track: G.track, tyre: c.tyre,
         stint: c.tyreStints || 0, compound: c.tyre && c.tyre.id, wet: G.trackWetness ? G.trackWetness() : 0, start: null };
       event("practice", DRILLS[mode] + " — unscored");
@@ -390,6 +400,9 @@ const RaceInsights = (function () {
       } else if (drill.mode === "trail") {
         if (drill.turnSeen && brake < .05 && turning && moving) finishDrill(current, c);
         else if (v < 1) { failDrill("stopped before releasing the brake"); finishDrill(current, c); }
+      } else if (drill.mode === "apex") {
+        if (current.prog >= drill.endProg) finishDrill(current, c);
+        else if (v < 1) { failDrill("stopped before the gate"); finishDrill(current, c); }
       } else if (drill.mode === "slalom" && drill.changes >= 6) finishDrill(current, c);
       else if (drill.rival) observeRival(c, current, v, moving, now);
     }
