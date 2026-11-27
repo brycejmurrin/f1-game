@@ -1,7 +1,6 @@
 {
   "tree": {
     "assertPinsAll": 1,
-    "eagerCodeBytes": -62,
-    "typeofGuards": -1
+    "eagerCodeBytes": -62
   }
 }

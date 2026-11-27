@@ -205,3 +205,48 @@ test("resetLive disarms a stale want: a quali/TT flag must not arm the NEXT race
   R.resetLive();
   assert.equal(R.want(), false);
 });
+
+test("#7321 M2: the podium phase ends through RacePodium's own timer, not the ceremony backstop", async () => {
+  const { makeDom } = await import("../helpers/mini-dom.mjs");
+  const dom = makeDom();
+  const results = dom.document.createElement("dialog");
+  results.id = "results";
+  results.hidden = true;
+  dom.document.body.appendChild(results);
+  const ctx = vm.createContext({
+    Math, console, Object, Array, Number, String, JSON, isFinite, parseFloat, parseInt,
+    document: dom.document,
+    Log: { info() {}, debug() {}, warn() {}, enabled() { return false; } },
+  });
+  for (const rel of ["js/ui/dom.js", "js/ui/results-story.js", "js/ui/podium-beat.js", "js/race/podium-beat.js"]) {
+    vm.runInContext(src(rel), ctx, { filename: absSrc(rel) });
+  }
+  // Record each beat exit's reason; ceremony.js reads RacePodium at create time.
+  const real = ctx.RacePodium, reasons = [];
+  ctx.RacePodium = {
+    PODIUM_S: real.PODIUM_S, eligible: real.eligible,
+    create(G, d) {
+      const p = real.create(G, d);
+      return Object.assign({}, p, { start: (o, opts, done) => p.start(o, opts, (r) => { reasons.push(r.reason); if (done) done(r); }) });
+    },
+  };
+  vm.runInContext(src("js/race/ceremony.js"), ctx, { filename: absSrc("js/race/ceremony.js") });
+  const R = vm.runInContext("RaceCeremony", ctx);
+  assert.ok(R.DUR.podium > real.PODIUM_S, `the ceremony backstop (${R.DUR.podium} s) sits past the beat's ${real.PODIUM_S} s`);
+  const G = Gbase({ els: { results }, cars: cars(5) });
+  const api = R.create(G);
+  assert.ok(api.start(G.cars, {}));
+  assert.ok(api.seek("podium"));
+  assert.equal(api.status().phase, "podium");
+  const dt = 1 / 60;
+  let t = 0;
+  while (api.status().phase === "podium" && t < 20) { api.tick(dt); t += dt; }
+  assert.equal(api.status().phase, "results");
+  assert.deepEqual(reasons, ["timer"], "the beat's own timer ended the podium");
+  assert.ok(Math.abs(t - real.PODIUM_S) < 2 * dt, `the podium played ${t.toFixed(3)} s, the beat's ${real.PODIUM_S} s`);
+});
+
+test("#7321 M2: with no RacePodium loaded the podium is a bare timer phase", () => {
+  const { R } = boot();
+  assert.ok(R.DUR.podium > 0 && Number.isFinite(R.DUR.podium));
+});
