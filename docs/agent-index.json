@@ -1207,6 +1207,7 @@
       "kind": "browser",
       "files": [
         "tests/specs/ctx-lost-retry.spec.js",
+        "tests/specs/glx-fallback.spec.js",
         "tests/specs/hud-mirror.spec.js",
         "tests/specs/image-grade-visual.spec.js",
         "tests/specs/instanced-draw.spec.js",
@@ -1737,6 +1738,7 @@
         "tests/unit/digital-steer.test.mjs",
         "tests/unit/dock-layout.test.mjs",
         "tests/unit/driving-cues.test.mjs",
+        "tests/unit/dualsense-polish.test.mjs",
         "tests/unit/editor-workspace.test.mjs",
         "tests/unit/garage-defaults.test.mjs",
         "tests/unit/grip-steer.test.mjs",

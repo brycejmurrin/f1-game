@@ -29,7 +29,7 @@ A SESSION playbook, never a subagent: a subagent never starts a browser (AGENTS.
 5. **Report as an issue**, not a docs PR (Bryce, 2026-11-25): write `docs/notes/RUNTIME-HUNT-<MODE>-<YYYY-MM-DD>.md`
    (Pacific date) with the ranked table below and the build sha you ran, push it on the hunt's branch unmerged, and
    open one `tracking` issue (`source:hunt` + its areas) whose checklist links each finding and the note (skill
-   `steward` `references/labels.md` §Hunt and survey output). Detach js-debugger, close the page.
+   `steward` `references/labels.md` §Hunt and survey output). The issue closes once every row is handed off (D-059). Detach js-debugger, close the page.
 
 | # | Repro (exact calls) | file:line | Mechanism (trigger → effect) | Player impact | Fix sketch | Test that would catch it |
 |---|---|---|---|---|---|---|

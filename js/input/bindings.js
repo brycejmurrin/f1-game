@@ -268,6 +268,8 @@ const InputBindings = (function () {
     }
     const PAD_NAMES_XBOX = ["A", "B", "X", "Y", "LB", "RB", "LT", "RT", "VIEW", "MENU", "LS", "RS", "D‑PAD ↑", "D‑PAD ↓", "D‑PAD ←", "D‑PAD →", "HOME"];
     const PAD_NAMES_PS = ["CROSS", "CIRCLE", "SQUARE", "TRIANGLE", "L1", "R1", "L2", "R2", "SHARE", "OPTIONS", "L3", "R3", "D‑PAD ↑", "D‑PAD ↓", "D‑PAD ←", "D‑PAD →", "PS"];
+    // DualSense (not the DS4): index 8 is CREATE, and Chrome exposes the touchpad click as button 17.
+    const PAD_NAMES_DS = PAD_NAMES_PS.slice(); PAD_NAMES_DS[8] = "CREATE"; PAD_NAMES_DS[17] = "TOUCHPAD";
     // Nintendo's physical A/B and X/Y sit OPPOSITE the Xbox positions, so index 0
     // — the button the standard mapping calls "bottom of the right cluster" — is
     // physically labelled B on a Switch Pro. Sniffing cannot always tell, which
@@ -297,11 +299,13 @@ const InputBindings = (function () {
     // The resolved brand: the player's override, else what the pad id suggests.
     // `pad` spares the activePad() scan to a caller that already holds it.
     const padBrand = (pad) => (padLabelMode === "auto" ? padBrandAuto(pad) : padLabelMode);
+    // DualSense id: "DualSense Wireless Controller (... Product: 0ce6)"; the DS4 (05c4/09cc) keeps SHARE.
+    const isDualSense = (pad) => /dualsense|\b0ce6\b|\b0df2\b/i.test(String((pad && pad.id) || ""));
     // The name on a chip: the player's override, else what the pad id suggests.
     function padLabel(index) {
       if (index == null) return "";
       const brand = padBrand();
-      const names = PAD_NAME_SETS[brand] || PAD_NAMES_XBOX;
+      const names = brand === "ps" && isDualSense(activePad()) ? PAD_NAMES_DS : PAD_NAME_SETS[brand] || PAD_NAMES_XBOX;
       return names[index] || `BTN ${index}`;
     }
 

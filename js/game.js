@@ -5764,7 +5764,7 @@ function updateCarLongitudinal(c, dt, ranked, S) {
     feel.shake = Math.max(feel.shake, KERB_SHAKE);     // continuous light rumble via shake
     c.kerbSndT = (c.kerbSndT || 0) - dt;
     if (soundOn && c.kerbSndT <= 0) { GameAudio.rumble(); c.kerbSndT = 0.07; }
-    if ((c.kerbHapT = (c.kerbHapT || 0) - dt) <= 0) { Input.vibrate(15); Input.rumble(0.25, 90, "handles"); c.kerbHapT = 0.12; }
+    if ((c.kerbHapT = (c.kerbHapT || 0) - dt) <= 0) { Input.vibrate(15); Input.rumble(0.25, 90, "kerb"); c.kerbHapT = 0.12; }
   }
 
   // Signed observed acceleration, including braking/grass, for AI lane

@@ -600,6 +600,8 @@
     "tests/unit/gltf-selftest.test.mjs",
     "// Round-2: GLX createTexture resets UNPACK flags and frees the texture when texImage2D throws (mock).",
     "tests/unit/glx-failure-paths.test.mjs",
+    "// #7045: pick-tests routes glx-fallback.spec.js for js/render/glx/** and renderer-boot.js; the spec stays selectable.",
+    "tests/unit/glx-fallback-routing.test.mjs",
     "// #3291: GLX setLampShadowSlot shares begin()'s ufI cache; drawChunkedBody restores the slot in finally.",
     "tests/unit/glx-lamp-shadow-slot.test.mjs",
     "tests/unit/glx-light-fit.test.mjs",
@@ -2270,6 +2272,7 @@
     "test:gfx": {
       "files": [
         "tests/specs/ctx-lost-retry.spec.js",
+        "tests/specs/glx-fallback.spec.js",
         "tests/specs/hud-mirror.spec.js",
         "tests/specs/image-grade-visual.spec.js",
         "tests/specs/instanced-draw.spec.js",
@@ -2726,6 +2729,7 @@
         "tests/unit/digital-steer.test.mjs",
         "tests/unit/dock-layout.test.mjs",
         "tests/unit/driving-cues.test.mjs",
+        "tests/unit/dualsense-polish.test.mjs",
         "tests/unit/editor-workspace.test.mjs",
         "tests/unit/garage-defaults.test.mjs",
         "tests/unit/grip-steer.test.mjs",
