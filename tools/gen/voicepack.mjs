@@ -37,6 +37,8 @@
  *   node tools/gen/voicepack.mjs --kokoro scratch/voicepack --id <voice> [--voice bm_george] [--dtype q4] [--speed 1.08] [--opus]
  *   node tools/gen/voicepack.mjs --opus-only --id <voice> [--speaker <channel>] --kokoro scratch/voicepack --ffmpeg /usr/bin/ffmpeg
  */
+import { exitIfHelp } from "../lib/cli-args.mjs";
+exitIfHelp(process.argv[1]?.endsWith("/voicepack.mjs") ? process.argv.slice(2) : [], "Usage: node tools/gen/voicepack.mjs [options]\nAuthor-time radio voice pack (Kokoro-82M) → `assets/voice/<id>.{bin,json}`; `--list` prints the phrases.\n--help prints this and exits 0.");
 import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";

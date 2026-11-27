@@ -457,7 +457,7 @@ Circuit geometry and scenery: the build guard, the baseline-gated audits, the su
 | **track/official-corners.cjs** | Fits the F1 timing outline (FastF1's MultiViewer source) onto the built centreline; places each official turn number. | survey-track |
 | **track/props-tris.cjs** | Per-circuit props triangles after hidden-face strip + vertex compaction; proves compaction render-identical. | scenery-dress |
 | **track/refresh-f1-circuit-reference.mjs** | Explicit maintenance tool that refreshes the offline F1 circuit reference data; tests never call it or the network. | new-track |
-| **track/rotate-markings.cjs** | Rotates each circuit's `turns` onto a corrected start line by the scenery's arc shift, then re-sorts them; `--check`. | new-track |
+| **track/rotate-markings.cjs** | Rotates each circuit's `turns` onto a corrected start line by the scenery arc shift, then re-sorts (`--write` applies). | new-track |
 | **track/startline-probe.cjs** | Checks that can FAIL a `startFrac`: \|k\| at s=0 (120 m mean, ±40 m max), the 24-slot grid span, first apex hand. | agent-view |
 | **track/startline-snap.cjs** | Derives `startFrac` from a real start/finish coordinate: projects into the def's `path`, snaps to the nearest segment. | new-track |
 | **track/stitch-osm-ring.mjs** | Stitches OpenStreetMap `highway=raceway` ways into ONE closed ring for import-circuit-path.mjs. | new-track |

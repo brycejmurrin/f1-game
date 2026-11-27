@@ -16,6 +16,8 @@
  *   manifest module declares; platform checks (OffscreenCanvas, window, ...) are legitimate and do not count.
  * gWrites (U0.2 of #6920): G.<member> writes through the façade, by file; measured only.
  */
+import { exitIfHelp } from "../lib/cli-args.mjs";
+exitIfHelp(process.argv[1]?.endsWith("/tree-counts.mjs") ? process.argv.slice(2) : [], "Usage: node tools/check/tree-counts.mjs [options]\nCounts behind the `tree` ratchets: CSS classes/spacing/colour, shell nodes, bare catches, waits, sleeps. `--offenders`.\n--help prints this and exits 0.");
 import cp from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";

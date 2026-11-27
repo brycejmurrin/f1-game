@@ -7,6 +7,8 @@
  * Allowed: js/circuits/<id>.js, js/circuits/scenery/<id>.js, scratch/, artifacts/.
  * Anything else is rejected (the hook cannot bind the circuit id).
  */
+import { exitIfHelp } from "../lib/cli-args.mjs";
+exitIfHelp(process.argv[1]?.endsWith("/surveyor-scope.mjs") ? process.argv.slice(2) : [], "Usage: node tools/track/surveyor-scope.mjs [options]\nHand-back scope check: lists files a track-surveyor branch changed outside its circuit pair (exit 1 if any).\n--help prints this and exits 0.");
 import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
 

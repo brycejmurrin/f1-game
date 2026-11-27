@@ -42,6 +42,8 @@
 //
 // THE FIX FOR A NEW SITE is almost never an allowlist row: build the node with
 // Dom.el()/textContent, or escape the dynamic part the way aria-state.js does.
+import { exitIfHelp } from "../lib/cli-args.mjs";
+exitIfHelp(process.argv[1]?.endsWith("/html-sink-lint.mjs") ? process.argv.slice(2) : [], "Usage: node tools/check/html-sink-lint.mjs [options]\nFlags non-constant `.innerHTML =` / `.outerHTML =` / `insertAdjacentHTML()` sinks in js/ outside the audited allowlist.\n--help prints this and exits 0.");
 import fs from "node:fs";
 import crypto from "node:crypto";
 import path from "node:path";

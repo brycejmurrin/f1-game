@@ -52,6 +52,8 @@
  * raw response and --cache replays one, so a stitch is reproducible offline and
  * a review can re-derive the same ring. Never run by the test suite.
  */
+import { exitIfHelp } from "../lib/cli-args.mjs";
+exitIfHelp(process.argv[1]?.endsWith("/stitch-osm-ring.mjs") ? process.argv.slice(2) : [], "Usage: node tools/track/stitch-osm-ring.mjs [options]\nStitches OpenStreetMap `highway=raceway` ways into ONE closed ring for import-circuit-path.mjs.\n--help prints this and exits 0.");
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";

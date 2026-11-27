@@ -17,6 +17,8 @@
 // (`tree.vmSrcLoads` in tests/data/ratchets.json since 2026-10-26, so a raise is a ratchets.d fragment; the test judges
 // it diff-relative on a PR, tools/check/ratchets.mjs ratchetMode); it only goes down: above it fails; below it prints the lower value (not a failure, so a PR that removes loads never
 // reddens another's run) (B·H11, PR #3388).
+import { exitIfHelp } from "../lib/cli-args.mjs";
+exitIfHelp(process.argv[1]?.endsWith("/vm-filename-lint.mjs") ? process.argv.slice(2) : [], "Usage: node tools/check/vm-filename-lint.mjs [options]\nFlags a vm source load in tests/unit or tests/helpers with a relative filename, which breakpoints and coverage miss.\n--help prints this and exits 0.");
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";

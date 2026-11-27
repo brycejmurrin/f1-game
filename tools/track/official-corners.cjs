@@ -30,6 +30,10 @@
  */
 "use strict";
 
+if (require.main === module && process.argv.slice(2).some((a) => a === "--help" || a === "-h" || a === "help")) {
+  console.log("Usage: node tools/track/official-corners.cjs [options]\nFits the F1 timing outline (FastF1's MultiViewer source) onto the built centreline; places each official turn number.\n--help prints this and exits 0.");
+  process.exit(0);
+}
 const fs = require("fs");
 const path = require("path");
 const { execFileSync } = require("child_process");

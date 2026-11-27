@@ -37,6 +37,8 @@
 // on every standard receiver; QUALIFIED holds the (receiver, method) pairs where
 // the receiver name is what disambiguates. Adding a receiver is how this lint
 // grows: a new false negative costs one row, a false positive costs the rule.
+import { exitIfHelp } from "../lib/cli-args.mjs";
+exitIfHelp(process.argv[1]?.endsWith("/reject-lint.mjs") ? process.argv.slice(2) : [], "Usage: node tools/check/reject-lint.mjs [options]\nAn unhandled rejection paints a full-screen overlay — finds promise-returning API calls that discard theirs.\n--help prints this and exits 0.");
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";

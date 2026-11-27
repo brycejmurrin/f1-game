@@ -7,6 +7,8 @@
  *   node tools/gen/gen-flags-table.mjs            # write
  *   node tools/gen/gen-flags-table.mjs --check    # exit 1 when committed ≠ generated
  */
+import { exitIfHelp } from "../lib/cli-args.mjs";
+exitIfHelp(process.argv[1]?.endsWith("/gen-flags-table.mjs") ? process.argv.slice(2) : [], "Usage: node tools/gen/gen-flags-table.mjs [options]\nRegenerates the DevFlags table in `docs/DEBUG-HOOKS.md` from `js/core/dev-flags.js`; `--check`.\n--help prints this and exits 0.");
 import vm from "node:vm";
 import { emit, isMain, readRepo, replaceBlock } from "./gen-lib.mjs";
 

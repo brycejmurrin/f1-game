@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 // @doc Offline VM lifecycle census: typed resource snapshots and diffs across entry, reset, cancellation and failed boot.
 // @skill check-changes
+import { exitIfHelp } from "../lib/cli-args.mjs";
+exitIfHelp(process.argv[1]?.endsWith("/lifecycle-census.mjs") ? process.argv.slice(2) : [], "Usage: node tools/check/lifecycle-census.mjs [options]\nOffline VM lifecycle census: typed resource snapshots and diffs across entry, reset, cancellation and failed boot.\n--help prints this and exits 0.");
 import vm from 'node:vm';
 import { createRequire } from 'node:module';
 import { mkdirSync, writeFileSync } from 'node:fs';

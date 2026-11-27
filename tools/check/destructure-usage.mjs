@@ -17,6 +17,8 @@
  * anywhere counts as a provider of `key`, and a destructure with a default (`{ a = 1 }`) is
  * allowed to miss. The façade `G` is check-gctx.mjs's job.
  */
+import { exitIfHelp } from "../lib/cli-args.mjs";
+exitIfHelp(process.argv[1]?.endsWith("/destructure-usage.mjs") ? process.argv.slice(2) : [], "Usage: node tools/check/destructure-usage.mjs [options]\nFails when a file destructures a name its script-global provider does not export (a dropped name after a rebase).\n--help prints this and exits 0.");
 import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";

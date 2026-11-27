@@ -17,6 +17,8 @@
 // and one pixel covers many degrees — so samples are kept only where the
 // surface faces the camera, and the far side is filled by mirroring, which is
 // what a helmet painter does anyway.
+import { exitIfHelp } from "../lib/cli-args.mjs";
+exitIfHelp(process.argv[1]?.endsWith("/helmet-trace.mjs") ? process.argv.slice(2) : [], "Usage: node tools/car/helmet-trace.mjs [options]\nProjects the helmet shell into a side-on photo, samples the real colour per (t, az), writes a colour map.\n--help prints this and exits 0.");
 import sharp from "sharp";
 import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";

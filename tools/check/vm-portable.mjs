@@ -74,6 +74,8 @@
  * written down and why smoke.spec.js and physics-characterization.spec.js stay
  * in a real browser whatever this table says.
  */
+import { exitIfHelp } from "../lib/cli-args.mjs";
+exitIfHelp(process.argv[1]?.endsWith("/vm-portable.mjs") ? process.argv.slice(2) : [], "Usage: node tools/check/vm-portable.mjs [options]\nWhich specs `tests/helpers/vm-page.js` could run under `node --test`: per-spec blocking calls + a portable count.\n--help prints this and exits 0.");
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
