@@ -28,6 +28,7 @@ restated rules drifted into three wordings and one contradicted the skill [14].
 - Adopt only a lapsed or handed-back lease, never a parked one (skill `steward` §Lane 3). `pr-board.mjs --brief`
   prints `lease …` and `churn: adopted Nx`; a churn PR (3+ adopters) gets one worker that stays until `land`.
 - Re-verify on the deploy tip first; a worker closes an already-fixed issue with evidence and opens no PR.
+- A hunt, survey or plan issue is a STAGING issue: close it once every row is handed off, not when built; parked rows go to the rolling decisions and device-checks issues (D-059).
 - Filed issues: one type, `area:*`, `source:*`; a hunt or Gardener reports as a `tracking` issue (steward labels.md).
 - Settle every human step before launch (device check, `config-ok`, decision) and cite its comment URL [10].
 - `config-ok` on a ROUTINE config path and `ratchet-raise` you add yourself, after you have read the PR's config diff
@@ -112,7 +113,7 @@ Bryce, 2026-11-25 (memory `orchestrator-routines.md`): two `create_trigger` task
   ONE subagent surveys open PRs (CI, gate, conflicts, `owner:`) and live sessions into `scratch/`; act reversibly and
   log it (a `CONTINUE PR` per ownerless red or conflict, nudge idle owners, archive the finished, `rerun_failed_jobs`
   only for infra or a designed cancel, diff read before `config-ok`, protected and `needs-decision` items to Bryce by
-  AskUserQuestion); queue health per #6463; one Claude Link window per wave; the task list; rotate at ~400k.
+  AskUserQuestion); a staging issue whose rows are all handed off is closed with its row ledger (D-059); no new hunt, survey or plan session while 30+ `batch` issues are open (D-059 intake pause); queue health per #6463; one Claude Link window per wave; the task list; rotate at ~400k.
 - **LIGHT `49 * * * *`, no subagent:** notifications, deploy tip, open PRs (`ci-watch` on ready+land or new reports);
   red or conflict → the owner, else one `CONTINUE PR`; green draft 30+ min, idle owner → nudge to land; fixable gate
   row or voided `config-ok` → the owner (Bryce-only: AskUserQuestion); a merge → one line, archive the worker.
