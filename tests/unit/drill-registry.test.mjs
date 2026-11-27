@@ -299,3 +299,20 @@ test("the host's run loop: tick samples a live run, scores its finish, saves, sh
   assert.deepEqual(log.at(-1), ["reopen", "loop-lesson", "loop", "gold"]);
   assert.equal(drills.lastResult(), null);
 });
+
+test("a start that could not place the cars reopens nothing (review F1, #7168)", () => {
+  const { ctx } = loadCard();
+  const log = [];
+  const G = { state: "menu", netPlay: { active: () => false }, coach: { practiceGoal: () => "none", setPracticeGoal() {} }, startRace() {} };
+  ctx.DrillRegistry.define({ id: "nope", lesson: "nope-lesson",
+    setup: { flow: "gp", session: "race", track: "monza", weather: "dry", changeable: false, grid: "tier", duel: false, dirtyAir: "classic", wind: "real" },
+    begin: () => false });
+  const drills = ctx.DrillRegistry.create(G, { retry: () => true, setDirtyAir() {}, reopenLesson: (lesson) => log.push(lesson) });
+  drills.launch("nope");
+  assert.equal(drills.begin(), false);
+  drills.end("quit");   // game.js: quitToMenu() after a failed begin()
+  assert.deepEqual(log, [], "the title stays; the COULD NOT START announce is the only word");
+  drills.launch("nope");
+  drills.end("quit");   // an ordinary quit (no failed begin) reopens the lesson
+  assert.deepEqual(log, ["nope-lesson"]);
+});

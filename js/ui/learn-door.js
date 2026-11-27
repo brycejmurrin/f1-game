@@ -128,6 +128,7 @@ const LearnDoor = (function () {
         const p = pendingResult;
         if (!p || p.lesson !== sheet.dataset.lesson) return;
         pendingResult = null;
+        if (Date.now() > p.until) return;
         frame.contentWindow?.postMessage({ type: "apex-learn-result", id: p.id, result: p.result }, location.origin);
       });
       body.append(index, frame);
@@ -210,12 +211,12 @@ const LearnDoor = (function () {
    *  and its lab gets the run's result once it loads. Waits for the title, as a deep link does. */
   function reopen(lesson, payload) {
     if (typeof document === "undefined") return false;
-    pendingResult = payload && payload.id ? { lesson, id: payload.id, result: payload.result } : null;
+    // A result the lab never loaded for (the title never came back) is dropped after 15 s, not posted later.
+    pendingResult = payload && payload.id ? { lesson, id: payload.id, result: payload.result, until: Date.now() + 15000 } : null;
     let tries = 0;
     const go = () => {
       const door = document.getElementById("mb-learn");
-      if (!door || door.hidden) return;
-      if (UiLayers.top()?.id !== "overlay") { if (++tries < 30) setTimeout(go, 100); return; }
+      if (!door || door.hidden || UiLayers.top()?.id !== "overlay") { if (++tries < 30) setTimeout(go, 100); return; }
       door.dataset.openLesson = lesson;
       door.click();
     };

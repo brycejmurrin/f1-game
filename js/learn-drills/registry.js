@@ -73,10 +73,13 @@ const DrillRegistry = (function () {
         run: null,       // {acc, prog}: the live run's accumulator, made on its first tick
         result: null,    // the last finished run's result, while its card is up
         attempt: 0,
+        failed: false,
         begin() {
           this.staging = false;
           if (guide) guide.hide();
-          return d.begin(G, port);
+          const ok = d.begin(G, port);
+          if (!ok) this.failed = true;   // game.js quits; end() then reopens nothing
+          return ok;
         },
         restore() {
           if (guide) guide.remove();
@@ -111,12 +114,12 @@ const DrillRegistry = (function () {
      *  lesson with the last result (#6555 A2). A start that never placed the cars reopens nothing. */
     function end(reason) {
       if (!current) return false;
-      const { d } = current, result = lastResult;
+      const { d, failed } = current, result = lastResult;
       if (typeof DrillCard !== "undefined") DrillCard.hide();
       current.restore();
       current = null;
       lastResult = null;
-      if (reason !== "place-failed") {
+      if (!failed && reason !== "place-failed") {
         const reopen = hooks.reopenLesson || ((lesson, r) => typeof LearnDoor !== "undefined" && LearnDoor.reopen(lesson, r));
         reopen(d.lesson, result ? { id: d.id, result } : null);
       }
