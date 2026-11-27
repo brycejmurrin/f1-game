@@ -20,6 +20,19 @@ async function boot(page) {
     null, { polling: 100, timeout: BOOT_MS });
 }
 const light = (page) => page.evaluate(() => JSON.stringify(__apex.lightState()));
+// TIME chips rebuild on the deferred path (setTimeOfDay defer:true, #7059): the world is null mid-build and a
+// weather chip only re-lights a built world, so wait for the rebuilt world and a signature that holds still.
+const built = (page) => page.evaluate(() => typeof __apex.lightState().trackNight === "boolean");
+async function settledLight(page) {
+  let last = "", stable = 0;
+  for (let i = 0; i < 120 && stable < 3; i++) {
+    await page.waitForTimeout(150);
+    const now = (await built(page)) ? await light(page) : "";
+    stable = now !== "" && now === last ? stable + 1 : 0;
+    last = now;
+  }
+  return last;
+}
 const phys = (page) => page.evaluate(() => {
   const p = __apex.physState();
   return { s: p.s, x: p.x, px: p.px, pz: p.pz, speed: p.speed, head: p.head, lap: __apex.cars().length };
@@ -64,26 +77,29 @@ test("Paused race photo changes time of day and weather live, resets, and leaves
   expect(await page.evaluate(() => LightTune.LT.sunElev)).toBe(beforeSun);
 
   // Every time of day: the hook follows the row and the resolved scene changes.
-  let seen = await light(page);
+  let seen = await settledLight(page);
   for (const tod of ["dawn", "dusk", "night", "default", "day"]) {
     await page.locator("#ps-tod").selectOption(tod);
     expect(await page.evaluate(() => __apex.setTimeOfDay())).toBe(tod);
-    const now = await light(page);
+    const now = await settledLight(page);
     expect(now, `scene changed for ${tod}`).not.toBe(seen);
     seen = now;
   }
   const lum = () => page.evaluate(() => __apex.lightState().ambientSky.reduce((t, v) => t + v, 0));
+  await settledLight(page);
   const dayLum = await lum();
   await page.locator("#ps-tod").selectOption("night");
+  await settledLight(page);
   expect(await lum(), "night is darker than day").toBeLessThan(dayLum);
   await page.locator("#ps-tod").selectOption("day");
 
   // Every weather: the hook follows the row; the lighting differs from dry for each lateral/wet state.
-  const dry = await light(page);
+  await settledLight(page);
+  const dry = await settledLight(page);
   for (const wx of WXS.slice(1)) {
     await page.locator("#ps-weather").selectOption(wx);
     expect(await page.evaluate(() => __apex.weather())).toBe(wx);
-    expect(await light(page), `scene changed for ${wx}`).not.toBe(dry);
+    expect(await settledLight(page), `scene changed for ${wx}`).not.toBe(dry);
     await expect(page.locator("#ps-weather")).toHaveValue(wx);
   }
   await expect(page.locator("#ps-cond-reset")).toBeEnabled();
@@ -94,7 +110,7 @@ test("Paused race photo changes time of day and weather live, resets, and leaves
   await expect(page.locator("#ps-tod")).toHaveValue("day");
   await expect(page.locator("#ps-weather")).toHaveValue("dry");
   await expect(page.locator("#ps-cond-reset")).toBeDisabled();
-  expect(await light(page)).toBe(dry);
+  expect(await settledLight(page)).toBe(dry);
 
   // A change left in place is still put back by DONE.
   await page.locator("#ps-tod").selectOption("night");
