@@ -91,6 +91,10 @@ test("no __apex: physOf matches __apex.physState() field for field, and a run sc
   assert.equal(run.ev("typeof window.__apex"), "undefined", "the agent surface is gone, as on a player's build");
   const r = run.drive(GRIP_SCRIPTS.vline());
   assert.ok(r, "the run reached the gate and the host scored it");
+  // Again after the run, once player-forces has stored axFrac (the branch the placed car's first read skips).
+  const a2 = run.g.apex.physState(), b2 = run.ev("DrillRegistry").physOf(run.G);
+  assert.ok(run.G.player.axFrac != null, "player-forces stored axFrac");
+  for (const k of Object.keys(b2)) assert.equal(b2[k], a2[k], "after the run: physOf." + k + " vs __apex.physState()." + k);
   assert.ok(Number.isFinite(r.value) && r.value > 0, "rim use " + r.value);
   assert.ok(r.medal, "a clean run earns a medal");
   assert.ok(r.metrics.every(([, v]) => !/NaN|undefined/.test(String(v))), JSON.stringify(r.metrics));

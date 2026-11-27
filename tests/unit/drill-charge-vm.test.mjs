@@ -91,8 +91,10 @@ test("units = mph: the card prints the km/h mean speed converted, with the mph l
     const mph = (at(plan).kmh / 1.609344).toFixed(1);
     assert.ok(text.startsWith("GOLD · " + mph + " mph"), text);
     assert.ok(!/km\/h/.test(text), "no km/h on an mph card: " + text);
+    // The earlier gold laps on this plan saved this same best, so the card shows it (not NEW BEST), converted too.
     const best = text.match(/best ([\d.]+) (\S+)/);
-    if (best) assert.equal(best[2], "mph", "the best is in the same unit");
+    assert.ok(best, "the saved best is on the card: " + text);
+    assert.deepEqual([best[1], best[2]], [(r.best / 1.609344).toFixed(1), "mph"], "the best is in the same unit");
   } finally { AO.setUnits("kmh"); }
 });
 
