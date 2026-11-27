@@ -13,6 +13,7 @@ import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { loadUiShape } from "../helpers/ui-shape-load.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
@@ -73,7 +74,7 @@ function boot({ stored = {}, studio = true, dropScreen = null, phone = false } =
   if (phone) sb.matchMedia = (query) => ({ matches: query === "(pointer: coarse)" });
   sb.window = sb;
   const ctx = vm.createContext(sb);
-  const run = (f) => vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: absSrc(f) });
+  const run = (f) => (loadUiShape(ctx), vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: absSrc(f) }));
   for (const f of ["js/ui/setting-row.js", "js/ui/pause-opts.js", "js/ui/title-layout.js", "js/ui/screen-looks.js"]) run(f);
   if (dropScreen) vm.runInContext(`ScreenLooks = Object.assign({}, ScreenLooks, { SCREENS: ScreenLooks.SCREENS.filter((s) => s.id !== ${JSON.stringify(dropScreen)}) });`, ctx, { filename: "layout-presets.test:drop-screen" });
   run("js/ui/layout-presets.js");

@@ -6,6 +6,7 @@ import path from "path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { loadDom } from "../helpers/dom-vm.mjs";
+import { loadUiShape } from "../helpers/ui-shape-load.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const SRC = fs.readFileSync(path.join(ROOT, "js/ui/hud-elements.js"), "utf8");
@@ -46,6 +47,7 @@ function load(stored = {}, opts = {}) {
   };
   vm.createContext(ctx);
   loadDom(ctx);
+  loadUiShape(ctx);
   vm.runInContext(SRC + "; this.HudElements = HudElements;", ctx);
   ctx.__written = written;
   ctx.__body = body;
@@ -204,6 +206,7 @@ test("HudLayout eval survives HudElements.apply reading profile() (no TDZ abort)
   };
   vm.createContext(ctx);
   loadDom(ctx);
+  loadUiShape(ctx);
   vm.runInContext(SRC + "; this.HudElements = HudElements;", ctx);
   vm.runInContext(cam + "\n" + layout + "; this.HudLayout = HudLayout;", ctx);
   assert.equal(typeof ctx.HudLayout, "object", "hud-layout.js finished; HudLayout is published");
@@ -245,6 +248,7 @@ test("actual HUD checklist refreshes contextual reasons and keeps requirement na
   let context = { profile: "minimal", tyreWear: true, state: "race" };
   const sandbox = vm.createContext({ document: dom.document, GameStore: { store: { get: (k, d) => stored[k] ?? d, set: (k, v) => { writes.push(k); stored[k] = v; }, subscribe() {} } } });
   loadDom(sandbox);
+  loadUiShape(sandbox);
   vm.runInContext(SRC + ";this.H=HudElements;", sandbox); const H = sandbox.H;
   H.initUI(); H.configure({ context: () => context, navigate: (page, target) => nav.push([page, target]) });
   const inputRow = fold.querySelector('[data-hud-el-row="inputs"]'), box = inputRow.querySelector("input"), reason = inputRow.querySelector("[data-hud-reason]"), link = inputRow.querySelector("button");
