@@ -3908,6 +3908,11 @@
       "roster": "LAZY_LEARN"
     },
     {
+      "path": "js/learn-drills/rain-groove.js",
+      "global": "RainDrill",
+      "roster": "LAZY_LEARN"
+    },
+    {
       "path": "js/learn-drills/registry.js",
       "global": "DrillRegistry",
       "roster": "LAZY_LEARN"

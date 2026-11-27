@@ -812,6 +812,7 @@ _Module index over 34 directories, in load order. `tag` = a `<script>` in index.
 | `registry.js` | `DrillRegistry` | LAZY_LEARN | DrillRegistry: the one host for LEARN's on-track scenario drills (#6920 U4.1, #6559 step 0). |
 | `drill-card.js` | `DrillCard` | LAZY_LEARN | DrillCard: a LEARN drill's result card and its one medal store (#6559 §1b, step 2; #7039). medalOf(r, tiers) is pure. tiers = {bronze, silver, gold,… |
 | `thumb-drill.js` | `ThumbDrill` | LAZY_LEARN | THUMB DRILL, LEARN's on-track sequel to the Vegas Thumb Trainer (#6927). |
+| `rain-groove.js` | `RainDrill` | LAZY_LEARN | WET WEATHER LINES: find the groove (#6559 step 15, #6551 §5 variant A). |
 <!-- /@gen-arch:modules -->
 
 ---

@@ -132,5 +132,98 @@
       "gold": 15.7,
       "goldClean": true
     }
+  },
+  "rain": {
+    "how": "WRITE_REFS=1 node --test tests/unit/drill-rain-vm.test.mjs: 10 runs of the Monza sector-3 Wet Weather Lines drill (road held at 0.18, slicks), one boot, RETRY between runs, a pure-pursuit driver at 34-37 m/s aimed at the groove offset by 0, ±1..±4 m, and one at the centreline",
+    "metric": "% of the sector's frames with WeatherArc.dryLine >= 0.5 under the car (js/learn-drills/rain-groove.js score)",
+    "rule": "bronze = the centreline driver's share; gold = the on-groove driver's share - 5; silver = halfway; whole %, floored; gold needs a clean run",
+    "runs": [
+      {
+        "mode": "groove",
+        "off": 0,
+        "share": 89.24,
+        "seconds": 70.52,
+        "clean": true,
+        "medal": "gold"
+      },
+      {
+        "mode": "centre",
+        "off": 0,
+        "share": 65.38,
+        "seconds": 70.6,
+        "clean": true,
+        "medal": "bronze"
+      },
+      {
+        "mode": "groove",
+        "off": 1,
+        "share": 90.31,
+        "seconds": 70.4,
+        "clean": true,
+        "medal": "gold"
+      },
+      {
+        "mode": "groove",
+        "off": -1,
+        "share": 85.62,
+        "seconds": 70.5,
+        "clean": true,
+        "medal": "gold"
+      },
+      {
+        "mode": "groove",
+        "off": 2,
+        "share": 71.94,
+        "seconds": 70.4,
+        "clean": true,
+        "medal": "bronze"
+      },
+      {
+        "mode": "groove",
+        "off": -2,
+        "share": 78.09,
+        "seconds": 70.6,
+        "clean": true,
+        "medal": "silver"
+      },
+      {
+        "mode": "groove",
+        "off": 3,
+        "share": 54.65,
+        "seconds": 70.4,
+        "clean": true,
+        "medal": null
+      },
+      {
+        "mode": "groove",
+        "off": -3,
+        "share": 61.04,
+        "seconds": 70.6,
+        "clean": true,
+        "medal": null
+      },
+      {
+        "mode": "groove",
+        "off": 4,
+        "share": 39.77,
+        "seconds": 70.3,
+        "clean": true,
+        "medal": null
+      },
+      {
+        "mode": "groove",
+        "off": -4,
+        "share": 49.78,
+        "seconds": 70.6,
+        "clean": true,
+        "medal": null
+      }
+    ],
+    "tiers": {
+      "bronze": 65,
+      "silver": 74,
+      "gold": 84,
+      "goldClean": true
+    }
   }
 }

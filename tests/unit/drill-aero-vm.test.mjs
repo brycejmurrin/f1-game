@@ -84,8 +84,8 @@ test("__apex.drill*: drillList, then a drillLaunch / drillState / drillEnd round
     assert.deepEqual(plain(g.apex.drillState()), { active: false, state: "menu" });
     assert.deepEqual(plain(g.apex.drillEnd()), { ok: false, error: "no_drill" });
     assert.deepEqual(plain(g.apex.drillRetry()), { ok: false, error: "no_drill" });
-    assert.deepEqual(plain(await g.apex.drillLaunch("nope")), { ok: false, error: "unknown_drill", ids: ["aero"] });
-    assert.deepEqual(plain(g.apex.drillList()), [{ id: "aero", lesson: "aero", track: "monza", flow: "gp", session: "race" }]);
+    assert.deepEqual(plain(await g.apex.drillLaunch("nope")), { ok: false, error: "unknown_drill", ids: plain(g.apex.drillList()).map(d => d.id) });   // every registered drill (aero, rain, ...)
+    assert.deepEqual(plain(g.apex.drillList()).find(d => d.id === "aero"), { id: "aero", lesson: "aero", track: "monza", flow: "gp", session: "race" });
     const launched = await g.apex.drillLaunch("aero");
     assert.equal(launched.ok, true, JSON.stringify(launched));
     assert.equal(launched.id, "aero");

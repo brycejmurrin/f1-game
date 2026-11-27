@@ -337,7 +337,7 @@ test("Button Trainer's arrow challenge is reachable and its saved-BRAKE preset r
 // DrillRegistry (the Button Trainer lab, the Vegas thumb trainer and its on-track drill, js/learn-drills/thumb-drill.js).
 const PENDING = Object.freeze([
   "chassis", "suspension", "deployment", "hybrid", "brake-blend", "tyre-heat", "braking", "racing-line", "telemetry",
-  "rain", "vsc", "pit-duel", "stint",
+  "vsc", "pit-duel", "stint",
 ]);
 const PENDING_SEED = 13;
 const TRAINERS = Object.freeze(["buttons", "thumbs", "thumbs-drive"]);
