@@ -205,7 +205,7 @@ test("the def() registry: every ApexPlay hook has doc, args, a unique name and i
     for (const r of PLAY) assert.ok(LIVE.includes(r.name), r.name + " is not a live __apex key");
     assert.equal(new Set(PLAY.map((r) => r.name)).size, PLAY.length, "duplicate names");
     for (const r of rows) assert.equal(typeof api[r.name], "function", r.name + " not spread into api");
-    assert.deepEqual(Array.from(g.apex.agentHelp().play, (r) => r.name), [...SHIPPED, "playFixture", "playFixtureTrack"], "agentHelp().play lists the registry rows");
+    assert.equal(g.apex.agentHelp().play.names, [...SHIPPED, "playFixture", "playFixtureTrack"].join(","), "agentHelp().play names the registry rows");
     assert.throws(() => g.ctx.ApexPlay.def("playFixture", { doc: "d", fn() {} }), /duplicate/);
     assert.throws(() => g.ctx.ApexPlay.def("no.dots", { doc: "d", fn() {} }), /bad hook name/);
     assert.throws(() => g.ctx.ApexPlay.def("playNoDoc", { doc: " ", fn() {} }), /doc is required/);

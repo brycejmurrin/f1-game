@@ -10,7 +10,7 @@ jq '.hooks[] | select(.name=="physState")' docs/agent-index.json
 
 | Hook | Signature | Summary |
 |---|---|---|
-| `atmosphere` | `atmosphere()` | WHAT IS THE LIGHT DOING — day/night, sun or moon, floodlights, fog visibility, wet road. Raw values kept for measurement |
+| `atmosphere` | `atmosphere()` | WHAT IS THE LIGHT DOING — day/night, sun/moon, floodlights, fog, wet road |
 | `awaitPresent` | `awaitPresent(timeoutMs)?` | WAIT FOR THE PIXELS — resolves once a real frame is on screen; screenshot after it (before: stale or black canvas) |
 | `field` | `field({detail})` | THE GRID — race order, gap-to-leader and interval. world().rivals is the egocentric nearest-few |
 | `render` | `render({what,cols,ss,...})` | SHOW IT — the one optional raster, APPROXIMATE. what: 'view'\|'map'\|'circuit'\|'car'. For intuition, not measurement |
@@ -27,35 +27,35 @@ jq '.hooks[] | select(.name=="physState")' docs/agent-index.json
 | Hook | Signature | Summary |
 |---|---|---|
 | `carView` | `carView({team,parts,bodyStyle,detail})` | WHAT AM I DRIVING — team, parts spec + effects, chassis silhouette, measured geometry; detail:"parts" adds per-part boxes |
-| `perf` | `perf()` | GOVERNOR SNAPSHOT — scale/fps/tier/autoTier/autoShed/userTier/strikes (alias of renderScale report) |
-| `spatialUpscale` | `spatialUpscale(0\|1)` | GLX/WGX/TLX SGSR1 (flag OFF by default). active only when on AND renderScale<~1; see UPSCALING-2026-09 §6–7 |
+| `perf` | `perf()` | GOVERNOR SNAPSHOT — scale/fps/tier/strikes (renderScale report alias) |
+| `spatialUpscale` | `spatialUpscale(0\|1)` | SGSR1 upscale (OFF by default); active only when on AND renderScale<~1 |
 | `survey` | `survey({stations,lats,reachM,limit,profile})` | IS ANYTHING BROKEN — floating/buried props, props over the line, terrain through the road, holes and cliffs |
-| `trackInfo` | `trackInfo({what})` | STATIC substrate — corners\|sectors\|profile\|all. Fetch ONCE. Corners carry radius, apexSpeedKph, straightAfterM/exitsOntoStraight (no line), plus bankingDeg/camber,… |
+| `trackInfo` | `trackInfo({what})` | STATIC substrate — corners\|sectors\|profile\|all. Fetch ONCE. Corners carry radius, apexSpeedKph, exitsOntoStraight, banking, gradient, kerbs |
 ## act
 
 | Hook | Signature | Summary |
 |---|---|---|
 | `ersPlan` | `ersPlan(plan?)` | sector ERS plan, 3× manual\|deploy\|save; get/set |
-| `objective` | `objective()` | WHAT AM I TRYING TO DO — win condition, the trade-offs (track limits, ERS, overtake, parts budget), hard constraints; read once |
+| `objective` | `objective()` | WHAT AM I TRYING TO DO — win condition, trade-offs, hard constraints; read once |
 | `rollout` | `rollout({seconds,dt,input,policy,policyHz,samples})` | drive an interval, return a digest; policy: a function or "autopilot"\|"box" |
 | `terminal` | `terminal()` | {done, reason} — retired\|finished\|wrong_way\|rescued\|null |
 ## fields
 
 | Hook | Signature | Summary |
 |---|---|---|
-| `ego.clearLeftM/RightM` | `ego.clearLeftM/RightM` | metres to the barrier each side; small = no room to defend |
+| `ego.clearLeftM/RightM` | `ego.clearLeftM/RightM` | metres to the barrier each side |
 | `ego.headingErrDeg` | `ego.headingErrDeg` | + = nose right of the road; steer the opposite sign to null it |
 | `ego.lateralM` | `ego.lateralM` | + = right of centreline; the road runs out at halfWidthM |
-| `ego.onTrack` | `ego.onTrack` | false means you are on grass — grip is gone, straighten first |
-| `episodeId` | `episodeId` | view-local episode counter; reset increments it and clears the delta baseline |
-| `nextCorner.apexSpeedKph` | `nextCorner.apexSpeedKph` | roughly the fastest you can be at the apex and still hold it |
+| `ego.onTrack` | `ego.onTrack` | false = on grass, grip gone |
+| `episodeId` | `episodeId` | episode counter; reset increments it, clears the delta baseline |
+| `nextCorner.apexSpeedKph` | `nextCorner.apexSpeedKph` | about the fastest you can hold at the apex |
 | `nextCorner.exitsOntoStraight` | `nextCorner.exitsOntoStraight` | true = prioritise exit speed over entry speed here |
 | `nextCorner.status` | `nextCorner.status` | the braking call — BRAKE NOW means brake this instant |
-| `pacenotes` | `pacenotes` | the road ahead as a co-driver call: dir + severity 1-6 @ distance |
-| `rivals[].closingMps` | `rivals[].closingMps` | + = the gap is shrinking, whichever side they are on |
-| `rivals[].pace` | `rivals[].pace` | AI skill ~0.92-1.02; a slower car will not hold the position |
+| `pacenotes` | `pacenotes` | co-driver call: dir + severity 1-6 @ distance |
+| `rivals[].closingMps` | `rivals[].closingMps` | + = the gap is shrinking |
+| `rivals[].pace` | `rivals[].pace` | AI skill ~0.92-1.02 |
 | `session.seed` | `session.seed` | replay this exact episode with reset(frac, speed, x, seed) |
-| `terminal.reason` | `terminal.reason` | why the episode ended — retired vs finished vs wrong_way vs rescued |
+| `terminal.reason` | `terminal.reason` | why the episode ended |
 ## read
 
 | Hook | Signature | Summary |
@@ -119,6 +119,6 @@ jq '.hooks[] | select(.name=="physState")' docs/agent-index.json
 | Hook | Signature | Summary |
 |---|---|---|
 | `decide vs show` | `decide vs show` | read world()/scene()/trackInfo()/the read hooks to DECIDE; call render() only to SEE — its glyphs are approximate |
-| `lean default, pull detail` | `lean default, pull detail` | the world is stored in FULL but never dumped; pull with describe(id)/query() where a decision needs it |
+| `lean default, pull detail` | `lean default, pull detail` | the world is stored FULL, never dumped; pull with describe(id)/query() as needed |
 | `per tick` | `per tick` | world({detail:"brief", since:<seq>}) — ~355 bytes/step, 34x cheaper than full. detail is the big lever |
 | `static vs dynamic` | `static vs dynamic` | trackInfo()+carView() are constant — fetch once. world()+field()+scene() are the live frame — read per decision |

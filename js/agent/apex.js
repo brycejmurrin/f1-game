@@ -2131,7 +2131,7 @@ const api = {
 
   // play: the def() registry rows (js/agent/apex-play.js), merged at call time because gen-agent-index evaluates
   // agentview.js's agentHelp() literal statically and cannot fold a call.
-  agentHelp() { return Object.assign(agentView.agentHelp(), { play: typeof ApexPlay !== "undefined" ? ApexPlay.rows() : [] }); },
+  agentHelp() { return Object.assign(agentView.agentHelp(), { play: typeof ApexPlay !== "undefined" ? { n: ApexPlay.rows().length, names: ApexPlay.rows().map((r) => r.name).join(","), see: "DEBUG-HOOKS.md" } : { n: 0, names: "" } }); },
 
   scene(opts) { return agentView.scene(opts); },
 
