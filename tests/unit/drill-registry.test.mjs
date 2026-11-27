@@ -33,7 +33,7 @@ function load({ tracks = [{ id: "bahrain" }, { id: "monza" }] } = {}) {
     Float32Array,
   };
   vm.createContext(ctx);
-  for (const rel of ["js/learn-drills/registry.js", "js/learn-drills/drill-card.js", "js/ui/learn-door.js"]) {
+  for (const rel of ["js/learn-drills/registry.js", "js/learn-drills/drill-card.js", "js/learn-drills/aero.js", "js/ui/learn-door.js"]) {
     vm.runInContext(readFileSync(absSrc(rel), "utf8"), ctx, { filename: absSrc(rel) });
   }
   vm.runInContext("this.DrillRegistry = DrillRegistry; this.LearnDoor = LearnDoor; this.DrillCard = DrillCard;", ctx);
@@ -149,17 +149,19 @@ test("begin() hands the drill the six-member DrillPort, clears staging and hides
 });
 
 // THE ARC NEVER REACHES THE DRIVER (AGENTS.md §Physics; #6559 rule 1e.2). The Aero drill still lives in
-// js/ui/learn-door.js this PR (U4.1b moves it), so today this covers registry.js and thumb-drill.js. TrackLine.at
-// (begin() placement) and DrivingLine.STRIDE (render-only guide geometry) stay allowed.
+// js/learn-drills/aero.js since U4.1b. TrackLine.at (begin() placement) and the render-only guide's DrivingLine reads
+// (STRIDE geometry; prepare/speedAt place the braking cue, bankOffset lifts a ribbon, invalidateUpload follows a draw)
+// stay allowed in aero.js only: the guide draws and writes nothing to a car.
 test("js/learn-drills/ reads no curvature and no racing line", () => {
   const dir = absSrc("js/learn-drills");
   const files = readdirSync(dir).filter((f) => f.endsWith(".js"));
   assert.equal(files.indexOf("registry.js") >= 0, true, "the host is under the grep");
-  const FORBIDDEN = [/curvature/i, /racingLine/i, /DrivingLine\s*\.\s*(?!STRIDE\b)\w+/];
+  const GUIDE = "STRIDE|prepare|speedAt|bankOffset|invalidateUpload";
+  const forbidden = (f) => [/curvature/i, /racingLine/i, new RegExp(`DrivingLine\\s*\\.\\s*(?!(?:${f === "aero.js" ? GUIDE : "STRIDE"})\\b)\\w+`)];
   const offenders = [];
   for (const f of files) {
     const code = readFileSync(`${dir}/${f}`, "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
-    for (const re of FORBIDDEN) if (re.test(code)) offenders.push(`${f} ${re}`);
+    for (const re of forbidden(f)) if (re.test(code)) offenders.push(`${f} ${re}`);
   }
   assert.deepEqual(offenders, []);
 });

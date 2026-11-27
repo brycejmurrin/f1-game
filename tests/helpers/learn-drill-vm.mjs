@@ -33,7 +33,7 @@ export function deriveAeroTiers(runs) {
 export async function aeroDrill(opts = {}) {
   const { createGame } = require(ROOT + "tools/lib/game-vm.cjs");
   const g = await createGame({ storage: { dirtyAir: "classic", ...(opts.storage || {}) } });
-  for (const rel of ["js/learn-drills/registry.js", "js/learn-drills/drill-card.js", "js/ui/learn-door.js"]) {
+  for (const rel of ["js/learn-drills/registry.js", "js/learn-drills/drill-card.js", "js/learn-drills/aero.js", "js/ui/learn-door.js"]) {
     vm.runInContext(readFileSync(ROOT + rel, "utf8"), g.ctx, { filename: ROOT + rel });
   }
   vm.runInContext("LearnDoor.defineDrills()", g.ctx);
@@ -81,7 +81,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url) && process.argv.includes(
   const refs = JSON.parse(readFileSync(REFS, "utf8"));
   refs.aero = {
     how: "node tests/helpers/learn-drill-vm.mjs --write: 20 runs of the Monza Aero drill (24 m start, Classic dirty air), one boot, RETRY between runs, throttle duty 1.00 down to 0.05, no steering",
-    metric: "metres closed = start gap - nearest gap reached (js/ui/learn-door.js scoreAero)",
+    metric: "metres closed = start gap - nearest gap reached (js/learn-drills/aero.js scoreAero)",
     rule: "bronze = median of the 20; silver = furthest before dropping out of the wake; gold = shortest clean finish (clean required); floored to 0.1 m",
     runs,
     tiers: deriveAeroTiers(runs),
