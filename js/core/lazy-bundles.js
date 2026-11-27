@@ -189,7 +189,7 @@ function ensureCircuit(idx) {
   if (!def || circuitResident(def) || def.custom) return Promise.resolve();
   let p = _circuitLoads.get(def.id);
   if (!p) {
-    p = loadBackendScripts([CIRCUITS_DIR + "/" + def.id + ".js"], [], { transientRetry: false }).then((ok) => {
+    p = loadBackendScripts([CIRCUITS_DIR + "/" + def.id + ".js"], []).then((ok) => {
       if (!ok) {
         Log.warn("track", "circuit payload failed to load: " + def.id);
         return false;
@@ -254,7 +254,7 @@ function sceneryModels(def) {
 function fetchScenery(id) {
   let p = _sceneryLoads.get(id);
   if (!p) {
-    p = loadBackendScripts([SCENERY_DIR + "/" + id + ".js"], [], { transientRetry: false })
+    p = loadBackendScripts([SCENERY_DIR + "/" + id + ".js"], [])
       .catch((e) => { Log.warn("track", "scenery fetch threw: " + id + ": " + (e && e.message)); })
       .then(() => { _sceneryLoads.delete(id); });
     _sceneryLoads.set(id, p);
@@ -1017,13 +1017,8 @@ function bootPerfRig(bind) {
 // build is a different physics world; tools/lib/game-vm.cjs §raceAssets).
 // LAZY_RACE lighting (~361 KB) stays on real idle so it does not fight title
 // paint for the wire. ensureScenery already awaits ensureCircuit.
-// ONE fetch of the presets in flight, and a failed one is forgotten: the loader
-// RESOLVES false on an error (offline, a refused stale-build request), so the
-// answer is read back from window.LightPresets. Without this the single idle
-// attempt below was the only one — one dropped request meant default lighting
-// for every race of the session. ensureCircuit re-asks at the next race start
-// after a failure (the circuit fetch's own pattern); until one has failed, the
-// boot path stays the idle prefetch alone.
+// ONE fetch of the presets in flight; a failed one is forgotten and ensureCircuit re-asks at the next
+// race start (the loader RESOLVES false, so the answer is read back from window.LightPresets).
 let lightLoad = null, lightFailed = false;
 function ensureLightPresets() {
   if (window.LightPresets) return Promise.resolve(true);
@@ -1047,7 +1042,7 @@ function ensureGarageData() {
   ensureSavesData();   // the GARAGE FILE row rides the same doors (setup-sheet reads garageRow synchronously)
   if (garageReady() || !GARAGE_FILES.length) return Promise.resolve(garageReady());
   if (garageLoad) return garageLoad;
-  garageLoad = loadBackendScripts(GARAGE_FILES, [], { strict: true, transientRetry: false }).catch(() => false).then(() => {
+  garageLoad = loadBackendScripts(GARAGE_FILES, [], { strict: true }).catch(() => false).then(() => {
     garageLoad = null;
     if (!garageReady()) Log.warn("game", "the garage's Blender tables did not load — the next garage visit asks again");
     return garageReady();

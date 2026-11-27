@@ -235,7 +235,10 @@ const LearnDoor = (function () {
     if (typeof WakeDrill !== "undefined") WakeDrill.define();   // js/learn-drills/wake.js, when it evaluated first
     if (typeof TyreHeatDrill !== "undefined") TyreHeatDrill.define();   // js/learn-drills/tyre-heat.js, when it evaluated first
     DrillRegistry.define(AeroDrill.descriptor());
+    if (typeof TelemetryDrill !== "undefined") TelemetryDrill.define();   // js/learn-drills/telemetry.js, likewise
     if (typeof LinesDrill !== "undefined") LinesDrill.define();   // js/learn-drills/lines.js, when it evaluated first
+    if (typeof ChargeDrill !== "undefined") ChargeDrill.define();   // js/learn-drills/charge.js, when it evaluated first
+    if (typeof RainDrill !== "undefined") RainDrill.define();   // js/learn-drills/rain-groove.js, when it evaluated first
   }
 
   /** Every lesson id in the curriculum, in index order (tests/unit/learn-curriculum.test.mjs's coverage pin). */

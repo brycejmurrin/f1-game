@@ -15,6 +15,8 @@
 // Output: `= first-race-census track=… api=… warm=… pre=N post=M sync=S misses=K dist=…m docs=D navigations=N` and one line per pipeline built
 // after lights-out: `  +<s> <state> key=<matCache key|-> <obj> <mat> rt=<target> sx=<±1> attrs=<…> <build ms>`. A run whose final
 // read finds no hook prints `= first-race-census FAILED hookLost …` and exits 1.
+import { exitIfHelp } from "../lib/cli-args.mjs";
+exitIfHelp(process.argv[1]?.endsWith("/first-race-census.mjs") ? process.argv.slice(2) : [], "Usage: node tools/perf/first-race-census.mjs [options]\nFirst-race pipeline census: TLX WebGPU on Lavapipe, one driven first lap; every createRenderPipeline after\n--help prints this and exits 0.");
 import { startStaticServer, launchChromium, WEBGPU_LAVAPE_CHROMIUM_ARGS, WEBGPU_LAVAPE_ENV } from "../lib/harness.mjs";
 import { gotoGame } from "../shot/probe-page.mjs";
 import { raceGate } from "../lib/census-entry.mjs";

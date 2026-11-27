@@ -18,6 +18,8 @@
 //
 // A browser renders, so TLX/WGX can still leak BELOW this contract (three's caches): that is
 // tests/specs/track-switch-memory.spec.js and race-cycle-memory.spec.js. This census is the layer above.
+import { exitIfHelp } from "../lib/cli-args.mjs";
+exitIfHelp(process.argv[1]?.endsWith("/vm-leak-census.mjs") ? process.argv.slice(2) : [], "Usage: node tools/perf/vm-leak-census.mjs [options]\nVM leak census: live GPU handles, event listeners and timers across race → QUIT TO MENU cycles (count-based, exact).\n--help prints this and exits 0.");
 import { createRequire } from "node:module";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";

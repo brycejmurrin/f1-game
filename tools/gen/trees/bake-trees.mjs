@@ -10,6 +10,8 @@
  *
  *   node tools/gen/trees/bake-trees.mjs
  */
+import { exitIfHelp } from "../../lib/cli-args.mjs";
+exitIfHelp(process.argv[1]?.endsWith("/bake-trees.mjs") ? process.argv.slice(2) : [], "Usage: node tools/gen/trees/bake-trees.mjs [options]\nManual tool: `npm i --no-save @dgreenheck/ez-tree three` (never a package.json\n--help prints this and exits 0.");
 import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";

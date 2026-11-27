@@ -32,6 +32,8 @@
  * A callback passed by reference cannot be
  * checked this way and is skipped rather than guessed at.
  */
+import { exitIfHelp } from "../lib/cli-args.mjs";
+exitIfHelp(process.argv[1]?.endsWith("/evaluate-scope-lint.mjs") ? process.argv.slice(2) : [], "Usage: node tools/check/evaluate-scope-lint.mjs [options]\nA `page.evaluate()` callback may not close over Node — flags module-scope reads inside serialised callbacks.\n--help prints this and exits 0.");
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /* Apex 26 — rotate a circuit's curated turn apexes onto a corrected start line.
- * @doc Rotates each circuit's `turns` onto a corrected start line by the scenery's arc shift, then re-sorts them; `--check`.
+ * @doc Rotates each circuit's `turns` onto a corrected start line by the scenery arc shift, then re-sorts (`--write` applies).
  * @skill new-track
  *
  * A def's `sectors` / `turns` (js/circuits/<id>.js) are authored in RACING-LAP
@@ -44,6 +44,10 @@
  */
 "use strict";
 
+if (require.main === module && process.argv.slice(2).some((a) => a === "--help" || a === "-h" || a === "help")) {
+  console.log("Usage: node tools/track/rotate-markings.cjs [options]\nRotates each circuit's `turns` onto a corrected start line by the scenery's arc shift, then re-sorts them (`--write` applies).\n--help prints this and exits 0.");
+  process.exit(0);
+}
 const fs = require("fs");
 const path = require("path");
 const { buildContext } = require("./verify-track.cjs");

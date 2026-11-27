@@ -18,6 +18,8 @@
 //   node tools/car/tri-census.mjs --flat             flat-shaded builds (apex26.carSmooth=0) as well
 //   node tools/car/tri-census.mjs --root=<dir>       measure another checkout (git worktree) for a before/after
 //   node tools/car/tri-census.mjs --json             machine output
+import { exitIfHelp } from "../lib/cli-args.mjs";
+exitIfHelp(process.argv[1]?.endsWith("/tri-census.mjs") ? process.argv.slice(2) : [], "Usage: node tools/car/tri-census.mjs [options]\nCar mesh census: tris/verts per body style × aero × draw tier (player, field, caster, far); --root = another checkout.\n--help prints this and exits 0.");
 import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";

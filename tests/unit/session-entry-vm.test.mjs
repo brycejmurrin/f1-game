@@ -42,7 +42,7 @@ test("cold-menu setup trials use the real solo standing grid; ordinary TT still 
 });
 function holdScenery(id) {
   delete g.sandbox.TrackScenery[id];
-  const head = g.sandbox.document.head, append = head.appendChild;
+  const head = g.sandbox.document.head, append = head.appendChild, W = vm.runInContext("window", g.ctx), setT = W.setTimeout;
   let held = null;
   head.appendChild = function (el) {
     if (el.tagName === "SCRIPT" && el.src.includes("/" + id + ".js")) { held = el; return el; }
@@ -58,12 +58,18 @@ function holdScenery(id) {
     },
     fail() {
       assert.ok(held, "the actual lazy scenery script was requested");
-      const script = held;
-      head.appendChild = append;
+      const script = held, err = () => ({ type: "error", error: new Error("injected scenery download failure") });
       held = null;
-      script.onerror({ type: "error", error: new Error("injected scenery download failure") });
+      // The download keeps failing: the loader's cache-busted retries (#7233) hit the same outage.
+      head.appendChild = function (el) {
+        if (el.tagName === "SCRIPT" && el.src.includes("/" + id + ".js")) { setImmediate(() => el.onerror(err())); return el; }
+        return append.call(this, el);
+      };
+      // VM timers are queued: the loader's 400/1200 ms retry waits (#7233) would never fire, so run them now.
+      W.setTimeout = (fn, ms, ...a) => (ms === 400 || ms === 1200 ? setImmediate(() => fn(...a)) : setT(fn, ms, ...a));
+      script.onerror(err());
     },
-    restore() { head.appendChild = append; },
+    restore() { head.appendChild = append; W.setTimeout = setT; },
   };
 }
 function select(id) { g.G.trackIdx = g.sandbox.Tracks.LIST.findIndex((t) => t.id === id); }

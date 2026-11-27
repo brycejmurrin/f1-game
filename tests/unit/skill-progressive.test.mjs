@@ -261,7 +261,7 @@ test("skills only name real test-bg groups", () => {
   const groups = new Set(
     Object.keys(pkg.scripts).filter((k) => k.startsWith("test:")).map((k) => k.slice(5)),
   );
-  const flags = new Set(["--status", "--stop", "--wait", "--timeout", "--force", "--json", "--sweep"]);
+  const flags = new Set(["--status", "--stop", "--wait", "--timeout", "--force", "--foreground", "--json", "--sweep"]);
   const bad = [];
   const walk = (dir) => {
     for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -339,7 +339,7 @@ test("every custom subagent declares name, description, and model", () => {
     // pinned to the cheap tier (https://code.claude.com/docs/en/sub-agents).
     "Explore.md": "haiku",
   };
-  const ONE_LINE = "Flat prohibitions: AGENTS.md §Verification 10, 5 and 4 (no Playwright/test-bg/test-solo/chrome-start, no --wait); what a card may write is its `tools:` list, not a hook.";
+  const ONE_LINE = "Flat prohibitions: AGENTS.md §Verification 10, 5 and 4 (no Playwright/test-bg/chrome-start, no --wait); what a card may write is its `tools:` list, not a hook.";
   for (const f of files) {
     const text = fs.readFileSync(path.join(AGENTS, f), "utf8");
     const fm = frontmatter(text);
@@ -363,7 +363,7 @@ test("review-pass contracts: no stale commands or steal phrases", () => {
   assert.doesNotMatch(triage, /ONE browser group per batch \(`tools\/test-bg\.mjs`/);
   assert.doesNotMatch(triage, /test-bg\.mjs[\s\S]{0,40}enforces the cap/);
   assert.match(triage, /verify-change/);
-  assert.match(triage, /test-solo\.mjs/);
+  assert.match(triage, /test-bg\.mjs --spec \S+ --foreground/);
 
   const walkMd = (dir, fn) => {
     for (const e of fs.readdirSync(dir, { withFileTypes: true })) {

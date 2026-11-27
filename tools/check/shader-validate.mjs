@@ -31,6 +31,8 @@
 //
 // Binaries: tools/env/install-lint-bins.sh. No network at run time. Output files go to
 // artifacts/shader-validate/. Exit 0 clean (or SKIPPED), 1 findings, 2 tool error.
+import { exitIfHelp } from "../lib/cli-args.mjs";
+exitIfHelp(process.argv[1]?.endsWith("/shader-validate.mjs") ? process.argv.slice(2) : [], "Usage: node tools/check/shader-validate.mjs [options]\nglslang over the GLX GLSL ES 3.00 shaders, naga (advisory) over the WGX WGSL; offline, skips LOUDLY without the binary.\n--help prints this and exits 0.");
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";

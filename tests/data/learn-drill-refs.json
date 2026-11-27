@@ -575,5 +575,403 @@
       "gold": 95.8,
       "goldClean": true
     }
+  },
+  "rain": {
+    "how": "WRITE_REFS=1 node --test tests/unit/drill-rain-vm.test.mjs: 10 runs of the Monza sector-3 Wet Weather Lines drill (road held at 0.18, slicks), one boot, RETRY between runs, a pure-pursuit driver at 34-37 m/s aimed at the groove offset by 0, ±1..±4 m, and one at the centreline",
+    "metric": "% of the sector's frames with WeatherArc.dryLine >= 0.5 under the car (js/learn-drills/rain-groove.js score)",
+    "rule": "bronze = the centreline driver's share; gold = the on-groove driver's share - 5; silver = halfway; whole %, floored; gold needs a clean run",
+    "runs": [
+      {
+        "mode": "groove",
+        "off": 0,
+        "share": 89.24,
+        "seconds": 70.52,
+        "clean": true,
+        "medal": "gold"
+      },
+      {
+        "mode": "centre",
+        "off": 0,
+        "share": 65.38,
+        "seconds": 70.6,
+        "clean": true,
+        "medal": "bronze"
+      },
+      {
+        "mode": "groove",
+        "off": 1,
+        "share": 90.31,
+        "seconds": 70.4,
+        "clean": true,
+        "medal": "gold"
+      },
+      {
+        "mode": "groove",
+        "off": -1,
+        "share": 85.62,
+        "seconds": 70.5,
+        "clean": true,
+        "medal": "gold"
+      },
+      {
+        "mode": "groove",
+        "off": 2,
+        "share": 71.94,
+        "seconds": 70.4,
+        "clean": true,
+        "medal": "bronze"
+      },
+      {
+        "mode": "groove",
+        "off": -2,
+        "share": 78.09,
+        "seconds": 70.6,
+        "clean": true,
+        "medal": "silver"
+      },
+      {
+        "mode": "groove",
+        "off": 3,
+        "share": 54.65,
+        "seconds": 70.4,
+        "clean": true,
+        "medal": null
+      },
+      {
+        "mode": "groove",
+        "off": -3,
+        "share": 61.04,
+        "seconds": 70.6,
+        "clean": true,
+        "medal": null
+      },
+      {
+        "mode": "groove",
+        "off": 4,
+        "share": 39.77,
+        "seconds": 70.3,
+        "clean": true,
+        "medal": null
+      },
+      {
+        "mode": "groove",
+        "off": -4,
+        "share": 49.78,
+        "seconds": 70.6,
+        "clean": true,
+        "medal": null
+      }
+    ],
+    "tiers": {
+      "bronze": 65,
+      "silver": 74,
+      "gold": 84,
+      "goldClean": true
+    }
+  },
+  "telemetry": {
+    "how": "node tests/unit/drill-telemetry-vm.test.mjs --write: one boot of the Monza Telemetry drill (solo TT, sector 2 from 40 m past the S1 line); steering is SoakRun's control() law, pedals SoakRun's own except the fault: REF, EARLY (whole brake 25 m before REF's first braking point), the pick at that window's middle with the found cause, FIX IT (REF's pedals), LATE (8 m off the throttle past REF's first throttle point after its first braking zone)",
+    "metric": "seconds located (the peak-loss 100 m window's loss, once picked) or won back (a FIX IT run, in the solved window) — js/learn-drills/telemetry.js analyze/pick/score",
+    "rule": "bronze = a pick within 60 m of the peak-loss window; silver = and the cause the trace names; gold = a clean FIX IT run that wins back 60 % of a silver window and is faster overall than the solved run (#6551 §4: geometric tiers, not score thresholds; the refs pin that the scripted fault is found)",
+    "runs": {
+      "mark": {
+        "on": 131,
+        "thr": 187
+      },
+      "ref": {
+        "value": 0,
+        "clean": true,
+        "reason": "",
+        "medal": null,
+        "total": null,
+        "window": null,
+        "cause": null,
+        "fix": null
+      },
+      "early": {
+        "value": 0.194,
+        "clean": true,
+        "reason": "",
+        "medal": "silver",
+        "total": 0.21,
+        "window": {
+          "from": 90,
+          "to": 190,
+          "loss": 0.194
+        },
+        "cause": "brake",
+        "fix": null
+      },
+      "picked": {
+        "medal": "silver",
+        "value": 0.194
+      },
+      "fix": {
+        "value": 0.194,
+        "clean": true,
+        "reason": "",
+        "medal": "gold",
+        "total": 0,
+        "window": {
+          "from": 0,
+          "to": 100,
+          "loss": 0
+        },
+        "cause": null,
+        "fix": {
+          "won": 0.194,
+          "frac": 1,
+          "faster": true
+        }
+      },
+      "late": {
+        "value": 0,
+        "clean": true,
+        "reason": "",
+        "medal": null,
+        "total": 0.36,
+        "window": {
+          "from": 130,
+          "to": 230,
+          "loss": 0.367
+        },
+        "cause": "throttle",
+        "fix": {
+          "won": 0.184,
+          "frac": 0.948,
+          "faster": false
+        }
+      }
+    }
+  },
+  "charge": {
+    "how": "node tests/helpers/charge-drill-vm.mjs --write: the 27 per-sector plans (MANUAL/DEPLOY/SAVE each sector) of the Monza Charge-Sustaining Lap (20 m past the line at 0.8 vTop, 2.0 Apex MJ store, gate 30 m before the line), one boot, a warm-up lap, then RETRY before each run; test pursuit driver at 1.1 x vTop, BOOST left to the plan",
+    "metric": "mean speed to the gate, dash km/h (js/learn-drills/charge.js score); clean = a clean lap that ends with at least the start store",
+    "rule": "#6550 D2 on lap time over the clean (charge-sustaining) runs: gold within +0.15 s of the best, silver within +0.40 s, bronze the slowest sustaining lap; as mean-speed tiers floored to 0.1 km/h; cleanRequired",
+    "runs": [
+      {
+        "plan": "manual/manual/manual",
+        "kmh": 202.1,
+        "lapS": 121.5,
+        "netMJ": 2,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "plan": "manual/manual/deploy",
+        "kmh": 203.1,
+        "lapS": 120.9,
+        "netMJ": -0.66,
+        "clean": false,
+        "reason": "borrowed 0.66 MJ"
+      },
+      {
+        "plan": "manual/manual/save",
+        "kmh": 202.1,
+        "lapS": 121.5,
+        "netMJ": 2,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "plan": "manual/deploy/manual",
+        "kmh": 203.1,
+        "lapS": 120.9,
+        "netMJ": 1.25,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "plan": "manual/deploy/deploy",
+        "kmh": 203.5,
+        "lapS": 120.7,
+        "netMJ": -0.693,
+        "clean": false,
+        "reason": "borrowed 0.69 MJ"
+      },
+      {
+        "plan": "manual/deploy/save",
+        "kmh": 203.1,
+        "lapS": 120.9,
+        "netMJ": 1.25,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "plan": "manual/save/manual",
+        "kmh": 202.1,
+        "lapS": 121.5,
+        "netMJ": 2,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "plan": "manual/save/deploy",
+        "kmh": 203.1,
+        "lapS": 120.9,
+        "netMJ": -0.66,
+        "clean": false,
+        "reason": "borrowed 0.66 MJ"
+      },
+      {
+        "plan": "manual/save/save",
+        "kmh": 202.1,
+        "lapS": 121.5,
+        "netMJ": 2,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "plan": "deploy/manual/manual",
+        "kmh": 202.4,
+        "lapS": 121.3,
+        "netMJ": 2,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "plan": "deploy/manual/deploy",
+        "kmh": 203.4,
+        "lapS": 120.7,
+        "netMJ": -0.66,
+        "clean": false,
+        "reason": "borrowed 0.66 MJ"
+      },
+      {
+        "plan": "deploy/manual/save",
+        "kmh": 202.4,
+        "lapS": 121.3,
+        "netMJ": 2,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "plan": "deploy/deploy/manual",
+        "kmh": 203.1,
+        "lapS": 120.9,
+        "netMJ": 1.967,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "plan": "deploy/deploy/deploy",
+        "kmh": 203.6,
+        "lapS": 120.6,
+        "netMJ": -0.66,
+        "clean": false,
+        "reason": "borrowed 0.66 MJ"
+      },
+      {
+        "plan": "deploy/deploy/save",
+        "kmh": 203.1,
+        "lapS": 120.9,
+        "netMJ": 1.967,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "plan": "deploy/save/manual",
+        "kmh": 202.4,
+        "lapS": 121.3,
+        "netMJ": 2,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "plan": "deploy/save/deploy",
+        "kmh": 203.4,
+        "lapS": 120.7,
+        "netMJ": -0.66,
+        "clean": false,
+        "reason": "borrowed 0.66 MJ"
+      },
+      {
+        "plan": "deploy/save/save",
+        "kmh": 202.4,
+        "lapS": 121.3,
+        "netMJ": 2,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "plan": "save/manual/manual",
+        "kmh": 202.1,
+        "lapS": 121.5,
+        "netMJ": 2,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "plan": "save/manual/deploy",
+        "kmh": 203.1,
+        "lapS": 120.9,
+        "netMJ": -0.66,
+        "clean": false,
+        "reason": "borrowed 0.66 MJ"
+      },
+      {
+        "plan": "save/manual/save",
+        "kmh": 202.1,
+        "lapS": 121.5,
+        "netMJ": 2,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "plan": "save/deploy/manual",
+        "kmh": 203.1,
+        "lapS": 120.9,
+        "netMJ": 1.25,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "plan": "save/deploy/deploy",
+        "kmh": 203.5,
+        "lapS": 120.7,
+        "netMJ": -0.693,
+        "clean": false,
+        "reason": "borrowed 0.69 MJ"
+      },
+      {
+        "plan": "save/deploy/save",
+        "kmh": 203.1,
+        "lapS": 120.9,
+        "netMJ": 1.25,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "plan": "save/save/manual",
+        "kmh": 202.1,
+        "lapS": 121.5,
+        "netMJ": 2,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "plan": "save/save/deploy",
+        "kmh": 203.1,
+        "lapS": 120.9,
+        "netMJ": -0.66,
+        "clean": false,
+        "reason": "borrowed 0.66 MJ"
+      },
+      {
+        "plan": "save/save/save",
+        "kmh": 202.1,
+        "lapS": 121.5,
+        "netMJ": 2,
+        "clean": true,
+        "reason": ""
+      }
+    ],
+    "tiers": {
+      "bronze": 202.1,
+      "silver": 202.4,
+      "gold": 202.8,
+      "goldClean": true,
+      "cleanRequired": true
+    }
   }
 }
