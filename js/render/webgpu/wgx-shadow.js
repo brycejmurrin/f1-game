@@ -2,8 +2,8 @@
  * Owns the static sun shadow map, the per-frame dynamic CAR map, the nearest-
  * floodlight spot map, the PCSS blocker downsample, and the depth-only cast
  * API (shadowBegin/castShadow/shadowEnd + car/lamp + castShadowInstanced).
- * castShadowChunked stays here for this peel (GLX keeps it on GLXChunked; a
- * follow-up can move it with wgx-chunked.js). Mirror of js/render/glx/shadow.js.
+ * castShadowChunked stays here (GLX keeps it on GLXChunked; D-049 froze the
+ * follow-up move). Mirror of js/render/glx/shadow.js.
  * Must load before js/render/webgpu/wgx.js (wgx.js calls WGXShadow.init).
  */
 "use strict";
@@ -199,9 +199,6 @@ const WGXShadow = (function () {
 
     function _shadowModelSrc(model) {
       return model && model.length === 16 ? model : (model && model.length > 16 && model.subarray ? model.subarray(0, 16) : IDENT);
-    }
-    function _writeShadowModel(slot, model) {
-      shadowModelRing.set(_shadowModelSrc(model), slot * SHADOW_MODEL_F32_STRIDE);
     }
     // One writeBuffer for every slot filled this pass — call before
     // shadowPass.end(). writeBuffer is queue-ordered before submit, so
@@ -537,7 +534,6 @@ const WGXShadow = (function () {
     setup();
 
     return {
-      SIZE: SHADOW_SIZE,
       get shadowView() { return shadowView; },
       get shadowSampler() { return shadowSampler; },
       get carShadowView() { return carShadowView; },
@@ -549,10 +545,7 @@ const WGXShadow = (function () {
       get carShadowLVPData() { return carShadowLVPData; },
       get lampShadowLVPData() { return lampShadowLVPData; },
       get shadowModule() { return shadowModule; },
-      get shadowPass() { return shadowPass; },
       get SHADOW_SIZE() { return SHADOW_SIZE; },
-      get SHADOW_SLOTS() { return SHADOW_SLOTS; },
-      get SHADOW_MODEL_STRIDE() { return SHADOW_MODEL_STRIDE; },
       get rendered() { return _shadowRendered; },
       set rendered(v) { _shadowRendered = !!v; },
       get lightVP() { return _shadowLightVP; },

@@ -2850,10 +2850,6 @@ test("shadow model UBO flushes once per pass (not per cast)", () => {
   // Lit draws already batch via _flushDrawUBO. Shadow used to upload 16
   // floats per castShadow* (sun + car + lamp). WebGPU Fundamentals:
   // fill one typed array, one writeBuffer, dynamic offsets at setBindGroup.
-  const write = WGX_SOURCE.match(/function _writeShadowModel\([\s\S]*?\n    \}/);
-  assert.ok(write, "_writeShadowModel exists");
-  assert.doesNotMatch(write[0], /writeBuffer/,
-    "_writeShadowModel must only fill the CPU ring — no per-cast queue upload");
   assert.match(WGX_SOURCE, /function _flushShadowModelUBO/,
     "one flush must exist, matching the lit _flushDrawUBO shape");
   assert.match(WGX_SOURCE, /shadowModelRing/,
