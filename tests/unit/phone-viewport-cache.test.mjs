@@ -12,6 +12,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { loadUiShape } from "../helpers/ui-shape-load.mjs";
 
 const src = (f) => fs.readFileSync(absSrc(f), "utf8");
 
@@ -28,6 +29,7 @@ function boot({ w, h, coarse }) {
   const store = { get: (_k, d) => d, set() {}, subscribe: () => () => {} };
   const ctx = vm.createContext({ console, Math, window: win, document: { body: null, readyState: "complete", getElementById: () => null, addEventListener() {} },
     GameStore: { store } });
+  loadUiShape(ctx);
   for (const f of ["js/ui/scale.js", "js/ui/hud-elements.js"]) vm.runInContext(src(f), ctx, { filename: absSrc(f) });
   vm.runInContext("this.UiScale = UiScale; this.HudElements = HudElements;", ctx);
   const fire = (n) => { for (const l of on[n] || []) l.fn({ type: n }); };
@@ -69,12 +71,12 @@ test("a resize or orientationchange drops the held side; the next ask reads the 
   assert.equal(b.reads.innerWidth, 3, "one read per viewport, not per ask");
 });
 
-test("every phone detector routes through UiScale.phone()", () => {
+test("every phone detector routes through UiShape.phone()", () => {
   for (const f of ["js/ui/hud-elements.js", "js/ui/screen-looks.js", "js/ui/title-layout.js"]) {
-    assert.match(src(f), /const phone = \(\) => [^\n]*typeof UiScale !== "undefined"[^\n]*UiScale\.phone\(\)/, f);
+    assert.match(src(f), /const phone = \(\) => [^\n]*typeof UiShape !== "undefined"[^\n]*UiShape\.phone\(\)/, f);
   }
   // scale.js loads before the other three, so their eval-time calls already see UiScale.
   const order = src("tools/manifest.cjs");
   const at = (f) => order.indexOf(`"${f}"`);
-  for (const f of ["js/ui/hud-elements.js", "js/ui/screen-looks.js", "js/ui/title-layout.js"]) assert.ok(at("js/ui/scale.js") < at(f), f);
+  for (const f of ["js/ui/hud-elements.js", "js/ui/screen-looks.js", "js/ui/title-layout.js"]) assert.ok(at("js/ui/ui-shape.js") < at(f), f);
 });

@@ -206,7 +206,7 @@
     return o.displayHdr ? HDR_PEAK : 1;
   }
 
-  /* TAA CONTROLLER. ctx = { runPass(mat, target), ownRT(rt), trackMaterial, ldrTex, depthTex }.
+  /* TAA CONTROLLER. ctx = { runPass(mat, target), ownRT(rt), rtSetSize(rt, w, h), trackMaterial, ldrTex, depthTex }.
    * jitter(w, h): this frame's NDC jitter (tlx.js applies it to the main camera's projection before the scene;
    *   the mirror camera and the DOM HUD never see it). resolve(F, w, h, live): history <- TAA(ldr, history),
    *   then the history -> dest copy runs through runPass; returns the history RT the copy read. */
@@ -306,7 +306,8 @@
           rt.texture.name = "TLXTaaHist" + i;
           return rt;
         });
-      } else { hist[0].setSize(w, h); hist[1].setSize(w, h); }
+      } else if (ctx.rtSetSize) { ctx.rtSetSize(hist[0], w, h); ctx.rtSetSize(hist[1], w, h); }
+      else { hist[0].setSize(w, h); hist[1].setSize(w, h); }
       W = w; H = h; reset = true;
     }
     function jitter(w, h) {

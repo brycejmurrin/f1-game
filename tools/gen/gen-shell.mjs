@@ -228,7 +228,8 @@ function controllerBlock() {
 
 /** Every tagless file sw.js must seed: loadBackendScripts() injects each one as
  *  `<path>?v=<build>`, and the tag parser cannot see any of them. LAZY_AGENT is
- *  deliberately absent (dev/test surface; an install-time put full-compiles). */
+ *  deliberately absent (dev/test surface; an install-time put full-compiles), and so is
+ *  LAZY_DEV (js/perf/gfx-debug-overlay.js, the `?gfxdebug=1` dev flag only). */
 const controllerPageOnly = MANIFEST.CONTROLLER.filter(file => MANIFEST.OVERLAY_PAGE.includes(file));
 
 export function swOptionalFiles() {
