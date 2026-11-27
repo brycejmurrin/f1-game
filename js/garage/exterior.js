@@ -115,7 +115,7 @@ const GarageExterior = (function () {
   function snapshot(s) {
     const tod = s.tod || "default";
     return { trackId: s.trackId || s.def && s.def.id || "", teamId: s.teamId || "", weather: s.weather || "dry",
-      tod, night: s.night != null ? !!s.night : tod === "night" || tod === "dusk" || tod === "dawn" || tod === "default" && !!(s.def && s.def.night), def: s.def };
+      tod, night: s.night != null ? !!s.night : GarageExperience.isNight(tod, s.def), def: s.def };
   }
   const geometryKey = s => JSON.stringify([s.trackId, s.teamId, s.night]);
   const selectionKey = s => geometryKey(s) + "|" + s.weather + "|" + s.tod;
