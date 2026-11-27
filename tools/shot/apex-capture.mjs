@@ -40,7 +40,7 @@ import { defaultCaptureWorkers, captureCpuBudget } from "../lib/browser-workers.
 import { screenshotPresentedCanvas, installProbeInit, gotoGame, awaitCaptureReady, mutateCaptureScene } from "./probe-page.mjs";
 import { invoked, pixelEvidence } from "./capture-contract.mjs";
 import { exitIfHelp } from "../lib/cli-args.mjs";
-import { parseCaptureOptions, captureContextOptions, captureLaunchOptions, captureExtension, captureScreenshotOptions, applyCaptureProfile } from "./capture-options.mjs";
+import { parseCaptureOptions, captureContextOptions, captureLaunchOptions, captureExtension, captureScreenshotOptions, applyCaptureProfile, assertCaptureFlagsSupported, splitTrackAndDir } from "./capture-options.mjs";
 import { captureBrowserDiagnostics, assertCaptureGpuCapability, startCaptureTrace } from "./capture-diagnostics.mjs";
 import { menuReady } from "../ui/menu-readiness.mjs";
 
@@ -61,6 +61,17 @@ Shared flags: --profile preview|comparison|custom --width N --height N --dpr N
 Default cmd=modes. Env APEX_WORKERS=N (GL-aware default via browser-workers.mjs).`);
 const options = parseCaptureOptions(argv);
 const [cmd = "modes", ...rest] = options.positionals;
+export const CAPTURE_COMMANDS = ["cameras", "modes", "tracks", "identity", "lap-tour"];
+// An unknown command used to fall into the `modes` branch (boot workers, exit 0); --ultra/--tlx-webgpu are parsed
+// for every capture tool but only shot.mjs reads them.
+if (invoked(import.meta.url)) {
+  if (!CAPTURE_COMMANDS.includes(cmd)) {
+    console.error(`apex-capture: unknown command "${cmd}" — one of ${CAPTURE_COMMANDS.join(" | ")}`);
+    process.exit(2);
+  }
+  try { assertCaptureFlagsSupported(options, "apex-capture", ["ultra", "tlxWebgpu"]); }
+  catch (e) { console.error(e.message); process.exit(2); }
+}
 const browserRuns = [];
 let outputRoot = null;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -274,8 +285,9 @@ async function main() {
   try {
     if (cmd === "cameras") {
       // Each worker owns a Chromium process; shared tabs contend on software GL.
-      const track = rest[0] && !rest[0].includes("/") && !rest[0].startsWith(".") ? rest[0] : "monza";
-      const dir = (rest[1] || `${ROOT}/scratch/captures/apex-capture/cameras`); mkdirSync(dir, { recursive: true });
+      // [track] [outdir] — a path-looking argument is the outdir wherever it sits (`cameras scratch/x` used to be read as the track).
+      const { track, dir: dirArg } = splitTrackAndDir(rest);
+      const dir = dirArg || `${ROOT}/scratch/captures/apex-capture/cameras`; mkdirSync(dir, { recursive: true });
       const CAMS = ["chase","far","cockpit","hood","overhead","heli","reverse","side","cinematic","low","tcam","rear"];
       const staticSrv = await startStaticServer();
       cleanup = async () => { await staticSrv.kill(); };

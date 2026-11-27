@@ -65,6 +65,19 @@ export function parseCaptureOptions(argv = [], env = process.env) {
   return options;
 }
 
+/** `[track] [outdir]`: a path-looking argument is the outdir wherever it sits. */
+export function splitTrackAndDir(args, defaultTrack = "monza") {
+  const isPath = (x) => x.includes("/") || x.startsWith(".");
+  return { track: args.find((x) => !isPath(x)) || defaultTrack, dir: args.find(isPath) || null };
+}
+
+const FLAG_SPELLING = { ultra: "--ultra", tlxWebgpu: "--tlx-webgpu" };
+/** Shared parsing accepts every capture flag; a tool that never reads one must refuse it, not ignore it. */
+export function assertCaptureFlagsSupported(options, tool, unsupported) {
+  const bad = unsupported.filter((key) => options[key]);
+  if (bad.length) throw new Error(`${tool}: ${bad.map((k) => FLAG_SPELLING[k] || k).join(", ")} not supported by this tool`);
+}
+
 export function captureViewport(options, fallback = { width: 844, height: 390 }) {
   const viewport = { width: options.width ?? options.viewport?.width ?? fallback.width,
     height: options.height ?? options.viewport?.height ?? fallback.height };
