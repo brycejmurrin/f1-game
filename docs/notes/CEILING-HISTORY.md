@@ -1,5 +1,13 @@
 # Ceiling history — the module-size ratchet, 2026-08 → 2026-09-03
 
+## 2026-11-27 — claude/ratchet-ui-rows-7208: 8 new per-file rows for the big UI files (#7208; #6548 item 3)
+
+Eight NEW `lines` rows, each seeded at its current value on tip `d71a0f9a`, so these files can only shrink from here
+(a new row is not a raise; no existing row moves): `js/ui/select-screen.js` **1447**, `js/ui/hud-layout.js` **1311**,
+`js/ui/settings-export-body.js` **1291**, `js/ui/photo-studio-ui.js` **1265**, `css/carsetup.css` **2118**,
+`css/overlays.css` **2046**, `css/data.css` **1633**, `css/tuner.css` **1565**. Edited in `ratchets.json` itself because
+`applyFragments` ignores a fragment row the base file does not already carry (#7203). They make the #6548 carves stick.
+
 ## 2026-11-27 — PR #7278 (claude/ai-pace-stage-7258): AiPace, the AI-only vmax stages of updateCar (#7258)
 
 `(tree) eagerScripts` 292 → **293** (+1) and `eagerCodeBytes` +638: `js/physics/ai-pace.js` is a new pure module (Bryce's
