@@ -811,6 +811,7 @@
         "tests/unit/drill-aero-vm.test.mjs",
         "tests/unit/drill-fork-vm.test.mjs",
         "tests/unit/drill-grip-vm.test.mjs",
+        "tests/unit/drill-telemetry-vm.test.mjs",
         "tests/unit/drive-to-box-vm.test.mjs",
         "tests/unit/driving-line-pace.test.mjs",
         "tests/unit/elevation-tracks-vm.test.mjs",
@@ -956,6 +957,7 @@
         "tests/unit/drill-aero-vm.test.mjs",
         "tests/unit/drill-fork-vm.test.mjs",
         "tests/unit/drill-grip-vm.test.mjs",
+        "tests/unit/drill-telemetry-vm.test.mjs",
         "tests/unit/drive-to-box-vm.test.mjs",
         "tests/unit/driving-line-pace.test.mjs",
         "tests/unit/episode-transients.test.mjs",
@@ -1138,6 +1140,7 @@
         "tests/unit/drill-aero-vm.test.mjs",
         "tests/unit/drill-fork-vm.test.mjs",
         "tests/unit/drill-grip-vm.test.mjs",
+        "tests/unit/drill-telemetry-vm.test.mjs",
         "tests/unit/drive-to-box-vm.test.mjs",
         "tests/unit/driving-line-pace.test.mjs",
         "tests/unit/hot-path-memo-vm.test.mjs",
@@ -3927,6 +3930,11 @@
     {
       "path": "js/learn-drills/registry.js",
       "global": "DrillRegistry",
+      "roster": "LAZY_LEARN"
+    },
+    {
+      "path": "js/learn-drills/telemetry.js",
+      "global": "TelemetryDrill",
       "roster": "LAZY_LEARN"
     },
     {

@@ -814,6 +814,7 @@ _Module index over 34 directories, in load order. `tag` = a `<script>` in index.
 | `drill-card.js` | `DrillCard` | LAZY_LEARN | DrillCard: a LEARN drill's result card and its one medal store (#6559 §1b, step 2; #7039). medalOf(r, tiers) is pure. tiers = {bronze, silver, gold,… |
 | `thumb-drill.js` | `ThumbDrill` | LAZY_LEARN | THUMB DRILL, LEARN's on-track sequel to the Vegas Thumb Trainer (#6927). |
 | `grip.js` | `GripDrill` | LAZY_LEARN | GRIP & BRAKING: the friction-circle drill (#6559 step 4, #6551 §2, #7040). |
+| `telemetry.js` | `TelemetryDrill` | LAZY_LEARN | TELEMETRY DETECTIVE: compare two runs at the SAME DISTANCE (#6559 step 14, #6551 §4). |
 <!-- /@gen-arch:modules -->
 
 ---

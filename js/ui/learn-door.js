@@ -234,6 +234,7 @@ const LearnDoor = (function () {
   function defineDrills() {
     if (typeof DrillRegistry === "undefined") return;
     if (typeof GripDrill !== "undefined") GripDrill.define();   // js/learn-drills/grip.js, when it evaluated first
+    if (typeof TelemetryDrill !== "undefined") TelemetryDrill.define();   // js/learn-drills/telemetry.js, likewise
     DrillRegistry.define({
       id: "aero", lesson: "aero", title: "Monza Aero Drill",
       setup: { flow: "gp", session: "race", track: "monza", weather: "dry", changeable: false, grid: "tier", duel: false, dirtyAir: "classic", wind: "real" },

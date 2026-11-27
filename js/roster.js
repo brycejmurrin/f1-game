@@ -292,7 +292,8 @@
     "js/ui/learn-door.js",
     "js/ui/thumb-trainer.js",
     "js/learn-drills/thumb-drill.js",
-    "js/learn-drills/grip.js"
+    "js/learn-drills/grip.js",
+    "js/learn-drills/telemetry.js"
   ],
     LAZY_DRILL_FORK: [
     "js/race/drill-fork.js"

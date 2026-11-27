@@ -86,10 +86,11 @@ test("__apex.drill*: drillList, then a drillLaunch / drillState / drillEnd round
     assert.deepEqual(plain(g.apex.drillRetry()), { ok: false, error: "no_drill" });
     // Definition order is evaluation order (grip.js defines at eval when the registry is up; LearnDoor lazily): sorted.
     const nope = plain(await g.apex.drillLaunch("nope"));
-    assert.deepEqual({ ...nope, ids: nope.ids.sort() }, { ok: false, error: "unknown_drill", ids: ["aero", "grip"] });
+    assert.deepEqual({ ...nope, ids: nope.ids.sort() }, { ok: false, error: "unknown_drill", ids: ["aero", "grip", "telemetry"] });
     assert.deepEqual(plain(g.apex.drillList()).sort((a, b) => a.id.localeCompare(b.id)), [
       { id: "aero", lesson: "aero", track: "monza", flow: "gp", session: "race" },
       { id: "grip", lesson: "braking", track: "monza", flow: "gp", session: "tt" },
+      { id: "telemetry", lesson: "telemetry", track: "monza", flow: "gp", session: "tt" },
     ]);
     const launched = await g.apex.drillLaunch("aero");
     assert.equal(launched.ok, true, JSON.stringify(launched));
