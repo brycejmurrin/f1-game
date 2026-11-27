@@ -182,7 +182,7 @@ test("the live director's battle pick is the same at OVERALL SPEED 0.469 as at p
     const field = [car("LEA", 1024), car("CHA", 1000), car("TAI", 0)];
     const G = {
       state: "race", camMode: 1, cars: field, player: field[2], track: { total: 5000 }, dbgCam: null,
-      netPlay: { active: () => false }, vTop: () => 72 * pace,
+      netPlay: { active: () => false }, vTop: () => 72 * pace, pace: { vScale: pace },
       camVantage: (mode, s, x) => ({ eye: [s, 5, x], tgt: [s + 10, 2, x], fov: 50 }),
     };
     const api = Dir.create(G);

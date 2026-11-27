@@ -226,7 +226,7 @@ const Director = (function () {
       // (!retired); retired players were not — TV mode forced with no dbgCam (M38).
       const decision = decideCut({
         wall, lastCut, cuts, onAirShot, subject,
-        vScale: G.vTop && typeof PhysicsConsts !== "undefined" ? G.vTop() / PhysicsConsts.VMAX : 1,   // sim speeds (never WATCH, above)
+        vScale: G.pace ? G.pace.vScale : 1,   // sim speeds (never WATCH, above)
         running: running.length ? running : (player ? [{ key: player, prog: player.prog || 0, speed: player.speed || 0 }] : []),
       });
       if (decision) {

@@ -90,7 +90,7 @@ const TvGraphics = (function () {
         lap: G.player && G.player.lap, laps: G.lapsTarget,
         flag: flagOf(G), ranked, sectorLast: G.sectorLast, sectorBests: G.sectorBests,
         fieldSectorBests: G.fieldSectorBests,
-        vScale: !opts?.spectator && G.vTop && typeof PhysicsConsts !== "undefined" ? G.vTop() / PhysicsConsts.VMAX : 1,
+        vScale: !opts?.spectator && G.pace ? G.pace.vScale : 1,
       });
       let holder;
       try { if (holderOf) holder = holderOf() || null; } catch (_) { /* replay mid-seek: per-car flags */ }

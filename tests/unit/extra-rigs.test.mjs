@@ -89,7 +89,7 @@ test("ExtraRigs.pickRival: RIVAL LOCK picks the same rival at OVERALL SPEED 0.46
     }
     const car = (code, prog) => ({ code, prog: prog * k, s: prog * k, x: 0, speed: 12 * k, replayRate: watch ? 1 : undefined });
     const X = car("X", 1022), P = car("P", 1000), Y = car("Y", 980);
-    ExtraRigs.tickPitAuto({ vTop: () => 72 * pace, player: P, camMode: 0 });
+    ExtraRigs.tickPitAuto({ vTop: () => 72 * pace, pace: { vScale: 72 * pace / 72 }, player: P, camMode: 0 });
     return ExtraRigs.pickRival([X, P, Y], P).code;
   };
   for (const broadcast of [false, true]) {

@@ -277,7 +277,7 @@ const ExtraRigs = (function () {
   let _pcStore = null, _pcRev = -1, _pcRaw = -1, _pcEnabled = false, _pitModes = null, _pitIdx = -1;
   const _isPitwall = (m) => m.id === "pitwall";
   function tickPitAuto(G) {
-    if (G && G.vTop && typeof PhysicsConsts !== "undefined") _vScale = G.vTop() / PhysicsConsts.VMAX;
+    if (G && G.pace) _vScale = G.pace.vScale;
     if (!G || !G.player || typeof CamModes === "undefined") return null;
     const store = G.store || (typeof GameStore !== "undefined" ? GameStore.store : null);
     // Both read once per change, not per frame (perf hunt 2 F10): the opt-in on

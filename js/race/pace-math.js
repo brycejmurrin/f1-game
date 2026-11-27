@@ -63,6 +63,10 @@ const PaceMath = (function () {
     // is the identity to the bit. ("pace 5" was the old piecewise-linear notch
     // that used to land on 1.0 — docs/PHYSICS.md §PACE.)
     function aStd(a) { return a / Math.max(getPACE(), 0.05); }
+    // G.pace (#7129): the one façade member for the PACE conversions, so a consumer reads
+    // these instead of re-spelling `G.vTop() / VMAX` or the 0.05 floor. vScale is the
+    // vTop()/VMAX quotient itself (bit-identical to the old inline sites); k is the floor.
+    const pace = Object.freeze({ vStd, aStd, get vScale() { return vTop() / getVMAX(); }, get k() { return Math.max(getPACE(), 0.05); } });
 
     function aeroLoadOf(c) { return c && c.aeroLoad != null ? c.aeroLoad : 0.5; }
     // An AI car's X-mode reads the neutral wing (docs/PHYSICS.md, #5791).
@@ -121,7 +125,7 @@ const PaceMath = (function () {
     }
 
     return {
-      vTop, vStd, aStd,
+      vTop, vStd, aStd, pace,
       xVmaxGain, paceRef, xCoastCut, xDfLoss,
       isErsDeploying, drainFor, regenFor, otTimeFor, deployTaper, regenSpeedK,
       aeroDfMult, gearHi, rpmFor,
