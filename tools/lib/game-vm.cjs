@@ -164,8 +164,12 @@ function shellHidden() {
   shellIds = new Map();
   let html = "";
   try { html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8"); } catch (_) { return shellIds; }
-  for (const m of html.matchAll(/<[a-zA-Z][\w-]*\s[^>]*?\bid="([^"]+)"[^>]*>/g)) {
-    if (!shellIds.has(m[1])) shellIds.set(m[1], /\shidden(?=[\s>=/])/.test(m[0]));
+  // A start tag, quoted values skipped whole (a `>` or the word "hidden" inside one is not markup).
+  const TAG = /<[a-zA-Z][\w-]*(?:\s+[^\s"'>\/=]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'>]+))?)*\s*\/?>/g;
+  for (const [tag] of html.matchAll(TAG)) {
+    const id = /\sid\s*=\s*"([^"]+)"/.exec(tag);
+    if (!id || shellIds.has(id[1])) continue;
+    shellIds.set(id[1], /\shidden(?=[\s>=/])/.test(tag.replace(/"[^"]*"|'[^']*'/g, '""')));
   }
   return shellIds;
 }
@@ -244,10 +248,11 @@ function createDom(sandbox, runScriptFile, mutations) {
     currentTime: 0, paused: true, muted: false, loop: false, isConnected: true,
     get style() { const s = makeStyle(); own(this, "style", s); return s; },
     set style(v) { own(this, "style", v); },
-    // An id write registers the element, so getElementById finds what js/ built
-    // (LearnDoor's #learn dialog) as a browser does once it is in the document.
+    // getElementById finds what js/ built (LearnDoor's #learn dialog): an id write
+    // claims a FREE id and appendChild claims it outright (the stub has no
+    // document tree), so a created, never-attached element never shadows a stub.
     get id() { return this._id || ""; },
-    set id(v) { hide(this, "_id", String(v == null ? "" : v)); if (this._id) byId.set(this._id, this); },
+    set id(v) { hide(this, "_id", String(v == null ? "" : v)); if (this._id && !byId.has(this._id)) byId.set(this._id, this); },
     // `hidden` reflects its attribute and tells the observers (makeMutationHub).
     get hidden() { return !!this._hid; },
     set hidden(v) {
@@ -284,7 +289,7 @@ function createDom(sandbox, runScriptFile, mutations) {
     matches() { return false; },
     contains(n) { return n === this; },
     appendChild(c) {
-      if (c && c.nodeType === 1) { this.children.push(c); c.parentNode = c.parentElement = this; }
+      if (c && c.nodeType === 1) { this.children.push(c); c.parentNode = c.parentElement = this; if (c._id) byId.set(c._id, c); }
       this.childNodes.push(c);
       if (c && c.tagName === "SCRIPT" && c.src) runScriptFile(c);
       return c;

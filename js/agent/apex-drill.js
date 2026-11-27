@@ -38,7 +38,7 @@ const ApexDrill = (function () {
       return { id, lesson: d.lesson, track: d.setup.track, flow: d.setup.flow, session: d.setup.session };
     })) : []) });
   ApexPlay.def("drillLaunch", { readOnly: true, args: "id = \"aero\", variant?",
-    doc: "From the menu, start a drill's race as the LEARN door does (loads LAZY_LEARN). Promise of {ok, id, variant, state}; the race is up once drillState().state is \"race\".",
+    doc: "From the menu, start a drill's race as the LEARN door does (loads LAZY_LEARN). Promise of {ok, id, variant, state}; the race is up once drillState().state is \"race\". variant is echoed only: no drill has one yet.",
     fn: async (G, id = "aero", variant = null) => {
       if (!(await ensureLearn())) return { ok: false, error: "learn_unavailable" };
       if (!DrillRegistry.get(id)) return { ok: false, error: "unknown_drill", ids: DrillRegistry.ids() };

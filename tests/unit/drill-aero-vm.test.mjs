@@ -3,6 +3,7 @@
  *    launches the drill, and quitting puts every setting back. On base this failed at the first line:
  *    each DOM stub read hidden:false, so UiLayers.top() was #trackdesigner and the door refused.
  * 2. __apex.drill*: drillList pins the registry; drillLaunch / drillState / drillEnd round-trip.
+ * 3. The stubs' seeds: `hidden` as index.html has it, and a detached element never shadows a shell id.
  *
  * Run: node --test tests/unit/drill-aero-vm.test.mjs
  */
@@ -70,6 +71,7 @@ test("the LEARN door opens in the VM and launches and quits the Aero drill", asy
     assert.equal(g.G.state, "menu");
     assert.equal(g.apex.drillState().active, false);
     assert.deepEqual(settings(g, ev), before, "quitting restored every setting the drill wrote");
+    assert.deepEqual(g.record.rejections.filter((r) => /MutationObserver/.test(r)), [], "no observer callback threw");
   } finally { g.close(); }
 });
 
@@ -81,6 +83,7 @@ test("__apex.drill*: drillList, then a drillLaunch / drillState / drillEnd round
     assert.deepEqual(plain(g.apex.drillList()), [], "nothing listed before LAZY_LEARN loads");
     assert.deepEqual(plain(g.apex.drillState()), { active: false, state: "menu" });
     assert.deepEqual(plain(g.apex.drillEnd()), { ok: false, error: "no_drill" });
+    assert.deepEqual(plain(g.apex.drillRetry()), { ok: false, error: "no_drill" });
     assert.deepEqual(plain(await g.apex.drillLaunch("nope")), { ok: false, error: "unknown_drill", ids: ["aero"] });
     assert.deepEqual(plain(g.apex.drillList()), [{ id: "aero", lesson: "aero", track: "monza", flow: "gp", session: "race" }]);
     const launched = await g.apex.drillLaunch("aero");
@@ -93,6 +96,19 @@ test("__apex.drill*: drillList, then a drillLaunch / drillState / drillEnd round
     const ended = g.apex.drillEnd();
     assert.deepEqual(plain(ended), { ok: true, id: "aero", reason: "quit", state: "menu" });
     assert.deepEqual(settings(g, ev), before, "drillEnd restored every setting the drill wrote");
+  } finally { g.close(); }
+});
+
+test("stub seeds: hidden as the shell has it, and a detached element never shadows a shell id", async () => {
+  const { g, ev } = await boot();
+  try {
+    assert.equal(ev('document.getElementById("overlay").hidden'), false, "#overlay has no hidden attribute in index.html");
+    assert.equal(ev('document.getElementById("pausemenu").hidden'), true, "#pausemenu is hidden in index.html");
+    assert.equal(ev('document.getElementById("no-such-id-7067").hidden'), true, "an id the shell lacks reads hidden");
+    assert.equal(ev('(() => { const d = document.createElement("div"); d.id = "pausemenu"; return document.getElementById("pausemenu") !== d; })()'), true,
+      "a created, never-attached element does not replace the shell's #pausemenu");
+    assert.equal(ev('(() => { const d = document.createElement("div"); d.id = "fresh-7067"; document.body.appendChild(d); return document.getElementById("fresh-7067") === d; })()'), true,
+      "an attached element is found by its id");
   } finally { g.close(); }
 });
 
