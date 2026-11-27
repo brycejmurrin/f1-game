@@ -299,7 +299,8 @@
     "js/learn-drills/grip.js",
     "js/learn-drills/torque.js",
     "js/learn-drills/wake.js",
-    "js/learn-drills/telemetry.js"
+    "js/learn-drills/telemetry.js",
+    "js/learn-drills/charge.js"
   ],
     LAZY_DRILL_FORK: [
     "js/race/drill-fork.js"
