@@ -1,6 +1,6 @@
 /* drill-grip.test.mjs — LEARN's friction-circle drill (js/learn-drills/grip.js, #7040 / #6559 step 4): the pure dot,
- * the medal rule and the registry's variant plumbing. The VM run (deterministic score and medal over two runs) is the
- * hand-off's next step (PR body). */
+ * the medal rule and the registry's variant plumbing. The VM runs (deterministic score and medal, the tiers' refs):
+ * tests/unit/drill-grip-vm.test.mjs. */
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -25,16 +25,18 @@ test("the dot: y is the brake's share, x the lateral use of what it left; the ri
   assert.equal(GripDrill.circle({ axFrac: 2, frontUtil: 3 }).r, 1, "capped at 1");
 });
 
-test("medals: bronze is a clean run, silver 75 %, gold 88 % within 0.15 s of the best TRAIL gate", () => {
+test("medals: bronze is a clean run, then the silver and gold rim-use tiers, gold within 0.15 s of the best TRAIL gate", () => {
   const GripDrill = vm.runInContext("GripDrill", load());
+  const { silver, gold } = GripDrill.MEDALS;
+  assert.ok(silver < gold);
   const run = (value, variant, gateS, clean = true) => ({ value, variant, gateS, clean });
   assert.equal(GripDrill.medals(run(95, "trail", 8, false), []), null);
-  assert.equal(GripDrill.medals(run(40, "vline", 8), []), "bronze");
-  assert.equal(GripDrill.medals(run(80, "vline", 8), []), "silver");
-  assert.equal(GripDrill.medals(run(90, "vline", 8), []), "silver", "no TRAIL run yet: no gate to be within");
-  assert.equal(GripDrill.medals(run(90, "trail", 8), []), "gold");
-  assert.equal(GripDrill.medals(run(90, "trail", 8.2), [run(85, "trail", 8)]), "silver", "0.2 s off the best TRAIL gate");
-  assert.equal(GripDrill.medals(run(90, "free", 8.1), [run(85, "trail", 8)]), "gold");
+  assert.equal(GripDrill.medals(run(silver - 1, "vline", 8), []), "bronze");
+  assert.equal(GripDrill.medals(run(silver, "vline", 8), []), "silver");
+  assert.equal(GripDrill.medals(run(gold + 1, "vline", 8), []), "silver", "no TRAIL run yet: no gate to be within");
+  assert.equal(GripDrill.medals(run(gold, "trail", 8), []), "gold");
+  assert.equal(GripDrill.medals(run(gold + 1, "trail", 8.2), [run(gold - 2, "trail", 8)]), "silver", "0.2 s off the best TRAIL gate");
+  assert.equal(GripDrill.medals(run(gold + 1, "free", 8.1), [run(gold - 2, "trail", 8)]), "gold");
 });
 
 test("the drill registers on the braking lesson with three variants and the grip goal", () => {

@@ -6,8 +6,8 @@
    A run is RaceInsights' "grip" goal: it ends at a gate 150 m past the turn (race-insights.js). RIM USE, the score, is
    the time-weighted mean of sqrt(lat^2 + long^2), capped at 1, from the first firm brake (> 0.5) to the apex. Fails:
    off the track or contact (RaceInsights), wheels locked over 0.3 s, a spin. Medals (MEDALS below): bronze a clean
-   run, silver rim use 75 %, gold 88 % and a gate time within 0.15 s of your best TRAIL run this launch. Reference
-   runs (next: a VM rollout into tests/data/learn-drill-refs.json "grip"); pure pins: tests/unit/drill-grip.test.mjs.
+   run, silver and gold the VM-derived rim-use tiers, gold also a gate time within 0.15 s of your best TRAIL run this
+   launch. Reference runs: tests/helpers/drill-drive-vm.mjs --write-grip; pins: tests/unit/drill-grip{,-vm}.test.mjs.
    THE ARC NEVER REACHES THE DRIVER: sample(), score() and the widget read only port.physState() (__apex) and the
    race clock; the turn and its gate are the curated track.def.turns, never the curvature table. Nothing is written
    to a car outside begin()'s placement, as the Aero drill places its cars. LAZY_LEARN: defined at eval when the
@@ -20,7 +20,9 @@ const GripDrill = (function () {
   const LOCK_S = 0.3;        // a lock held this long fails the run
   const SPIN_DEG = 60;       // body slip past this is a spin
   const LEAD_M = 650;        // the start, metres before the apex: flat out, then the whole braking zone
-  const MEDALS = Object.freeze({ silver: 75, gold: 88, goldGateS: 0.15 });
+  // Tiers from the VM reference runs (tests/data/learn-drill-refs.json "grip", #6559 §1e rule 4): silver = their
+  // median clean rim use, gold = the best clean one; pinned by tests/unit/drill-grip-vm.test.mjs.
+  const MEDALS = Object.freeze({ silver: 45, gold: 52, goldGateS: 0.15 });
   const VARIANTS = Object.freeze([
     { id: "vline", label: "V-line", task: "Brake hard in a straight line, release, then turn" },
     { id: "trail", label: "Trail", task: "Turn in while you bleed the brake off" },
