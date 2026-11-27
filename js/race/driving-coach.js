@@ -566,6 +566,7 @@ const DrivingCoachBody = (function () {
           lap: "Cross the start line to begin timing, then complete one full lap without contact or leaving the track. Practice laps are not saved, so this is how to time one.",
           braking: "Build speed before saving, then brake firmly and keep braking until the car stops. Coasting to a stop does not count.",
           trail: "Build speed before saving. Brake firmly, keep some brake on as the car turns in, then release it while the car is still turning.",
+          taper: "Save on a straight, then stay flat out for 400 m. Press BOOST once and see where the push lands: it is strongest at low speed.",
           cooling: "Tyre wear must be enabled. Save, then complete one clean lap from the line on the same set in stable weather. Shows measured grain and grip changes, without a recovery promise.",
           slalom: "Make six direction changes while moving: the car must change direction, not just the stick. Stay on the track and avoid contact.",
           launch: "Stop the car before saving, then launch to racing speed. Timed from your first throttle.",

@@ -156,7 +156,7 @@ test("X-mode: an AI car (human === false) trades at the neutral wing; a human ke
 });
 
 // ERS-PURE (#6550 addition 1, #6559 step 6): deployTaper / regenSpeedK moved from game.js into PaceMath. OLD is the
-// game.js text as it was before the move (tip f7819205, game.js:507-516); the new instance and pure functions must
+// game.js text as it was before the move (deployTaper and regenSpeedK in js/game.js at tip f7819205); the new instance and pure functions must
 // return the same value, bit for bit, at every vStd 0..90 m/s (0.25 steps), with OVERTAKE on and off, at four PACEs.
 test("deployTaper / regenSpeedK: old game.js = new PaceMath over vStd 0..90, OVERTAKE on and off", () => {
   const env = load();
