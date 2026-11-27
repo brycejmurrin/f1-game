@@ -436,9 +436,8 @@ function ensureRealRace() {
 
 // Memoised on the PROMISE: a second DATA tap awaits the first load, never a 2nd inject or an early open().
 let dataHubLoad = null;
-const DATA_HUB_RETRY_MS = [400, 1200];
 function dataHubRetryDelay(attempt) {
-  const ms = DATA_HUB_RETRY_MS[attempt - 1];
+  const ms = ScriptLoader.retryMs[attempt - 1];
   if (!ms) return Promise.resolve();
   return new Promise((r) => setTimeout(r, ms));
 }
@@ -450,7 +449,7 @@ function ensureDataHub(opts) {
   dataHubSlow = cb ? [cb] : [];
   const markSlow = () => { const cbs = dataHubSlow; if (cbs !== true) { dataHubSlow = true; cbs.forEach((f) => f()); } };
   dataHubLoad = (async () => {
-    const maxAttempts = DATA_HUB_RETRY_MS.length + 1;
+    const maxAttempts = ScriptLoader.retryMs.length + 1;
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       if (attempt > 0) await dataHubRetryDelay(attempt);
       // WATCH & DRIVE launches RealRace: its engine lands with the hub, never after a tap.

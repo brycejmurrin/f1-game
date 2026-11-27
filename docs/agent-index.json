@@ -1445,6 +1445,7 @@
         "tests/unit/lobby-codes.test.mjs",
         "tests/unit/lobby-settings.test.mjs",
         "tests/unit/net-authority.test.mjs",
+        "tests/unit/net-core-dedupe.test.mjs",
         "tests/unit/net-grid-separation.test.mjs",
         "tests/unit/net-ice-fetch-checks.test.mjs",
         "tests/unit/net-lobby-friend-quali.test.mjs",
