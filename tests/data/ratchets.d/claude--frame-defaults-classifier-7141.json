@@ -1,0 +1,13 @@
+{
+  "files": {
+    "js/render/glx/glx.js": {
+      "lines": -2
+    }
+  },
+  "tree": {
+    "assertPins": 4,
+    "assertPinsAll": 6,
+    "eagerCodeBytes": 572,
+    "rawGameReads": 1
+  }
+}

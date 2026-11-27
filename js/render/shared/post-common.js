@@ -207,6 +207,20 @@ const PostCommon = (function () {
   // max of ~6.2 s. Tier 4 at full res did not move the 12 s gap. Off under
   // webdriver and the node game VM so pixel specs stay full-res. Knob
   // "1" / "0" is apex26.swRaceShed (force on / force off).
+  // #7141 (#6479 rows 2+4). ONE table of what a backend uses when game.js's frame builder / atmosphere.js left a
+  // field off (a garage or probe frame): fogColor is the TLX value (Bryce's D1, 2026-11-25). WGX is frozen (D-049)
+  // and keeps its own [0.5,0.6,0.7]; tests/unit/render-frame-defaults.test.mjs pins the difference.
+  const FRAME_DEFAULTS = Object.freeze({
+    fogColor: [0.04, 0.04, 0.06], ambientSky: [0.3, 0.32, 0.36], ambientGround: [0.2, 0.19, 0.18],
+    skyZenith: [0.18, 0.40, 0.78], skyHorizon: [0.62, 0.74, 0.88], cloud: 0, cloudSpeed: 1, fogDensity: 0,
+  });
+  function frameDefault(frame, key) {
+    const v = frame && frame[key];
+    return v != null ? v : FRAME_DEFAULTS[key];
+  }
+  // The union of every backend's old sniff (Bryce's D2). A bare `soft` is NOT in it: "Microsoft" matches that.
+  const SOFTWARE_RENDERER_RE = /swiftshader|llvmpipe|lavapipe|softpipe|subzero|microsoft basic render|gdi generic|software/i;
+  function isSoftwareRenderer(name) { return SOFTWARE_RENDERER_RE.test(String(name || "")); }
   function softwareRaceShed(softwareGL, nav, knob) {
     if (!softwareGL) return false;
     if (knob === "0") return false;
@@ -287,6 +301,6 @@ const PostCommon = (function () {
     return worst > 0 ? Math.log2(worst) : -Infinity;
   }
 
-  return { makeDirtCanvas, keepNearest, hdrGradeOn, sunScreen, flareTapsDepth, knob, sunShadowStrength, roadReflection, softwareGlowScale, softwareRaceShed, mipFootprintLod };
+  return { makeDirtCanvas, keepNearest, hdrGradeOn, sunScreen, flareTapsDepth, knob, FRAME_DEFAULTS, frameDefault, isSoftwareRenderer, sunShadowStrength, roadReflection, softwareGlowScale, softwareRaceShed, mipFootprintLod };
 })();
 Object.freeze(PostCommon);

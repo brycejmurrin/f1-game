@@ -4154,3 +4154,10 @@ Human step: `ratchet-raise`.
 (`togglePocket`, `paintPocket`) live in the eager race-settings.js; the sheet is built at boot, so there is no lazy home. `(tree) shellNodes`
 2335 → **2337** (+2): the `#rs-pocket` button and its `<small>`. Fragment: `ratchets.d/claude--pocket-weekend-7042.json`.
 Human step: `ratchet-raise`.
+
+## 2026-11-27 — claude/frame-defaults-classifier-7141: frame defaults + one software-renderer classifier (#7141, #6479 rows 2+4)
+
+`(tree) eagerCodeBytes` 4026247 → **4026819** (+572): `PostCommon.FRAME_DEFAULTS` / `frameDefault` / `isSoftwareRenderer` become the one home in
+the EAGER post-common.js; the pasted defaults and regexes they replace live in the deferred glx.js, tlx.js and tsl-lit.js bundles, so the
+eager total can only grow. `(tree) assertPins` +4 / `assertPinsAll` +6: `render-frame-defaults.test.mjs`. `(tree) rawGameReads` +1: its
+producer scan reads game.js. Fragment: `ratchets.d/claude--frame-defaults-classifier-7141.json`. Human step: `ratchet-raise`.

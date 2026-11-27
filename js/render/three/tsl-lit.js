@@ -429,11 +429,11 @@
       s3(U.sunColor, frame.sunColor);
       setLampBake(frame.lampBake, frame.lampBakeScale);
       const ambM = k("ambientMul");
-      s3(U.ambSky, frame.ambientSky || [0.3, 0.32, 0.36], ambM);
-      s3(U.ambGround, frame.ambientGround || [0.2, 0.19, 0.18], ambM);
-      s3(U.skyZenith, frame.skyZenith || [0.18, 0.40, 0.78]);
-      s3(U.skyHorizon, frame.skyHorizon || [0.62, 0.74, 0.88]);
-      s3(U.fogColor, frame.fogColor || [0.04, 0.04, 0.06]);
+      s3(U.ambSky, PostCommon.frameDefault(frame, "ambientSky"), ambM);
+      s3(U.ambGround, PostCommon.frameDefault(frame, "ambientGround"), ambM);
+      s3(U.skyZenith, PostCommon.frameDefault(frame, "skyZenith"));
+      s3(U.skyHorizon, PostCommon.frameDefault(frame, "skyHorizon"));
+      s3(U.fogColor, PostCommon.frameDefault(frame, "fogColor"));
       uf1(U.fogHeight, T && T.fogHeight != null ? T.fogHeight
         : (frame.fogHeight != null ? frame.fogHeight : 0.0));
       U.groundMist.value = (frame.groundMist != null ? frame.groundMist : 0) * k("mistDensity");
@@ -454,8 +454,8 @@
         const wd = k("windDir") * (Math.PI / 180);
         U.wind.value.set(Math.cos(wd), Math.sin(wd), k("windSpeed"));
       }
-      U.cloudCover.value = frame.cloud != null ? frame.cloud : 0;
-      U.cloudSpeed.value = frame.cloudSpeed != null ? frame.cloudSpeed : 1;
+      U.cloudCover.value = PostCommon.frameDefault(frame, "cloud");
+      U.cloudSpeed.value = PostCommon.frameDefault(frame, "cloudSpeed");
       uf1(U.bounceK, k("bounceK"));
       uf1(U.specKnee, k("specKnee"));
       uf1(U.mistShare, k("mistShare"));
