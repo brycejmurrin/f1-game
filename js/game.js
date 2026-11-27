@@ -102,7 +102,7 @@ const lazyBundles = LazyBundles.create({
     });
   },
 });
-const { ensureGarageExterior, SCENERY_DIR, sceneryResident, ensureCircuit, ensureScenery, ensureTrackBuild, ensureDataHub, ensureNet, ensureAudio, adoptAudio, audioHandle, ensureRaceSession, ensureLightPresets, ensureGarageData, wantAgentSurface, loadAgentSurface, bootAgentSurface } = lazyBundles;
+const { ensureGarageExterior, SCENERY_DIR, sceneryResident, ensureCircuit, ensureScenery, ensureTrackBuild, ensureDataHub, ensureNet, ensureAudio, adoptAudio, audioHandle, ensureRaceSession, ensureCareerBody, ensureLightPresets, ensureGarageData, wantAgentSurface, loadAgentSurface, bootAgentSurface } = lazyBundles;
 // Stub AudioPanel (js/audio/stub.js) pulls the real LAZY_AUDIO bundle via this hook.
 if (typeof AudioPanel !== "undefined") AudioPanel._ensure = ensureAudio;
 const rendererBoot = RendererBoot.create({ $, els, canvas, ensureDataHub, loadBackendScripts });
@@ -1966,7 +1966,27 @@ async function raceTrackStepped(idx, stale) {
   }
   throw new Error("track build superseded twice");
 }
+// The tuner's TIME chips (#6896): a day<->dark crossing mid-race was a sync Tracks.build per tap and on close. Now one
+// stepped build on the next task, coalesced (a tap back first builds nothing); physics skips the null world (K1).
+const _wr = { p: null }, inSession = () => state === "race" || state === "count";
+function rebuildWorldDeferred() {
+  if (!inSession()) { loadTrack(trackIdx); return null; }
+  return _wr.p || (_wr.p = (async () => {
+    try {
+      await new Promise((res) => setTimeout(res, 0));
+      for (let i = 0; i < 3 && inSession() && !builtWorldFits(Tracks.LIST[trackIdx]); i++) {
+        const dark = sessionDarkFor(Tracks.LIST[trackIdx]);
+        if (await loadTrackStepped(trackIdx, () => inSession() && sessionDarkFor(Tracks.LIST[trackIdx]) === dark && !gfxContextLost())) applyRaceSettings();
+      }
+    } catch (e) { Log.warn("track", "deferred rebuild failed (" + (e && e.message) + "); building sync"); }
+    try {   // abandoned, failed or the race ended under it: never leave a session on no world
+      if (!track && (inSession() || state === "results") && !gfxContextLost()) { loadTrack(trackIdx); applyRaceSettings(); }
+      else if (track && inSession()) applyRaceSettings();   // the build's own palette reset wins otherwise: always leave the frame lit for the CURRENT time of day (#7059)
+    } finally { _wr.p = null; }
+  })());
+}
 function loadTrack(idx) {
+  globalThis.TLXShaders?.memScope?.set("circuit");   // tlxMem scope (#6958)
   // Every loader releases selector ownership before replacing the world.
   _menuGate.track = null; _menuGate.ready = ""; _menuGate.warm = 0;
   const def = Tracks.LIST[idx];
@@ -2167,6 +2187,7 @@ const _carWarm = { busy: false };   // the stepped race car warm (startRaceBody)
 const _warmed = new Set();
 const warmPrograms = (tag = "") => { try { if (gfx.warm) { const k = menuKey(trackIdx); _warmKey = k; let fresh = false; if (!_warmed.has(k + tag)) { _warmed.add(k + tag); gfx.warm(); fresh = true; } carDraw.warmCockpitTelemetry(); return fresh; } } catch (_) { /* optimisation only */ } return false; };   // telemetry every call (_rigDone dedupes; A·W56 / #3766 DAILY)
 async function menuFinish(current, key) {
+  globalThis.TLXShaders?.memScope?.set("home");
   await prepareMenuCarAssets(current);
   if (!current()) return;
   if (await menuIdle(current)) { warmPrograms(); FlybySeq.reset(); _menuGate.warm = 2; }   // reset: a new world's shot 0 snaps, never glides in from the last one
@@ -2454,6 +2475,7 @@ async function startRaceBody() {
   let sessionOk = await ensureRaceSession(); while (!sessionOk && !stale() && await LoadingScreen.failed() === "retry") sessionOk = await ensureRaceSession(); if (stale()) return false;   // #2625 RETRY re-runs the load, BACK falls through; LAZY_RACE_SESSION — pit/radio/reliability before grid/pits + AudioPanel
   if (!sessionOk) { loadingScreen.stop(); quitToMenu(); announce("RACE MODULES FAILED TO LOAD — RETRY", 3, "info"); return false; }   // the stubs have no retirements or pit stops, and TT data would be lost silently
   await Promise.all([ensureAudio(), lazyBundles.ensureResultsSheet()]); if (stale()) return false;   // LAZY_AUDIO + LAZY_RESULTS_SHEET before startEngine / sync buildResults at the flag
+  if (Career.inCareer() && !(await ensureCareerBody())) { if (stale()) return false; loadingScreen.stop(); quitToMenu(); announce("CAREER MODULES FAILED TO LOAD — RETRY", 3, "info"); return false; }   // LAZY_CAREER: era legality, AI setups and winter development; a silent skip would race the wrong rules
   if (!window.LightPresets) { await ensureLightPresets(); if (stale()) return false; }   // LAZY_RACE presets before the first applyRaceSettings: a late landing re-lit the race mid-session (false = default lighting; logged)
   radioVoice.prepare();   // the recorded voices download over the loading screen, not under the first line
   // Completed seasons are readable, never raceable (also guarded by award()).
@@ -3353,14 +3375,15 @@ const G = {
   get lightsLit() { return lightsLit; }, set lightsLit(v) { lightsLit = v; },
   get netLobby() { return netLobby; },
   loadCarModel: (url) => carDraw.loadCarModel(url),   // const from CarDraw.create(G) below — defer
-  loadTrack, persistLightTune, copyLightTune, restoreLightTune,
+  loadTrack: (idx, defer) => (defer ? rebuildWorldDeferred() : loadTrack(idx)),   // defer: weather-arc's setTimeOfDay(tod, { defer }) (#6896)
+  persistLightTune, copyLightTune, restoreLightTune,
   refreshLightTunePanel: (...a) => refreshLightTunePanel(...a),   // const initialised below — defer
   setCamMode: (...a) => setCamMode(...a),   // const from CamModes.create(G) below — defer
   rescuePlayer, setLightTune, snapGameCam,
   onIncidentLineCross,
   // Live weather + time of day (js/race/weather-arc.js) — deferred, wxArc is created below.
   setWeatherLive: (w) => wxArc.setWeatherLive(w),
-  setTimeOfDay: (tod) => wxArc.setTimeOfDay(tod),
+  setTimeOfDay: (tod, opt) => wxArc.setTimeOfDay(tod, opt),
   weather: (w) => wxArc.weather(w),
   loadingInfo,                          // what the loading card describes — the flyby editor previews it
   menuPrep,                             // the menu's race prep, read-only (__apex.menuPrep)
@@ -3416,6 +3439,7 @@ const G = {
   startWeatherArc: (from, to, dur) => wxArc.startArc(from, to, dur),
   endWeatherSession: () => wxArc.endSession(true),   // the agent's race()/tt(): a start follows, so a plan set for it stays (race-settings-vm)
   startRace, update, wrapS, quitToMenu: (t) => (qThen = t, quitToMenu()),
+  drills: () => (drills ??= DrillRegistry.create(G, { retry: coach.retry, setDirtyAir: v => { raceDirtyAir = v; } })),   // LEARN's drill host (js/learn-drills/registry.js), made on first use (LAZY_LEARN loaded); the LEARN door and __apex.drill* (js/agent/apex-drill.js)
   raceIntro,   // the pre-race screen, for a launch that is not RACE! (js/race/real-race.js: the Data Hub's JUMP IN)
   // OWNER COMMANDS (#6920 U2.4): game.js owns the writes to state / frozen / paused / skyViewOverride; every other module goes through these.
   cmd: { setState: (next, why) => setState(next, why || "cmd"), pause: (v, why) => setPaused(v, why) },
@@ -3469,9 +3493,8 @@ let flyingStart = FlyingStart.create(G, flyingStartDeps());   // LAZY_RACE_SESSI
 var jumpStartPenalty = JumpStartPenalty.create(G, {
   autoThrottle, inputOf, launchT0: () => launchT0, soundOn: () => soundOn, isQuali, isTimeTrial,
 });   // LAZY_RACE_SESSION — recreated in onRaceSessionReady
-titleMenu = TitleMenu.create(G, openDataHub, id => { // returning-player, Daily and Learn (js/ui/title-menu.js); a LEARN drill (js/learn-drills/registry.js)
-  (drills ??= DrillRegistry.create(G, { retry: coach.retry, setDirtyAir: v => { raceDirtyAir = v; } })).launch(id || "aero");
-}, show => showTouchControls(show, false, show));   // the race dock previewed under LEARN's thumb trainer
+titleMenu = TitleMenu.create(G, openDataHub, null,   // returning-player, Daily and Learn (js/ui/title-menu.js); its LEARN drill launches through G.drills()
+  show => showTouchControls(show, false, show));   // the race dock previewed under LEARN's thumb trainer
 const onboard = Onboard.create(G),
   director = Director.create(G, () => !realRace.isWatch() && !replayBuf.isScrubbing(), lazyBundles.ensureReplayBroadcast),
   replayBuf = ReplayBuf.create(G, () => !realRace.isWatch()), // coach + live TV (solo only) + replay ring
@@ -4169,6 +4192,7 @@ const incidentSim = IncidentSim.create(G, c => { if (c.human && c.isPlayer && is
 // pass-watch clear is gridUp's (U1.1 territory); the debris prime of a start stays after makeCars.
 // #6860 phase 2 (decision B): 'episode' becomes ONE registrant calling SimState.clear(G) — WHAT is SimState's.
 // results-cam stays FIRST (a montage / ceremony is restored before the field is replaced). Left explicit: director.reset (its setCamMode needs startRaceBody's state), resultsCam.reset in startRaceFromSheet / quitToMenu / garageBack (not whys, or ordered among menu teardown).
+Scopes.register("race", { id: "tlx-mem-scope", on: ["start", "finish", "quit"], exit: (c) => globalThis.TLXShaders?.memScope?.set(c.why === "start" ? "race" : "home") });   // tlxMem scope rides the bus (#6958)
 Scopes.register("race", { id: "results-cam", on: ["start"], exit: () => { resultsCam.reset(); RaceCeremony.resetLive(); } });
 Scopes.register("race", { id: "incident-sim", on: ["start", "restart-red", "restart-declined", "episode"], touches: ["takeovers"],
   exit: () => IncidentSim.reset(), snapshot: () => { const s = IncidentSim.status(); return { owned: s.owned, count: s.count }; } });
@@ -5762,7 +5786,7 @@ function updateCarLateral(c, dt, ranked, S) {
     _aiLane.traits = aiT; _aiLane.nearby = nearbyN; _aiLane.roomL = roomL; _aiLane.roomR = roomR;
     _aiLane.street = !!track.street; _aiLane.baseLane = c.lanePref != null ? c.lanePref : c.lane;
     _aiLane.queueT = c.queueT || 0;
-    c.lane = AiDrive.adaptLane(c.lane, _aiLane, dt); c.laneClr = AiDrive.laneClear(c.laneClr, !c.launchOn && raceT >= (c.calmUntil || 0) && !blocker && !chaser && !S.towCar && !(_stopped.length && Collide.parkedAhead(c, _stopped, track.total, AiDrive.hazardReach(c.speed))), dt);   // #5330 (not in launch/calm: lanes to T1)
+    c.lane = AiDrive.adaptLane(c.lane, _aiLane, dt); c.laneClr = AiDrive.laneClear(c.laneClr, !c.launchOn && raceT >= (c.calmUntil || 0) && !blocker && chaserGap >= c.speed / 4 && !S.towCar && !(_stopped.length && Collide.parkedAhead(c, _stopped, track.total, AiDrive.hazardReach(c.speed))), dt);   // #5330 (not in launch/calm: lanes to T1); chaser: 0.25 s (#6575)
     const kA = Tracks.curvature(track, wrapS(c.s + clamp(c.speed * 0.7, 18, 70)));
     // THE LINE (TrackLine, baked at build): outside-inside-outside through every
     // corner, read a short way ahead so the lateral step's lag does not turn in
@@ -9141,10 +9165,10 @@ let garageReturn = "select";
 // The one way in. Everything that opens the garage goes through here so the
 // return path can never be left stale — including js/career/career-ui.js, via G.openGarage.
 function openGarage(from) {
-  loadingScreen.stop(); garagePre.markOpen(from); ensureGarageData();   // stale busy/prep plate (and the arrival's Blender tables) (z 36) must not cover #carsetup
+  loadingScreen.stop(); garagePre.markOpen(from); ensureGarageData(); if (Career.inCareer()) ensureCareerBody();   // stale busy/prep plate (and the arrival's Blender tables) (z 36) must not cover #carsetup
   if (from === "menu" && soundOn) ensureAudio().then(() => GameAudio.init());
   else if (soundOn) GameAudio.uiSelect();
-  garageReturn = from;
+  garageReturn = from; globalThis.TLXShaders?.memScope?.push("garage");
   $("cs-done").textContent = from === "select" ? "RACE SETUP" :
     from === "pit" ? (isTimeTrial() ? "RETURN TO TIME TRIAL" : "RETURN TO RACE") : from === "career" ? "RETURN TO CAREER" :
     from === "vsfriend" ? "RETURN TO LOBBY" : "CLOSE GARAGE";
@@ -9217,6 +9241,7 @@ function closePitWork() {
 // Leaving the GARAGE, shared by DONE and BACK: the screen's own teardown plus
 // the part maths, which both exits owe the rest of the game.
 function leaveGarage() {
+  globalThis.TLXShaders?.memScope?.pop("garage");
   setupCam.cancelArrival();
   if (typeof MenuTeardown !== "undefined") MenuTeardown.beginGarageClose();
   if (garageReturn !== "pit" && !loadingScreen.phase()) loadingScreen.busy("Returning");

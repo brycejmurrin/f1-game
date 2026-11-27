@@ -19,8 +19,11 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 const fixture = JSON.parse(fs.readFileSync(path.join(ROOT, "tests/fixtures/ghost-monza-short.json"), "utf8"));
 
 const titleSource = fs.readFileSync(path.join(ROOT, "js/ui/title-flow.js"), "utf8");
+const deepLinkSource = fs.readFileSync(path.join(ROOT, "js/ui/deep-link.js"), "utf8");
 function titleConsume(ctx) {
   ctx.titleTransition = 0;   // standalone consumption has no queued title navigation
+  // consumeGhostHash stages through the real DeepLink.stageChallenge (#6884 A3).
+  if (vm.runInContext("typeof DeepLink", ctx) === "undefined") vm.runInContext(deepLinkSource, ctx, { filename: absSrc("js/ui/deep-link.js") });
   return vm.runInContext(fnSource(titleSource, "function titleIsLive(") + "\n(" +
     fnSource(titleSource, "async function consumeGhostHash()") + ")", ctx);
 }

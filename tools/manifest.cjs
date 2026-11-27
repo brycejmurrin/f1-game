@@ -285,8 +285,6 @@ const FULL = [
   // VisorOptics loads with LAZY_RACE_SESSION; title/garage consumers are guarded.
   "js/fx/droplets.js",         // Droplets: onboard lens/visor rain overlay (game.js ticks it at render)
   "js/lighting/atmosphere.js",
-  "js/career/regulations.js",
-  "js/career/ai-dev.js",
   "js/career/career-planning.js", // bounded projections and save protection
   "js/career/career.js",
   "js/career/season-cal.js",
@@ -303,12 +301,9 @@ const FULL = [
   "js/physics/ai-band.js",   // gap catch-up vs scripted fixed pace (carve-headroom D)
   "js/physics/ai-corridor.js",
   "js/camera/offsets.js",
-  "js/camera/extra-rigs.js",   // RIVAL LOCK / PIT WALL / DRONE solvers (before vantage)
   "js/camera/flyby-sight.js",   // FlybySight: the flyby planner's (and frame-report's) sightline/occluder model
   "js/camera/flyby-clear.js",   // FlybyClear: solid props, roof lift, ground floor (before flyby-seq)
   "js/camera/flyby-seq.js",
-  "js/camera/cam-avoid.js",   // open-circuit wall/building step-in + clearEye for broadcast cams
-  "js/camera/trackside.js",   // TRACKSIDE fixed corner cams (CAM_MODES append)
   "js/camera/flyby-panel.js",
   "js/garage/setup-tune.js",
   "js/garage/setup-trials.js", // bounded unscored setup comparison receipts (call-time consumers)
@@ -317,7 +312,6 @@ const FULL = [
   "js/garage/setup-experiments.js", // reversible tune experiments and aero bench
   "js/garage/livery-design-editor.js",
   "js/garage/setup-sheet.js",
-  "js/career/experience.js",
   "js/career/career-ui-boot.js", // CareerUI stub; #career body is LAZY_CAREER_UI
   "js/career/season-ui.js",
   "js/ui/flags.js",
@@ -839,11 +833,8 @@ const HARD_EDGES = [
   ["js/race/pace-math.js", "js/game.js"],           // game.js calls PaceMath.create(deps) at eval
   ["js/physics/consts.js", "js/physics/body-attitude.js"], // LAT_MAX read at eval
   ["js/data/teams.js", "js/career/save-migrate.js"], // remapPoints reads Teams (call time; keep ordered)
-  ["js/car/parts.js", "js/career/regulations.js"],   // bannedIds() derives the ban from Parts.CATALOG (call time; keep ordered)
-  ["js/car/parts.js", "js/career/ai-dev.js"],       // AI winter develops catalog options through Parts
-  ["js/data/teams.js", "js/career/ai-dev.js"],
-  ["js/core/mat4.js", "js/career/ai-dev.js"],         // aliases M4.clamp at eval
-  ["js/career/ai-dev.js", "js/career/career.js"],     // rolloverTeams calls CareerAiDev.developWinter
+  // regulations / ai-dev / experience are LAZY_CAREER (after FULL): parts, teams and mat4 precede them by construction;
+  // career.js reads them only at call time, behind typeof guards (rollover runs after ensureCareerBody).
   ["js/career/save-migrate.js", "js/core/save-schema-registry.js"],
   ["js/core/save-schema-registry.js", "js/core/store.js"],
   ["js/career/save-migrate.js", "js/core/store.js"],
@@ -1013,6 +1004,7 @@ const DEFERRED = {
     "js/render/three/tlx-mem.js",
     "js/render/three/tlx-util.js",
     "js/render/three/tlx-texpool.js",
+    "js/render/three/tlx-debug.js",
     "js/render/three/tlx.js",
   ],
 };
@@ -1038,6 +1030,7 @@ const LAZY_AGENT = [
   "js/agent/apex-track.js",
   "js/agent/apex-lobby.js",
   "js/agent/apex-play.js",
+  "js/agent/apex-drill.js", // ApexDrill: __apex.drill* flat hooks, def()'d at eval (#7067)
   "js/agent/apex-gpu-capture.js",
   "js/agent/apex-lifecycle.js",
   "js/perf/three-inspector.js", // ThreeInspector: opt-in (?inspector=1) dev panel; apex.js boots it at eval (#4978 row 4)
@@ -1052,6 +1045,8 @@ const LAZY_EDGES = [
   ["js/agent/apex-track.js", "js/agent/apex.js"],
   ["js/agent/apex-lobby.js", "js/agent/apex.js"],
   ["js/agent/apex-play.js", "js/agent/apex.js"],   // def() registry: ApexApi spreads ApexPlay.hooks(G)
+  ["js/agent/apex-play.js", "js/agent/apex-drill.js"],   // ApexDrill calls ApexPlay.def at eval
+  ["js/agent/apex-drill.js", "js/agent/apex.js"],   // its defs exist before ApexApi.create spreads them
   ["js/agent/apex-gpu-capture.js", "js/agent/apex.js"], // __apex.gpuCapture one-line registration
   ["js/perf/three-inspector.js", "js/agent/apex.js"],   // apex.js calls ThreeInspector.boot(gfx) at eval
   ["js/agent/agentview-corners.js", "js/agent/agentview.js"],
@@ -1168,6 +1163,9 @@ const LAZY_RACE_SESSION = [
   "js/race/flying-start.js",
   "js/race/lap-retry.js",      // LapRetry: RETRY LAP back to the flying-start drop-in through SimState (#6965)
   "js/race/jump-start-penalty.js",
+  "js/camera/extra-rigs.js",    // ExtraRigs: RIVAL LOCK / PIT WALL / DRONE solvers; vantage.js typeof-guards it (chase fallback), binds M4 at eval
+  "js/camera/trackside.js",    // TracksideCams: fixed corner cams; vantage.js typeof-guards it
+  "js/camera/cam-avoid.js",    // CamAvoid: open-circuit wall/building step-in; vantage.js typeof-guards it
   "js/ui/podium-beat.js",   // PodiumBeat: ceremony podium overlay (#4070 slice 4); ResultsStory is FULL
   "js/race/podium-beat.js", // RacePodium: podium beat + results handoff (#4070)
   "js/race/parc-ferme.js", // ParcFerme.create(G): ceremony parc fermé beat (#4069); reads ResultsCam at call time
@@ -1370,6 +1368,16 @@ const LAZY_CAREER_UI = [
   "js/career/career-ui.js",   // CareerScreen
 ];
 const LAZY_CAREER_UI_EDGES = [["js/career/career-planning-ui.js", "js/career/career-ui.js"]];
+
+// Career-only bodies (15.6 KB stripped): AI winter development, era regulations, the experience ledger. No boot
+// stub (a stub would defeat the consumers' typeof guards): ensureCareerBody() loads them at idle, at the career
+// door, at career race entry and the career garage door, then re-runs Career.applyRegs().
+const LAZY_CAREER = [
+  "js/career/regulations.js",
+  "js/career/ai-dev.js",
+  "js/career/experience.js",
+];
+const LAZY_CAREER_EDGES = [];
 
 // LAYOUT PRESET row + APPEARANCE / PHOTO studio bodies (#4978 row 5). The FULL
 // stubs (appearance-studio.js, photo-studio.js) answer scene/homeCamera/background
@@ -1638,6 +1646,7 @@ const DEFERRED_EDGES = [
   ["js/render/three/tlx-post.js", "js/render/three/tlx.js"],     // TLX.create invokes TLXShaders.postChain
   ["js/render/three/tlx-util.js", "js/render/three/tlx.js"],     // tlx.js destructures TLXUtil at eval
   ["js/render/three/tlx-texpool.js", "js/render/three/tlx.js"],  // tlx.js calls TLXTexPool.create at TLX.create
+  ["js/render/three/tlx-debug.js", "js/render/three/tlx.js"],     // TLX.create calls TLXDebug.create for __tlx
 ];
 
 // Named paths for direct single-file consumers (tests/tools that load one
@@ -1971,6 +1980,7 @@ const GROUP_TIERS = {
   LAZY_XR: { tier: "menu", where: "page" },
   LAZY_CAM_EDITOR: { tier: "tool", where: "page" },
   LAZY_CAREER_UI: { tier: "career", where: "page" },
+  LAZY_CAREER: { tier: "career", where: "page" },
   LAZY_UI_PRESETS: { tier: "menu", where: "page" },
   LAZY_SAVES_DATA: { tier: "menu", where: "page" },
   LAZY_RESULTS_SHEET: { tier: "race", where: "page" },
@@ -2108,8 +2118,6 @@ const FULL_TIERS = {
     "js/fx/particles.js": "race",
     "js/fx/droplets.js": "race",
     "js/lighting/atmosphere.js": "home",
-    "js/career/regulations.js": "career",
-    "js/career/ai-dev.js": "career",
     "js/career/career-planning.js": "career",
     "js/career/career.js": "career",
     "js/career/season-cal.js": "menu",
@@ -2125,12 +2133,9 @@ const FULL_TIERS = {
     "js/physics/ai-band.js": "race",
     "js/physics/ai-corridor.js": "race",
     "js/camera/offsets.js": "race",
-    "js/camera/extra-rigs.js": "race",
     "js/camera/flyby-sight.js": "race",
     "js/camera/flyby-clear.js": "race",
     "js/camera/flyby-seq.js": "race",
-    "js/camera/cam-avoid.js": "race",
-    "js/camera/trackside.js": "race",
     "js/camera/flyby-panel.js": "race",
     "js/garage/setup-tune.js": "garage",
     "js/garage/setup-trials.js": "garage",
@@ -2139,7 +2144,6 @@ const FULL_TIERS = {
     "js/garage/setup-experiments.js": "garage",
     "js/garage/livery-design-editor.js": "garage",
     "js/garage/setup-sheet.js": "garage",
-    "js/career/experience.js": "career",
     "js/career/career-ui-boot.js": "career",
     "js/career/season-ui.js": "menu",
     "js/ui/flags.js": "menu",
@@ -2293,7 +2297,7 @@ module.exports = {
   LAZY_AUDIO, LAZY_AUDIO_EDGES,
   LAZY_DATA, LAZY_DATA_EDGES, LAZY_NET, LAZY_NET_EDGES, LAZY_WORKER, TRACK_WORKER_EXTRA, LAZY_EDITOR, LAZY_EDITOR_EDGES,
   LAZY_XR, LAZY_XR_EDGES, LAZY_CAM_EDITOR, LAZY_CAM_EDITOR_EDGES,
-  LAZY_CAREER_UI, LAZY_CAREER_UI_EDGES,
+  LAZY_CAREER_UI, LAZY_CAREER_UI_EDGES, LAZY_CAREER, LAZY_CAREER_EDGES,
   LAZY_UI_PRESETS, LAZY_UI_PRESETS_EDGES, LAZY_SAVES_DATA, LAZY_SAVES_DATA_EDGES,
   LAZY_RESULTS_SHEET, LAZY_RESULTS_SHEET_EDGES,
   LAZY_GFX_HI, LAZY_GFX_HI_EDGES,

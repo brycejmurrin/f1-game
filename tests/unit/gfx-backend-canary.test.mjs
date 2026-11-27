@@ -630,7 +630,7 @@ test("TLX aborts program warm on device loss so race-start cannot hang on warmin
   assert.match(src, /renderer\.onDeviceLost = function[\s\S]{0,400}?_deviceLost = true/);
   assert.match(src, /_warmRequested = false;\s*_warmPending = null;\s*_warmDone = true/);
   assert.match(src, /warming\(\)\s*\{\s*return !_deviceLost && !!_warmPending/);
-  assert.match(src, /ctxLost:\s*!!_deviceLost/);
+  assert.match(code("js/render/three/tlx-debug.js"), /ctxLost:\s*!!S\._deviceLost/);   // __tlx lives in tlx-debug.js (#6821)
   assert.match(src, /RendererPicker\.showUnavailable/);
 });
 
@@ -3473,11 +3473,11 @@ test("TLX world-frame Color clear prefers skyZenith over fog (missed TSL sky is 
 
 test("B·H26-R2: TLX skyState() tells the zenith-only software fallback from the full sky", () => {
   // skyState().on is true for both materials, so a software-GL still with no clouds or stars read as a phone gap.
-  const src = read("js/render/three/tlx.js");
+  const src = read("js/render/three/tlx-debug.js");   // __tlx lives in tlx-debug.js (#6821); outer names read through S
   const at = src.indexOf("skyState() {");
   assert.notEqual(at, -1, "skyState moved");
   assert.match(src.slice(at, at + 900),
-    /fallback: !!\(skyMesh && skyMatFallback && skyMatFallback !== skyMatFull && skyMesh\.material === skyMatFallback\)/,
+    /fallback: !!\(S\.skyMesh && S\.skyMatFallback && S\.skyMatFallback !== S\.skyMatFull && S\.skyMesh\.material === S\.skyMatFallback\)/,
     "skyState must report whether the armed sky material is the fallback");
 });
 
@@ -7874,9 +7874,10 @@ test("game.js gfxContextLost reads the cheap ctxLost() accessor, not backendStat
   assert.equal(facade.call({}), false);
   assert.equal(facade.call({ __tlx: { ctxLost: () => false } }), false);
   assert.equal(facade.call({ __tlx: { ctxLost: () => true } }), true);
-  const backend = new Function("_deviceLost", fnBody(tlx.slice(tlx.lastIndexOf("ctxLost()")), "ctxLost"));
-  assert.equal(backend(false), false);
-  assert.equal(backend({ reason: "destroyed" }), true);
+  const dbg = read("js/render/three/tlx-debug.js");   // the __tlx.ctxLost accessor lives in tlx-debug.js (#6821)
+  const backend = new Function("S", fnBody(dbg.slice(dbg.indexOf("ctxLost()")), "ctxLost"));
+  assert.equal(backend({ _deviceLost: false }), false);
+  assert.equal(backend({ _deviceLost: { reason: "destroyed" } }), true);
 });
 
 // 14-F1: window.__apex is NULL on the shipped build (game.js declares it null, only dev surfaces fill it), so

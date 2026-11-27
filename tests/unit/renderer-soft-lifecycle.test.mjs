@@ -685,7 +685,7 @@ test("TLX picks its backend on what three will BIND, not on navigator.gpu existi
     "the webgpu context probe must run on a THROWAWAY canvas, never on #game");
 
   // And the defect must stay diagnosable from a bug report.
-  assert.match(src, /canvasAlpha:/,
+  assert.match(read("js/render/three/tlx-debug.js"), /canvasAlpha:/,   // backendState lives in tlx-debug.js (#6821)
     "backendState must report the LIVE canvas alpha so a report can name this defect");
 });
 

@@ -1,0 +1,1 @@
+Improved: Las Vegas follows the real driven line, re-surveyed from 2024 qualifying car positions (#6922). The fast corners are now as open as the real ones (T5 ~106 m, T7 ~171 m, T17 ~172 m driven radius, was ~68 / 98 / 108 m), and the centreline sits within 2 m of the pole lap (was ~5 m). Your Vegas time-trial times start a new leaderboard class.

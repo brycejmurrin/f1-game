@@ -212,19 +212,19 @@ _Module index over 34 directories, in load order. `tag` = a `<script>` in index.
 | `team-identity.js` | `CareerTeamIdentity` | tag | Per-career MY TEAM appearance. |
 | `save-migrate.js` | `SaveMigrate` | tag | versioned save migration (SaveMigrate). |
 | `restore-points.js` | `CareerRestorePoints` | tag | CareerRestorePoints — bounded local history at explicit round/import boundaries. |
-| `regulations.js` | `Regulations` | tag | career regulation eras. |
-| `ai-dev.js` | `CareerAiDev` | tag | AI constructor part development over career winters. |
 | `career-planning.js` | `CareerPlanning` | tag | Career planning: pure projections and bounded choices; never changes Parts legality. |
 | `career.js` | `Career` | tag | CAREER core: the `apex26.career.<flavour>.0..2` saves (three DRIVER slots and three MY TEAM slots, one live at a time), the credits economy, driver an… |
 | `season-cal.js` | `SeasonCal` | tag | the SEASON CALENDAR and the WEEKEND FORMAT: which circuits a standalone championship visits and in what order, whether the weekend qualifies, whether … |
 | `badges.js` | `Badges` | tag | LICENCE BADGES: local achievements unlocked from facts the game already computes (a classified result, a pole, a daily streak), persisted at `apex26.badges`. |
-| `experience.js` | `CareerExperience` | tag | CareerExperience: race brief, real season story and management navigation. |
 | `career-ui-boot.js` | `CareerUI` | tag | CAREER screen boot stub (FULL). |
 | `season-ui.js` | `SeasonUI` | tag | the SEASON SETUP screen (#season-setup): the calendar the player races and the format they race it under. |
 | `custom-team.js` | `CustomTeam` | tag | MY TEAM: load/sync, customize dialog, emblem upload. |
 | `career-backup.js` | `CareerBackup` | LAZY_CAREER_UI | CAREER BACKUP: versioned export/import of all six career slots (plus optional standalone season / badges / daily and the MY TEAM identity). |
 | `career-planning-ui.js` | `CareerPlanningUI` | LAZY_CAREER_UI | Read-only Career planning cards and explicit local save recovery actions. |
 | `career-ui.js` | `CareerScreen` | LAZY_CAREER_UI | the CAREER screen (#career), LAZY_CAREER_UI. |
+| `regulations.js` | `Regulations` | LAZY_CAREER | career regulation eras. |
+| `ai-dev.js` | `CareerAiDev` | LAZY_CAREER | AI constructor part development over career winters. |
+| `experience.js` | `CareerExperience` | LAZY_CAREER | CareerExperience: race brief, real season story and management navigation. |
 
 **`js/ui/`**
 
@@ -628,12 +628,9 @@ _Module index over 34 directories, in load order. `tag` = a `<script>` in index.
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
 | `offsets.js` | `CamTune` | tag | PER-CAMERA-MODE framing offsets (the CAMERA TUNER's data layer): the knob registry (CAM_TUNE_DEFS), the per-mode override store (localStorage apex26.camTune),… |
-| `extra-rigs.js` | `ExtraRigs` | tag | EXTRA player camera rigs (RIVAL LOCK, PIT WALL, DRONE FOLLOW): append-only CAM_MODES solvers kept out of vantage.js for file-size headroom. |
 | `flyby-sight.js` | `FlybySight` | tag | FLYBY SIGHTLINES: what a flyby eye can actually SEE. |
 | `flyby-clear.js` | `FlybyClear` | tag | flyby eye clearance: which props are solid, the lift over a roof, and the ground floor under a crane shot. |
 | `flyby-seq.js` | `FlybySeq` | tag | FLYBY SHOT SEQUENCER: the pre-race loading screen's camera. |
-| `cam-avoid.js` | `CamAvoid` | tag | broadcast-camera wall / building avoidance for open circuits. |
-| `trackside.js` | `TracksideCams` | tag | TRACKSIDE fixed cameras: one eye per measured corner, outside the fence, auto-switching as the subject car passes. |
 | `flyby-panel.js` | `FlybyPanel` | tag | the FLYBY SHOT EDITOR pause-menu panel: pick a shot from the pre-race sequence (js/camera/flyby-seq.js), scrub the whole run, edit every pose field live… |
 | `director.js` | `Director` | tag | LIVE TV DIRECTOR (Director.create(G)): a broadcast-style camera brain for the race the player is driving. |
 | `photo-looks.js` | `PhotoLooks` | tag | photo-mode look presets: a transient grade applied while the free camera is open, restored when the visit ends. |
@@ -655,6 +652,9 @@ _Module index over 34 directories, in load order. `tag` = a `<script>` in index.
 | `vantage.js` | `GameCams` | tag | the camera-vantage solver for js/game.js: all per-mode framing (cockpit/hood/tcam/rear, chase/far/drift, heli/side/cinematic/low/overhead/reverse, plus… |
 | `cam-picker.js` | `CamPicker` | tag | CAM button picker: hold or right-click opens the view grid, arrow keys move it, AUTO appears only while a WATCH runs. |
 | `mode-switch.js` | `CamModes` | tag | CamModes — the PLAYER camera-mode switch UI: the CAM button (tap to cycle, hold/right-click for the picker grid) and the C-key cycle. |
+| `extra-rigs.js` | `ExtraRigs` | LAZY_RACE_SESSION | EXTRA player camera rigs (RIVAL LOCK, PIT WALL, DRONE FOLLOW): append-only CAM_MODES solvers kept out of vantage.js for file-size headroom. |
+| `trackside.js` | `TracksideCams` | LAZY_RACE_SESSION | TRACKSIDE fixed cameras: one eye per measured corner, outside the fence, auto-switching as the subject car passes. |
+| `cam-avoid.js` | `CamAvoid` | LAZY_RACE_SESSION | broadcast-camera wall / building avoidance for open circuits. |
 | `tuner-panel.js` | `CamTunerEditor` | LAZY_CAM_EDITOR | the CAMERA TUNER pause-menu panel: a chip per player camera mode plus a slider per knob from CamTune.defs(), comfort knobs, a global baseline scope, presets,… |
 | `flyby-editor.js` | `FlybyEditor` | LAZY_CAM_EDITOR | FLYBY SHOT EDITOR DOM panel (LAZY_CAM_EDITOR). |
 
@@ -733,6 +733,7 @@ _Module index over 34 directories, in load order. `tag` = a `<script>` in index.
 | `tlx-mem.js` | `TLXShaders` | DEFERRED:three | TLXShaders.memCensus: the texture / render-target / buffer byte census for the TLX backend, the three-path answer to GLX.texCensus() (glx.js). |
 | `tlx-util.js` | `TLXUtil` | DEFERRED:three | TLXUtil: module-level helpers carved out of tlx.js (#6821, #6607 row 8): pumpAnimation (three's rAF pump), texStandIn (the 1x1 canvas a released texture… |
 | `tlx-texpool.js` | `TLXTexPool` | DEFERRED:three | TLXTexPool: the retired-texture pool carved out of tlx.js (#6821, #6479 row 10). |
+| `tlx-debug.js` | `TLXDebug` | DEFERRED:three | TLXDebug: the __tlx debug surface carved out of tlx.js (#6821, #6479 row 9). create(S) returns the object tlx.js exposes as api.__tlx. |
 | `tlx.js` | `TLX` | DEFERRED:three | TLX: default three.js/TSL renderer behind js/render/gfx.js. |
 | `tsl-surface.js` | `TLXSurface` | LAZY_GFX_HI | TLXSurface: close-up road surfaces for the TLX lit program (#6509 items 1 + 2; GfxQuality features `closeLayers` and `wearMask`, FEATURES level 2: desktop… |
 
@@ -748,6 +749,7 @@ _Module index over 34 directories, in load order. `tag` = a `<script>` in index.
 | `apex-track.js` | `ApexTrack` | LAZY_AGENT | ApexTrack: track-geometry hooks of window.__apex. |
 | `apex-lobby.js` | `ApexLobby` | LAZY_AGENT | ApexLobby: session and field hooks of window.__apex. |
 | `apex-play.js` | `ApexPlay` | LAZY_AGENT | ApexPlay: the def() registry for NEW __apex hooks (#6962, #6920 U4.4). |
+| `apex-drill.js` | `ApexDrill` | LAZY_AGENT | __apex.drill*: drive a LEARN drill without its dialog (#7067, #6559 step 0). |
 | `apex-gpu-capture.js` | `ApexGpuCapture` | LAZY_AGENT | ApexGpuCapture (#2964): dev-only __apex.gpuCapture toggle that injects vendored Spector.js (captureCanvas) or webgl-lint into the page for GLX / TLX WebGL… |
 | `apex-lifecycle.js` | `ApexLifecycle` | LAZY_AGENT | ApexLifecycle: __apex.lifecycle(), the page/render lifecycle hook (#2572). |
 | `apex.js` | `ApexApi` | LAZY_AGENT | the window.__apex dev/test API for js/game.js (~220 methods: staging, cameras, track geometry, telemetry, session control, lighting, input override, h… |
@@ -2195,16 +2197,38 @@ gap is recorded in §Parity snapshot above and in the defect inventory
 crash and validation fixes (D-049): never port a look or knob into it, and a GLX
 or TLX fix is not "unfinished" for lacking a WGX twin.
 
+#### Backend gap table
+
+TLX ships; GLX and WGX gaps live here and only here (D-058). Source: the
+object-literal scan in `tests/unit/backend-surface-parity.test.mjs` on 2026-11-26
+(GLX 84 names = BACKEND_SURFACE, TLX 137, WGX 100); a gap is not a bug.
+
+| feature (names) | TLX | GLX | WGX |
+|---|---|---|---|
+| WebXR (`presentXR`, `xrCapable`, `xrInfo`, `setFoveation`, `detachXrSession`, …) | yes | gap | gap |
+| Shader/pipeline warm-up (`warm`, `warming`, `warmSettled`, `warmQueued`, `warmDraws`, `primeChunkMerge`) | yes | gap | gap |
+| Frame capture (`renderCaptureFrame`, `capturePixels`) | yes | gap | `capturePixels`, `cancelCapture` |
+| Static/car lamp-shadow split (`lampStaticBegin/End`, `lampCarsBegin`, `lampGridState`) | yes | gap | gap |
+| Texture pool and ownership (`flushTexPool`, `freeTexture`, `refillTexture`, `uploadTexture`, `pinMesh`, `flushChunkedOwnership`) | yes | `flushTexPool` only | `flushTexPool`, `freeTexture` |
+| Track wear, env readback, decal runs (`setTrackWear`, `readEnvCube`, `decalRuns`, `trackPrepareConfig`) | yes | gap | gap |
+| HDR output, post retry, inspector (`hdrOutputActive`, `retryPost`, `inspectorHost`, `photoFocusAvailable`) | yes | gap | gap |
+| Soft-present hold, road LUT, pipeline stats (`holdSoftPresent`, `roadLutReady`, `litPipelineStats`) | gap | gap | yes (WGX-only) |
+
+Adding or closing a row is a docs edit; closing a GLX gap needs a correctness or
+phone-safety reason (`.claude/rules/render-glx.md`).
+
+
 **GLX's job — safe mode.** GLX is the renderer every backend failure lands on
 (`Gfx.create()` → null), the no-adapter device path, the explicit `webgl2` pick,
 and the name of the seam (`GLX` facade). Its job is to boot and race correctly on
 any WebGL2 device, holding the features it ships today as its floor look. It
 takes crash, correctness and phone-safety fixes; it does not chase TLX looks.
-The floor-look list, a `render-glx.md` rule, a named backend-interface list and a
-fallback-correctness spec are the later phases of #6861 (not yet landed).
+The floor look is `.claude/rules/render-glx.md`; the interface is the frozen
+BACKEND_SURFACE list (`docs/backend-surface.txt`, D-058, `docs/GFX-CONTRACT.md`
+§Backend roles). A fallback-correctness spec is the next phase of #6861 (#7045).
 
 1. `node --test tests/unit/backend-surface-parity.test.mjs` first — the
-   façade must carry the same member names on all three backends (a missing
+   façade must carry every BACKEND_SURFACE name on all three backends (a missing
    name leaves GLX's dead closure behind after descriptor-copy; see §Mental
    model).
 2. Grep the knob across ALL of `js/render/`: GLSL in `shaders/`, WGSL in

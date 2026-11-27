@@ -85,6 +85,7 @@ function create(G) {
     if (!host) return null;
     if (dev.key !== "pad" || !Input.controllerProfile || !Input.controllerProfile()) dev.load(store.get(dev.key, null));
     let armed = null;   // { id, slot, btn } while a slot waits for input
+    const parts = new Map();   // slot chip -> { clear, other }: the armed row's CLEAR and the chip it replaces
     const setNote = (t) => { if (note) note.textContent = t; };
     // Input already persists the active device profile. Keep the shared pad
     // map intact so a wheel that has yet to migrate can still claim it.
@@ -97,6 +98,8 @@ function create(G) {
       const { btn } = armed;
       armed = null;
       delete btn.dataset.armed;
+      const p = parts.get(btn);
+      if (p) { p.clear.hidden = true; p.other.hidden = false; }
       window.removeEventListener("keydown", onKey, true);
       window.removeEventListener("blur", disarmOnBlur);
       window.removeEventListener("focusin", disarmOnFocus, true);
@@ -113,6 +116,15 @@ function create(G) {
     function accept(v) {
       if (!armed) return;
       if (!onScreen()) { disarm(true, false); return; }
+      // A pad cannot walk the menu while it is capturing, so a D-pad press hands
+      // the pad back to the walker with focus on CLEAR (#7150): A clears, B cancels.
+      const p = parts.get(armed.btn);
+      if (!dev.keys && p && (v === 14 || v === 15)) {
+        Input.padCapture(null);
+        p.clear.focus();
+        setNote(dev.clearNote);
+        return;
+      }
       const { id, slot } = armed;
       const focus = { id, slot };   // profile saves can synchronously re-render/disarm
       const r = dev.set(id, slot, v);
@@ -147,6 +159,8 @@ function create(G) {
          false mid-composition. The 229 check is what covers that gap, and is
          the pairing MDN recommends. */
       if (e.isComposing || e.keyCode === 229) return;
+      // Enter / Space on a focused CLEAR is its click, not a capture (Esc still cancels).
+      { const p = parts.get(armed.btn); if (p && e.target === p.clear && !esc) return; }
       const erase = e.code === "Backspace" || e.code === "Delete";
       if (dev.keys || erase || esc) { e.preventDefault(); e.stopPropagation(); }
       if (e.repeat) return;
@@ -176,6 +190,12 @@ function create(G) {
       armed = { id, slot, btn };
       btn.dataset.armed = "1";
       btn.textContent = dev.keys ? "PRESS A KEY" : "PRESS A BUTTON";
+      // The aria-label overrides the text, so it must say the slot is waiting; render() restores it.
+      const armedRow = dev.list().find((x) => x.id === id);
+      btn.setAttribute("aria-label", `${armedRow ? armedRow.label : id}${slot ? " second" : ""} ${dev.noun}: waiting for ${dev.keys ? "a key" : "a button"}, Esc cancels`);
+      btn.setAttribute("aria-pressed", "true");
+      const p = parts.get(btn);
+      if (p) { p.other.hidden = true; p.clear.hidden = false; }   // CLEAR takes the idle slot's place: one line
       setNote(dev.armedNote);
       window.addEventListener("keydown", onKey, true);
       window.addEventListener("blur", disarmOnBlur);
@@ -191,7 +211,10 @@ function create(G) {
     }
     function disarmOnBlur() { disarm(false, false); }
     // Focus leaving the armed chip hands the next key to that control (#6281).
-    function disarmOnFocus(e) { if (armed && e.target !== armed.btn) disarm(false, false); }
+    function disarmOnFocus(e) {
+      const p = armed && parts.get(armed.btn);
+      if (armed && e.target !== armed.btn && !(p && e.target === p.clear)) disarm(false, false);
+    }
     // A dialog `cancel` (pad B, Android Back) cancels the recording, not the page.
     function onCancel(e) {
       if (!armed || !e.target || !e.target.contains || !e.target.contains(host)) return;
@@ -220,6 +243,7 @@ function create(G) {
       // A rebuild drops the armed chip from the DOM; disarm first so padCapture
       // cannot steal the next button press (gamepad connect, brand switch, …).
       if (clearArmed()) setNote(dev.idle);
+      parts.clear();
       host.textContent = "";
       let focusBtn = null;
       for (const a of dev.list()) {
@@ -232,7 +256,17 @@ function create(G) {
         lbl.textContent = a.label;
         const cluster = document.createElement("div");
         const first = slotButton(a, 0), second = slotButton(a, 1);
-        cluster.append(first, second);
+        const clear = document.createElement("button");
+        clear.type = "button";
+        clear.className = "sel-chip";
+        clear.hidden = true;
+        clear.dataset.clear = a.id;
+        clear.textContent = "CLEAR";
+        clear.setAttribute("aria-label", `Clear ${a.label} ${dev.noun}`);
+        clear.onclick = () => { if (armed && armed.id === a.id) unbind(); };
+        parts.set(first, { clear, other: second });
+        parts.set(second, { clear, other: first });
+        cluster.append(first, second, clear);
         if (focus && focus.id === a.id) focusBtn = focus.slot === 1 ? second : first;
         row.append(lbl, cluster);
         host.appendChild(row);
@@ -338,8 +372,8 @@ function create(G) {
     // pressed (a tablet with a Bluetooth keyboard), or when the map is already
     // customised — pointer: coarse says nothing about whether a keyboard exists.
     show: () => desktop() || Input.keyboardSeen() || !Input.keysAreDefault(),
-    idle: "Tap a key slot, then press the key you want. Esc cancels, Backspace clears the slot. A key already used by another action moves here.",
-    armedNote: "Press a key… (Esc cancels, Backspace clears)", resetNote: "Keys reset to the defaults.",
+    idle: "Tap a key slot, then press the key you want. Esc cancels, CLEAR or Backspace empties the slot. A key already used by another action moves here.",
+    armedNote: "Press a key… (Esc cancels, CLEAR or Backspace clears)", resetNote: "Keys reset to the defaults.",
     groups: [
       ["Steer", ["left", "right"]], ["Gas", ["throttle"], gasTail], ["Brake", ["brake"]],
       ["Boost", ["boost"], "tap to toggle"], ["Overtake", ["overtake"]], ["Active aero", ["aero"]],
@@ -378,8 +412,8 @@ function create(G) {
     // once a pad has been seen, or when the map is already customised (buttons,
     // wheel axes, or a stick rest offset — any of those is a live controller).
     show: () => Input.padPresent() || desktop() || !controllerIsDefault(),
-    idle: "Tap a slot, then press a button on the controller. Esc cancels, Backspace clears the slot. The stick and D‑pad steer.",
-    armedNote: "Press a controller button… (Esc cancels, Backspace clears)", resetNote: "Controller reset to the defaults.",
+    idle: "Tap a slot, then press a button on the controller. Esc cancels, CLEAR empties the slot. The stick and D‑pad steer.",
+    clearNote: "CLEAR is selected — A empties the slot, B cancels.", armedNote: "Press a controller button… (D‑pad ◀ ▶ selects CLEAR, B cancels)", resetNote: "Controller reset to the defaults.",
     groups: [
       ["Steer", "left stick / D‑pad"], ["Gas", ["throttle"], gasTail], ["Brake", ["brake"], "(triggers are analog)"],
       ["Boost", ["boost"], "toggle"], ["Overtake", ["overtake"]], ["Active aero", ["aero"]],

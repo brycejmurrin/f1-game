@@ -226,7 +226,8 @@
     "RetiredCard",
     "TLXCarSurf",
     "TLXUtil",
-    "TLXTexPool"
+    "TLXTexPool",
+    "TLXDebug"
   ],
   "mutable": [
     "GLX",

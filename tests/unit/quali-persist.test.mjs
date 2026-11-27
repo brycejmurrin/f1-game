@@ -361,6 +361,7 @@ function loadSheet({ dom = false, globals = {} } = {}) {
     set textContent(v) { this._t = v; this.children.length = 0; }
     appendChild(c) { this.children.push(c); return c; }
     append(...cs) { for (const c of cs) this.children.push(c); }
+    setAttribute(k, v) { (this.attrs ||= {})[k] = String(v); }
   }
   const els = new Map(["q-table", "q-title", "quali"].map((id) => [id, new El("div")]));
   let refreshed = 0;
@@ -395,6 +396,24 @@ test("a driven pole's badge is spoken when the sheet opens; no badge, no line", 
   quiet.sheet.open([{ pos: 2, code: "VER", name: "Max", team: "me", isPlayer: true, human: true, t: 61, gap: 1 }]);
   timers.splice(0).forEach((fn) => fn());
   assert.equal(said.length, 1);
+});
+
+// #6883 row 4: the YOU row is nameable (text + aria-current) and the grid is a list.
+test("the quali sheet's YOU row carries a YOU tag and aria-current; rivals do not", () => {
+  const { sheet, els } = loadSheet();
+  sheet.build([
+    { pos: 1, code: "RIV", name: "Rival", team: "rb", t: 60, gap: 0 },
+    { pos: 2, code: "VER", name: "Max", team: "me", isPlayer: true, t: 61, gap: 1 },
+  ]);
+  const table = els.get("q-table");
+  assert.equal(table.attrs.role, "list");
+  const [rival, me] = table.children;
+  assert.equal(me.attrs.role, "listitem");
+  assert.equal(me.attrs["aria-current"], "true");
+  assert.equal(rival.attrs["aria-current"], undefined);
+  const nameOf = (row) => row.children.find((c) => c.className === "res-name");
+  assert.ok(nameOf(me).children.some((c) => c._t.trim() === "YOU"), "a YOU tag inside the name");
+  assert.equal(nameOf(rival).children.length, 0);
 });
 
 // hunt2 ui-menus: SIMULATE / peer rebuild while #quali stays open must drop the

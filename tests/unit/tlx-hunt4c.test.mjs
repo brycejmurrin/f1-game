@@ -518,7 +518,7 @@ test("B-F3.1: tlx.js wiring — mirrorBegin's gate after the in-flight refusal, 
     "present() starts it where it starts the entry warm, and paints nothing while it runs");
   assert.match(TLX, /let _mirWarmLazy = false;\s*try \{ _mirWarmLazy = localStorage\.getItem\("apex26\.tlxMirWarmLazy"\) === "1"; \}/, "opt-in: unset is the eager stage");
   assert.equal((TLX.match(/localStorage\.getItem\("apex26\.tlxMirWarmLazy"\)/g) || []).length, 1, "read once");
-  assert.match(TLX, /mirrorDeferred: _warmStages\.mirrorDeferred, mirrorLazy: _warmStages\.mirrorLazy/, "memState().warm reports both");
+  assert.match(read("js/render/three/tlx-debug.js"), /mirrorDeferred: S\._warmStages\.mirrorDeferred, mirrorLazy: S\._warmStages\.mirrorLazy/, "memState().warm reports both");   // __tlx lives in tlx-debug.js (#6821)
   // The mirror stage is ONE function shared by every warm (no drift between the eager, the deferred and the
   // rig warm's menu-path compiles).
   assert.equal((TLX.match(/await warmMirrorStage\(usePost, useTag\);/g) || []).length, 3);

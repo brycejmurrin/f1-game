@@ -2,8 +2,7 @@
 const AiStart = (function () {
   "use strict";
 
-  const clamp = M4.clamp;
-  const lerp = M4.lerp;
+  const { clamp, lerp } = M4;
 
   // THE LAUNCH. Real lights-out is a reaction (a driver-dependent fraction of a
   // second) and a getaway that varies car to car; the model had neither, so a

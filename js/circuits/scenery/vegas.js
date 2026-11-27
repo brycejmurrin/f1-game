@@ -441,7 +441,8 @@
       cityFront(0.12, 0.20,  1, 52, { minH: 6, maxH: 12, depth: 16, step: 32,
         palette: [[0.18, 0.18, 0.20], [0.17, 0.18, 0.21]], lit: true, windowCol: BOH_WIN });
       // Mid-sector service massing — re-keyed through sl(); pushed back off the barrier.
-      building(K(sl(0.26)), 1, 62, 30, 40, 28, { kind: "tiered", wall: BOH_WALL, window: BOH_WIN, floor: 8, lit: true });
+      // 0.264 (was 0.26): at 0.26 a ground-floor detail sank 1.2 m into the dip behind T5-T6 once the pit row was back (#6922).
+      building(K(sl(0.264)), 1, 62, 30, 40, 28, { kind: "tiered", wall: BOH_WALL, window: BOH_WIN, floor: 8, lit: true });
 
       // Wynn / Encore — copper twin towers on Sands Ave approach just before
       // Venetian Strip entry (racing ~0.445, LEFT). Closed solid cores —
@@ -623,7 +624,7 @@
           size: [48, 78, 120],
           basis: b,
         }, (stage) => {
-          seat.box(stage, a.c, [40, 14, 108], BEL, b);
+          seat.box(stage, a.c, [40, 14.4, 108], BEL, b);   // 14.4: the base top stays off the lake plane (#6922 grade)
           seat.box(stage, vadd(a.c, a.u, 14), [36, 52, 100], BEL_D, b);
           stage._mat = MAT.GLASS;
           addBox(stage, vadd(a.c, a.u, 38), [37.2, 42, 101], BEL_WIN, b);
@@ -769,12 +770,14 @@
             const h1 = hash(idx * 5 + (side > 0 ? 13 : 71));
             const neon = NEON[(idx + (side > 0 ? 4 : 1)) % NEON.length];
             const fh = 80 + h1 * 100;
-            backdrop(k, side, 185, [50, fh, 30], backdropCols[idx % 3], { followGrade: true });
+            // 46 / 48 m long, not 50 / 52: on the #6922 centreline the inside of the Strip curve
+            // packs the 0.009 steps closer, and full-length boxes met end to end (flat-coplanar feet).
+            backdrop(k, side, 185, [46, fh, 30], backdropCols[idx % 3], { followGrade: true });
             // Bright neon band at street level — backdrop() always stands on
             // the ground, so the "crown" never reached the top. Now a 3 m
             // strip against the tower's front face (170 m) instead of a slab
             // round its foot sharing its underside (63 flat-coplanar pairs).
-            backdrop(k, side, 168.5, [52, 7.0, 3], neon);
+            backdrop(k, side, 168.5, [48, 7.0, 3], neon);
           }
         }
 

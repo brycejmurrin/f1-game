@@ -15,7 +15,7 @@ const GAME_JS = gameSource();
 const GAME_CALL = GAME_JS.slice(GAME_JS.indexOf("PhotoStudio.create(G, {"), GAME_JS.indexOf("function openExperiencePhoto("));
 const GAME_DEPS = new Set(["ltStore", "ltSet", "ltApply"].filter((k) => new RegExp("[{,]\\s*" + k + "\\s*[,:}]").test(GAME_CALL)));
 function boot(options = {}) {
-  const dom = makeDom(), order = [], downloads = [], canvasOps = [], storage = new Map();
+  const dom = makeDom(), order = [], downloads = [], canvasOps = [], storage = new Map(options.storage || []);
   const create = dom.document.createElement;
   dom.document.createElement = (tag) => {
     const el = create(tag);
@@ -56,7 +56,7 @@ function boot(options = {}) {
   const scene = { value: options.homeScene || "photo" };
   const ltWrites = [], latchWrites = [];
   const windowEvents = new Map();
-  const ctx = vm.createContext({ document: dom.document, window: { dispatchEvent: () => {},
+  const ctx = vm.createContext({ document: dom.document, window: { dispatchEvent: () => {}, matchMedia: options.matchMedia,
     addEventListener: (type, fn) => windowEvents.set(type, fn),
     removeEventListener: (type, fn) => { if (windowEvents.get(type) === fn) windowEvents.delete(type); } },
     localStorage: { getItem: (k) => storage.get(k), setItem: (k, v) => { if (options.storageFull) throw new Error("Quota"); storage.set(k, v); }, removeItem: (k) => storage.delete(k) },
@@ -102,7 +102,7 @@ function boot(options = {}) {
   const PS = ctx.PhotoStudio, api = PS.create(G, { freeCam, garage, renderFrame: () => { order.push("draw"); options.renderSample?.(ctx.PhotoStudioBody.sampling); },
     ltStore: GAME_DEPS.has("ltStore") ? ltStore : undefined, ltSet: GAME_DEPS.has("ltSet") ? ltStore.set : undefined,
     borrowCar: options.borrowCar ? () => options.borrowCar(G) : undefined });
-  return { api, PS, Body: ctx.PhotoStudioBody, dom, order, downloads, canvasOps, G, storage, scene, LT, ltProfiles, ltWrites, latchWrites, windowEvents,
+  return { api, PS, win: ctx.window, Body: ctx.PhotoStudioBody, dom, order, downloads, canvasOps, G, storage, scene, LT, ltProfiles, ltWrites, latchWrites, windowEvents,
     closed: () => closed, restored: () => restored, overlays: () => overlays };
 }
 
@@ -956,6 +956,49 @@ test("the menu background goes through GameStore's raw lane and reads back the s
   assert.equal(b.PS.background(), img);
   assert.equal(b.PS.setBackground(""), true);
   assert.equal(b.storage.has("apex26.photoBackground"), false);
+});
+
+test("menu background has separate landscape and portrait slots (#7157)", () => {
+  const b = boot(), L = "data:image/jpeg;base64,TEFORA==", P = "data:image/jpeg;base64,UE9SVA==";
+  for (const PS of [b.PS, b.Body]) {
+    b.storage.clear();
+    b.PS.setBackground(L, "landscape"); PS.setBackground(P, "portrait");
+    assert.equal(PS.background("landscape"), L); assert.equal(PS.background("portrait"), P);
+    assert.equal(b.storage.get("apex26.photoBackground"), L, "the old key stays the landscape slot");
+    assert.equal(b.storage.get("apex26.photoBackgroundPortrait"), P);
+    PS.setBackground("", "portrait");
+    assert.equal(PS.background("landscape"), L, "clearing portrait leaves landscape");
+    assert.equal(PS.background("portrait"), "");
+    b.storage.clear(); b.storage.set("apex26.photoBackground", L);
+    assert.equal(PS.background("landscape"), L, "a pre-slot save reads as landscape");
+  }
+  b.storage.clear(); b.PS.setBackground(L, "landscape"); b.PS.setBackground(P, "portrait");
+  b.api.state(); // no-arg read follows orientation, falling back to the other slot
+  assert.equal(b.PS.background(), L);   // no innerHeight in the VM: landscape
+  b.PS.setBackground("", "landscape");
+  assert.equal(b.PS.background(), P, "empty landscape falls back to portrait");
+});
+
+test("portrait orientation: no-arg read, slot choice, CLEAR and a failed write (#7157)", async () => {
+  const L = "data:image/jpeg;base64,TEFORA==", P = "data:image/jpeg;base64,UE9SVA==";
+  const b = boot(); b.win.innerWidth = 393; b.win.innerHeight = 852;
+  b.PS.setBackground(L, "landscape");
+  assert.equal(b.PS.background(), L, "portrait falls back to landscape while its own slot is empty");
+  b.PS.setBackground(P);   // no slot: the current (portrait) orientation
+  assert.equal(b.storage.get("apex26.photoBackgroundPortrait"), P);
+  assert.equal(b.PS.background(), P); assert.equal(b.storage.get("apex26.photoBackground"), L);
+  assert.equal(b.PS.slotFor(0.8), "portrait"); assert.equal(b.PS.slotFor(16 / 9), "landscape"); assert.equal(b.PS.slotFor(1), "portrait", "square follows orientation");
+  b.PS.setBackground("");   // clears only the portrait slot
+  assert.equal(b.PS.background("portrait"), ""); assert.equal(b.PS.background("landscape"), L);
+  // a failed write (quota) keeps the other slot and reports plainly
+  const full = boot({ storageFull: true }); full.storage.set("apex26.photoBackground", L);
+  assert.equal(full.PS.setBackground(P, "portrait"), false);
+  assert.equal(full.storage.get("apex26.photoBackground"), L);
+  // CLEAR BACKGROUND in the Studio names and clears the current slot
+  const c = boot(); c.win.innerWidth = 393; c.win.innerHeight = 852; c.storage.set("apex26.photoBackground", L); c.storage.set("apex26.photoBackgroundPortrait", P);
+  c.api.open({ source: "garage" }); c.dom.byId("ps-background").parentNode.children[1].click();
+  assert.equal(c.dom.byId("ps-message").textContent, "Portrait menu background cleared.");
+  assert.equal(c.storage.has("apex26.photoBackgroundPortrait"), false); assert.equal(c.storage.get("apex26.photoBackground"), L);
 });
 
 test("a captured or saved photo selects its own Home scene after the image is stored", async () => {
@@ -1832,4 +1875,63 @@ test("Depth focus off presents photoFocus undefined; on with no tap presents nul
   depth.value = "off"; b.dom.dispatch(depth, { type: "change" });
   for (const expr of exprs) assert.equal(present(expr), undefined, "turning it off again drops the pass");
   b.api.close(false);
+});
+
+test("#7017: DOCK and HIDE toggle the sheet attributes with accessible state; the dock side persists and restores", () => {
+  const b = boot(); const studio = b.dom.byId("photo-studio"), body = b.dom.document.body;
+  const dock = b.dom.byId("ps-dock"), hide = b.dom.byId("ps-collapse");
+  assert.equal(dock.parentElement.parentElement.className, "sheet-head", "both controls live in the sheet header");
+  assert.equal(dock.getAttribute("aria-pressed"), "false");
+  assert.equal(hide.getAttribute("aria-expanded"), "true");
+  assert.equal(hide.getAttribute("aria-controls"), "ps-body");
+  b.api.open();
+  assert.equal(studio.dataset.dock, "bottom", "default stays the bottom sheet");
+  assert.equal(studio.dataset.sheet, "open");
+  assert.equal(body.getAttribute("data-ps-dock"), "bottom", "the photo sticks read the side from body");
+  dock.click();
+  assert.equal(studio.dataset.dock, "top"); assert.equal(dock.getAttribute("aria-pressed"), "true");
+  assert.equal(body.getAttribute("data-ps-dock"), "top");
+  assert.equal(b.storage.get("apex26.photoDock"), "top");
+  assert.equal(b.api.state().dock, "top");
+  hide.click();
+  assert.equal(studio.dataset.sheet, "collapsed"); assert.equal(hide.getAttribute("aria-expanded"), "false");
+  assert.equal(body.getAttribute("data-ps-sheet"), "collapsed", "the sticks read the fold from body");
+  assert.equal(hide.textContent, "SHOW"); assert.equal(b.api.state().collapsed, true);
+  assert.equal(b.storage.has("apex26.photoCollapsed"), false, "collapse is visit state, not stored");
+  b.api.close(false);
+  assert.equal(body.getAttribute("data-ps-dock") ?? null, null, "closing drops the body side");
+  assert.equal(body.getAttribute("data-ps-sheet") ?? null, null);
+  b.api.open();
+  assert.equal(studio.dataset.sheet, "collapsed", "the collapse survives a reopen in the same session");
+  hide.click(); assert.equal(studio.dataset.sheet, "open"); assert.equal(hide.textContent, "HIDE");
+  dock.click(); assert.equal(studio.dataset.dock, "bottom"); assert.equal(b.storage.get("apex26.photoDock"), "bottom");
+  const again = boot({ storage: [["apex26.photoDock", "top"]] }); again.api.open();
+  assert.equal(again.dom.byId("photo-studio").dataset.dock, "top", "the next visit opens where the player left it");
+  assert.equal(again.dom.byId("ps-dock").getAttribute("aria-pressed"), "true");
+  const junk = boot({ storage: [["apex26.photoDock", "left"]] }); junk.api.open();
+  assert.equal(junk.dom.byId("photo-studio").dataset.dock, "bottom", "an unknown stored side falls back to bottom");
+  assert.equal(b.dom.byId("ps-help").textContent.startsWith("WASD move"), true, "a mouse and keyboard keep the key hints");
+  const touch = boot({ matchMedia: (q) => ({ matches: q === "(pointer: coarse)" }) }); touch.api.open();
+  assert.equal(touch.dom.byId("ps-help").textContent.startsWith("Left stick moves"), true, "a touch phone gets the stick wording");
+  assert.equal(touch.dom.byId("ps-help").textContent.includes("WASD"), false);
+  const full = boot({ storageFull: true }); full.api.open(); full.dom.byId("ps-dock").click();
+  assert.equal(full.dom.byId("photo-studio").dataset.dock, "top", "a failed write still moves the sheet for this visit");
+});
+
+test("TIME chips cross day<->night without a synchronous rebuild: deferred, at most one (#7059)", () => {
+  const b = boot(), n = { sync: 0, deferred: 0 };
+  // The engine seam (weather-arc setTimeOfDay): a day<->dark crossing is a sync Tracks.build unless opt.defer.
+  b.G.setTimeOfDay = (v, opt) => {
+    if (v === undefined) return b.G.raceTimeOfDay;
+    const dark = (t) => t === "night";
+    if (dark(v) !== dark(b.G.raceTimeOfDay)) { if (opt && opt.defer) n.deferred++; else n.sync++; }
+    b.G.raceTimeOfDay = v; return v;
+  };
+  b.api.open({ source: "race" });
+  const tod = b.dom.byId("ps-tod"); tod.value = "night"; b.dom.dispatch(tod, { type: "change" });
+  assert.equal(n.sync, 0, "the chip ran no synchronous rebuild");
+  b.dom.byId("ps-cond-reset").click();
+  assert.equal(b.G.raceTimeOfDay, "day");
+  assert.equal(n.sync, 0, "RESET CONDITIONS ran no synchronous rebuild");
+  assert.ok(n.deferred >= 1 && n.deferred <= 2, "each crossing is deferred (the engine coalesces them)");
 });

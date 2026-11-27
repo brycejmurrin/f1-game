@@ -128,13 +128,15 @@ const WeatherArc = (function () {
     // Live time-of-day + weather for player UI (lighting tuner) and __apex. The
     // agent surface is absent on GitHub Pages, so anything player-facing must go
     // through G — not window.__apex.
-    function setTimeOfDay(tod) {
+    // opt.defer (the lighting tuner's TIME chips, #6896): a day<->dark world rebuild goes to
+    // game.js rebuildWorldDeferred (one stepped build, never on this frame) instead of a sync build.
+    function setTimeOfDay(tod, opt) {
       if (tod === undefined) return G.raceTimeOfDay;
       const valid = ["default", "dawn", "day", "dusk", "night"];
       const next = valid.includes(tod) ? tod : "default";
       if (next === G.raceTimeOfDay) return next;
       G.raceTimeOfDay = next;
-      G.loadTrack(G.trackIdx);
+      G.loadTrack(G.trackIdx, !!(opt && opt.defer));
       G.applyRaceSettings();
       return G.raceTimeOfDay;
     }
@@ -597,7 +599,7 @@ const WeatherArc = (function () {
     function syncWetness(dt, snap) {
       const frame = G.frame;
       if (!frame) return;
-      syncSegs(frame, dt);
+      syncSegs(frame, dt, snap);
       const knobs = (typeof LightKnobs !== "undefined" && LightKnobs) ? LightKnobs.LT : null;
       if (knobs && typeof knobs.wetness === "number" && knobs.wetness >= 0) {
         frame.wetness = knobs.wetness;
@@ -620,17 +622,23 @@ const WeatherArc = (function () {
     // centred on lap fraction (i + 0.5) / WET_SEGS (RainCells.segFrac), each the
     // along-lap wetness there — no drying line (that is lateral, per car). Fixed
     // length, so a renderer can bind it as a uniform array; lap-wide weather
-    // fills every slot with the lap value. No renderer reads it yet (phase 2).
+    // fills every slot with the lap value. TLX's road samples it (phase 2).
     const _segT = new Float64Array(WET_SEGS);
     /** frame.wetnessSegs, from syncWetness: the tuner pin fills every slot; else
-     *  the same 0.8/s ramp as frame.wetness (dt null or <= 0 snaps), so a settle
-     *  or a chip cut eases per segment exactly as the global value does. */
-    function syncSegs(frame, dt) {
+     *  the same ramp as frame.wetness — 0.8/s, `snap` jumps, dt <= 0 HOLDS (a
+     *  paused render(0) frame, #6881 R6) — so a settle or a chip cut eases per
+     *  segment exactly as the global value does. A fresh array seeds snapped.
+     *  frame.wetnessLap is the lap length the segments span (s / it = lap
+     *  fraction; the TLX road reads both, #6909 phase 2), 0 with no track. */
+    function syncSegs(frame, dt, snap) {
       let out = frame.wetnessSegs;
-      if (!(out instanceof Float32Array) || out.length !== WET_SEGS) out = frame.wetnessSegs = new Float32Array(WET_SEGS);
+      if (!(out instanceof Float32Array) || out.length !== WET_SEGS) { out = frame.wetnessSegs = new Float32Array(WET_SEGS); snap = true; }
+      frame.wetnessLap = G.track && G.track.total > 0 ? G.track.total : 0;
       const lt = typeof LightKnobs !== "undefined" && LightKnobs ? LightKnobs.LT : null;
       if (lt && typeof lt.wetness === "number" && lt.wetness >= 0) { out.fill(lt.wetness); return; }
-      const step = dt > 0 ? Math.min(1, dt * 0.8) : 1, tgt = sectorWetness(_segT);
+      const step = snap ? 1 : dt > 0 ? Math.min(1, dt * 0.8) : 0;
+      if (step === 0) return;
+      const tgt = sectorWetness(_segT);
       for (let i = 0; i < WET_SEGS; i++) out[i] += (tgt[i] - out[i]) * step;
     }
     /** Target wetness per arc segment into `out` (length WET_SEGS), unlagged.

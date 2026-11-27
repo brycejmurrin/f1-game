@@ -766,7 +766,8 @@ interface GameCtx {
 
   // ── Loading, lighting persistence, camera + car plumbing ─────────────────
   readonly loadCarModel: (url: string) => Promise<unknown>;
-  readonly loadTrack: (idx: number) => void;
+  /** defer (the tuner's day<->dark, #6896): one stepped rebuild on the next task, coalesced; sync outside race/count. */
+  readonly loadTrack: (idx: number, defer?: boolean) => unknown;
   readonly persistLightTune: () => void;
   readonly copyLightTune: (mode?: string) => unknown;
   readonly restoreLightTune: (undo?: unknown) => unknown;
@@ -784,7 +785,7 @@ interface GameCtx {
   /** A jump-in's rolling hand-over count, big on the gantry's plate: 4..1, "GO", or null to clear. */
   readonly handoverCount: (v: number | string | null) => void;
   /** Live time-of-day (read with no arg, write with tod). Rebuilds track when day/night flips. */
-  readonly setTimeOfDay: (tod?: TimeOfDay) => TimeOfDay;
+  readonly setTimeOfDay: (tod?: TimeOfDay, opt?: { defer?: boolean }) => TimeOfDay;
   /** Live weather (read with no arg, write with w). Same path as __apex.weather(). */
   readonly weather: (w?: Weather) => Weather;
   readonly snapGameCam: (paint?: number | true) => void;
@@ -844,6 +845,20 @@ interface GameCtx {
   /** Arc position wrapped into [0, track.total). */
   readonly wrapS: (s: number) => number;
   readonly quitToMenu: (then?: () => void) => void;
+  /** LEARN's drill host (js/learn-drills/registry.js create), made on first call; LAZY_LEARN must be loaded.
+   *  __apex.drill* (js/agent/apex-drill.js) and the LEARN door's launch both go through it. */
+  readonly drills: () => DrillHost;
+}
+
+/** What DrillRegistry.create returns: one drill at a time, launched from the menu. */
+interface DrillHost {
+  launch(id: string): boolean;
+  begin(): boolean;
+  end(reason?: string): boolean;
+  retry(): boolean;
+  active(): { id: string; staging: boolean } | null;
+  guide(): Opaque | null;
+  state(): { id: string; staging: boolean } | null;
 }
 
 // ── Module.create(G) ─────────────────────────────────────────────────────────

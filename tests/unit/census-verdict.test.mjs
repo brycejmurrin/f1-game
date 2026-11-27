@@ -119,7 +119,7 @@ const run = (o) => verdict({ image: "macos-latest", census: HW, legs: healthy(),
 // The fixtures above are hand copies of what the legs write; this pins them to
 // the producers so a renamed field fails here instead of leaving the gate green.
 test("healthy() fixture keys exist in the producers (tlx.js envState/backendState, gpu-game-check)", () => {
-  const tlxSrc = fs.readFileSync(path.join(ROOT, "js/render/three/tlx.js"), "utf8");
+  const tlxSrc = fs.readFileSync(path.join(ROOT, "js/render/three/tlx-debug.js"), "utf8");   // the producers moved out of tlx.js (#6821)
   const from = tlxSrc.lastIndexOf("backendState() {");
   assert.ok(from >= 0 && tlxSrc.indexOf("envState() {") >= 0, "tlx.js producers missing");
   const e = tlxSrc.indexOf("envState() {");

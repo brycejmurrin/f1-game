@@ -107,6 +107,7 @@ const DrillRegistry = (function () {
       launch,
       begin: () => (current ? current.begin() : false),
       end,
+      retry: () => (current ? hooks.retry() : false),   // the coach's RETRY LAP, for __apex.drillRetry (js/agent/apex-drill.js)
       active: () => current,
       guide: () => (current ? current.guide : null),
       state: () => (current ? { id: current.id, staging: current.staging } : null),

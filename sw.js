@@ -65,7 +65,7 @@ const offlineRetries = new Map();
 // optional Set for gen-shell lockstep with DEFERRED/LAZY_*, but are skipped at
 // install — explicit opt-in; fetch handler runtime-caches on use.
 // @gen-shell:sw-required-lazy
-const REQUIRED_LAZY = ["js/career/career-backup.js","js/career/career-planning-ui.js","js/career/career-ui.js"];
+const REQUIRED_LAZY = ["js/career/career-backup.js","js/career/career-planning-ui.js","js/career/career-ui.js","js/career/regulations.js","js/career/ai-dev.js","js/career/experience.js"];
 // /@gen-shell:sw-required-lazy
 const PACK_MANIFEST_KEY_PREFIX = "assets/pack/manifest.json?b=";
 function isInstallCriticalOptional(u) {
@@ -494,6 +494,7 @@ async function precacheAssetLists() {
     "js/render/three/tlx-mem.js",
     "js/render/three/tlx-util.js",
     "js/render/three/tlx-texpool.js",
+    "js/render/three/tlx-debug.js",
     "js/render/three/tlx.js",
     // LAZY_RACE — race payload every race needs
     "js/data/garage-entrance-motion.js",
@@ -526,6 +527,9 @@ async function precacheAssetLists() {
     "js/race/flying-start.js",
     "js/race/lap-retry.js",
     "js/race/jump-start-penalty.js",
+    "js/camera/extra-rigs.js",
+    "js/camera/trackside.js",
+    "js/camera/cam-avoid.js",
     "js/ui/podium-beat.js",
     "js/race/podium-beat.js",
     "js/race/parc-ferme.js",
@@ -772,6 +776,10 @@ async function precacheAssetLists() {
     "js/career/career-backup.js",
     "js/career/career-planning-ui.js",
     "js/career/career-ui.js",
+    // LAZY_CAREER — ai-dev, regulations, experience behind ensureCareerBody
+    "js/career/regulations.js",
+    "js/career/ai-dev.js",
+    "js/career/experience.js",
     // LAZY_UI_PRESETS — APPEARANCE LAYOUT PRESET row behind the first APPEARANCE enter
     "js/ui/desktop-graphics.js",
     "js/ui/screen-regions.js",
@@ -900,7 +908,7 @@ async function precacheAssetLists() {
   // suspenders if a tag is re-added. Do NOT add them to optional: that is
   // still an install-time put. Fetch-miss still cache.put on first use.
   // @gen-shell:sw-lazy-agent
-  const LAZY_AGENT = ["js/render/shared/puddles.js","js/agent/agentview-raster.js","js/agent/agentview-corners.js","js/agent/agentview.js","js/agent/apex-net.js","js/agent/apex-cam.js","js/agent/apex-track.js","js/agent/apex-lobby.js","js/agent/apex-play.js","js/agent/apex-gpu-capture.js","js/agent/apex-lifecycle.js","js/perf/three-inspector.js","js/agent/apex.js","js/agent/apex-bridge.js","js/agent/bridge-link.js"];
+  const LAZY_AGENT = ["js/render/shared/puddles.js","js/agent/agentview-raster.js","js/agent/agentview-corners.js","js/agent/agentview.js","js/agent/apex-net.js","js/agent/apex-cam.js","js/agent/apex-track.js","js/agent/apex-lobby.js","js/agent/apex-play.js","js/agent/apex-drill.js","js/agent/apex-gpu-capture.js","js/agent/apex-lifecycle.js","js/perf/three-inspector.js","js/agent/apex.js","js/agent/apex-bridge.js","js/agent/bridge-link.js"];
   // /@gen-shell:sw-lazy-agent
   for (const u of [...essential]) {
     if (LAZY_AGENT.some((p) => u.includes(p))) essential.delete(u);
@@ -1226,7 +1234,7 @@ async function precacheGeneration(onName) {
   // manifest or relying on the first online boot loses the pack after an update.
   const packManifest = PACK_MANIFEST_KEY_PREFIX + build;
   const stamped = urls.optional.map((u) =>
-    /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/|^js\/core\/sim-state\.js$|^js\/audio\/|^js\/race\/|^js\/fx\/visor-optics\.js$|^js\/data\/|^js\/render\/shared\/(?:mesh-detail|gfx-hi)\.js$|^js\/car\/car-hero\.js$|^js\/garage\/(departure-wheels|entrance-motion|arrival-rows|hi-prims|exterior(?:-geometry)?)\.js$|^js\/net\/|^js\/editor\/|^js\/xr\/|^js\/camera\/(tuner-panel|flyby-editor)\.js$|^js\/career\/career-(ui|planning-ui|backup)\.js$|^js\/perf\/(thermal-drift|soak-run|gpu-test-run|phone-recorder|bench-capture|bench-run|metrics-panel)\.js$|^js\/input\/(?:phone-pad(?:-codec|-page)?|touch-button-actions)\.js$|^js\/ui\/(podium-beat|layout-presets|look-avail|touch-button-settings|appearance-(?:studio-ui|arrangement-picker)|companion-return|photo-studio-ui|results-sheet|quali-sheet|watch-transport|progress-backup|save-health|settings-export-body|learn-door|thumb-trainer|circuit-details-panel|hud-inputs|screen-(regions|placement|arranger)|hud-arrange|hud-layout-editor|desktop-graphics|dock-toolbar)\.js$|^js\/share\/share-card(?:-chips|-data|-layout)?\.js$|^js\/lighting\/(presets|tuner-panel)\.js$|^js\/garage\/garage-data\.js$|^js\/track\/(build-worker\.js$|scenery\/|core\/hidden-faces\.js$)|^js\/workers\/|^js\/learn-drills\//.test(u)
+    /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/|^js\/core\/sim-state\.js$|^js\/audio\/|^js\/race\/|^js\/fx\/visor-optics\.js$|^js\/data\/|^js\/render\/shared\/(?:mesh-detail|gfx-hi)\.js$|^js\/car\/car-hero\.js$|^js\/garage\/(departure-wheels|entrance-motion|arrival-rows|hi-prims|exterior(?:-geometry)?)\.js$|^js\/net\/|^js\/editor\/|^js\/xr\/|^js\/camera\/(tuner-panel|flyby-editor|extra-rigs|trackside|cam-avoid)\.js$|^js\/career\/career-(ui|planning-ui|backup)\.js$|^js\/career\/(regulations|ai-dev|experience)\.js$|^js\/perf\/(thermal-drift|soak-run|gpu-test-run|phone-recorder|bench-capture|bench-run|metrics-panel)\.js$|^js\/input\/(?:phone-pad(?:-codec|-page)?|touch-button-actions)\.js$|^js\/ui\/(podium-beat|layout-presets|look-avail|touch-button-settings|appearance-(?:studio-ui|arrangement-picker)|companion-return|photo-studio-ui|results-sheet|quali-sheet|watch-transport|progress-backup|save-health|settings-export-body|learn-door|thumb-trainer|circuit-details-panel|hud-inputs|screen-(regions|placement|arranger)|hud-arrange|hud-layout-editor|desktop-graphics|dock-toolbar)\.js$|^js\/share\/share-card(?:-chips|-data|-layout)?\.js$|^js\/lighting\/(presets|tuner-panel)\.js$|^js\/garage\/garage-data\.js$|^js\/track\/(build-worker\.js$|scenery\/|core\/hidden-faces\.js$)|^js\/workers\/|^js\/learn-drills\//.test(u)
       ? stampKey(u) : u).filter((u) => {
         const bare = u.replace(/\?v=.*$/, "");
         // GLX and career UI went in `required`; runtime-only doors are skipped.

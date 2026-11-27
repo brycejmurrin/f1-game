@@ -45,6 +45,7 @@
       "js/render/three/tlx-mem.js",
       "js/render/three/tlx-util.js",
       "js/render/three/tlx-texpool.js",
+      "js/render/three/tlx-debug.js",
       "js/render/three/tlx.js"
     ]
   },
@@ -172,6 +173,10 @@
     [
       "js/render/three/tlx-texpool.js",
       "js/render/three/tlx.js"
+    ],
+    [
+      "js/render/three/tlx-debug.js",
+      "js/render/three/tlx.js"
     ]
   ],
     LAZY_AGENT: [
@@ -184,6 +189,7 @@
     "js/agent/apex-track.js",
     "js/agent/apex-lobby.js",
     "js/agent/apex-play.js",
+    "js/agent/apex-drill.js",
     "js/agent/apex-gpu-capture.js",
     "js/agent/apex-lifecycle.js",
     "js/perf/three-inspector.js",
@@ -214,6 +220,14 @@
     ],
     [
       "js/agent/apex-play.js",
+      "js/agent/apex.js"
+    ],
+    [
+      "js/agent/apex-play.js",
+      "js/agent/apex-drill.js"
+    ],
+    [
+      "js/agent/apex-drill.js",
       "js/agent/apex.js"
     ],
     [
@@ -310,6 +324,9 @@
     "js/race/flying-start.js",
     "js/race/lap-retry.js",
     "js/race/jump-start-penalty.js",
+    "js/camera/extra-rigs.js",
+    "js/camera/trackside.js",
+    "js/camera/cam-avoid.js",
     "js/ui/podium-beat.js",
     "js/race/podium-beat.js",
     "js/race/parc-ferme.js",
@@ -892,6 +909,12 @@
       "js/career/career-ui.js"
     ]
   ],
+    LAZY_CAREER: [
+    "js/career/regulations.js",
+    "js/career/ai-dev.js",
+    "js/career/experience.js"
+  ],
+    LAZY_CAREER_EDGES: [],
     LAZY_UI_PRESETS: [
     "js/ui/desktop-graphics.js",
     "js/ui/screen-regions.js",

@@ -24,7 +24,8 @@
 //   fetch                          rejects like an offline browser
 //   Image / FileReader             never fire onload
 //   navigator / location / screen  desktop, non-touch, localhost
-//   matchMedia / *Observer         inert
+//   matchMedia / *Observer         inert, but MutationObserver delivers
+//                                  `hidden` and `open` attribute records
 //   GLX                            the renderer is NOT loaded: a stub records
 //                                  createMesh counts and no-ops every draw
 //
@@ -154,8 +155,77 @@ function makeListeners() {
   };
 }
 
-function createDom(sandbox, runScriptFile) {
+// The shell's ids and which of them carry `hidden` (#6555 A7). A stub used to read
+// `hidden: false` for every id, so UiLayers.top() named some closed screen
+// (#trackdesigner) over #overlay and the LEARN door's titleReady() refused. Read once.
+let shellIds = null;
+function shellHidden() {
+  if (shellIds) return shellIds;
+  shellIds = new Map();
+  let html = "";
+  try { html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8"); } catch (_) { return shellIds; }
+  // A start tag, quoted values skipped whole (a `>` or the word "hidden" inside one is not markup).
+  const TAG = /<[a-zA-Z][\w-]*(?:\s+[^\s"'>\/=]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'>]+))?)*\s*\/?>/g;
+  for (const [tag] of html.matchAll(TAG)) {
+    const id = /\sid\s*=\s*"([^"]+)"/.exec(tag);
+    if (!id || shellIds.has(id[1])) continue;
+    shellIds.set(id[1], /\shidden(?=[\s>=/])/.test(tag.replace(/"[^"]*"|'[^']*'/g, '""')));
+  }
+  return shellIds;
+}
+
+// Attribute records for the stub MutationObserver (#6555 A7): `hidden` only, the
+// attribute every layer observer in js/ui/ filters on. Inert, UiLayers.top()'s
+// 250 ms memo outlived a layer opening, and LEARN's own messages read the title
+// as top. Delivered in a microtask as a browser does; takeRecords() drains.
+function makeMutationHub(record) {
+  const observers = new Map();     // observer -> { targets: Map(el -> opts), records: [], queued }
+  const watchers = new WeakMap();  // el -> Set(observer)
+  const entry = (mo) => { if (!observers.has(mo)) observers.set(mo, { targets: new Map(), records: [], queued: false }); return observers.get(mo); };
+  return {
+    observe(mo, el, o) {
+      if (!el || typeof el !== "object") return;
+      entry(mo).targets.set(el, o || {});
+      if (!watchers.has(el)) watchers.set(el, new Set());
+      watchers.get(el).add(mo);
+    },
+    disconnect(mo) {
+      const st = observers.get(mo);
+      if (!st) return;
+      for (const el of st.targets.keys()) { const w = watchers.get(el); if (w) w.delete(mo); }
+      observers.delete(mo);
+    },
+    take(mo) { const st = observers.get(mo); return st ? st.records.splice(0) : []; },
+    notify(target, attr, oldValue) {
+      const told = new Set();
+      for (let n = target; n; n = n.parentNode) {
+        const w = watchers.get(n);
+        if (!w) continue;
+        for (const mo of w) {
+          if (told.has(mo)) continue;
+          const st = observers.get(mo), o = st && st.targets.get(n);
+          if (!o || (n !== target && !o.subtree) || !(o.attributes || o.attributeFilter)) continue;
+          if (o.attributeFilter && !o.attributeFilter.includes(attr)) continue;
+          told.add(mo);
+          st.records.push({ type: "attributes", target, attributeName: attr, oldValue: o.attributeOldValue ? oldValue : null,
+            addedNodes: [], removedNodes: [] });
+          if (st.queued) continue;
+          st.queued = true;
+          queueMicrotask(() => {
+            st.queued = false;
+            const rs = st.records.splice(0);
+            if (!rs.length || !observers.has(mo)) return;
+            try { mo.cb(rs, mo); } catch (e) { record.rejections.push("MutationObserver: " + String(e && e.message || e)); }
+          });
+        }
+      }
+    },
+  };
+}
+
+function createDom(sandbox, runScriptFile, mutations) {
   const byId = new Map();
+  const shell = shellHidden();
   const rect = () => ({ x: 0, y: 0, left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 });
 
   // One shared prototype per DOM (#6559 S1): a boot makes ~2,900 stub elements,
@@ -164,7 +234,7 @@ function createDom(sandbox, runScriptFile) {
   // on the element itself, so reads and writes behave as before. style,
   // classList and the listener map are built on first use.
   const ELEMENT = {
-    nodeType: 1, hidden: false, disabled: false, open: false, checked: false, selected: false,
+    nodeType: 1, disabled: false, open: false, checked: false, selected: false,
     value: "", className: "", title: "", href: "",
     src: "", type: "", name: "", placeholder: "", tabIndex: -1, inert: false, draggable: false,
     parentNode: null, parentElement: null, firstChild: null, lastChild: null,
@@ -178,6 +248,20 @@ function createDom(sandbox, runScriptFile) {
     currentTime: 0, paused: true, muted: false, loop: false, isConnected: true,
     get style() { const s = makeStyle(); own(this, "style", s); return s; },
     set style(v) { own(this, "style", v); },
+    // getElementById finds what js/ built (LearnDoor's #learn dialog): an id write
+    // claims a FREE id and appendChild claims it outright (the stub has no
+    // document tree), so a created, never-attached element never shadows a stub.
+    get id() { return this._id || ""; },
+    set id(v) { hide(this, "_id", String(v == null ? "" : v)); if (this._id && !byId.has(this._id)) byId.set(this._id, this); },
+    // `hidden` reflects its attribute and tells the observers (makeMutationHub).
+    get hidden() { return !!this._hid; },
+    set hidden(v) {
+      v = !!v;
+      if (v === !!this._hid) return;
+      hide(this, "_hid", v);
+      if (v) this.attributes.hidden = ""; else delete this.attributes.hidden;
+      mutations.notify(this, "hidden", v ? null : "");
+    },
     get classList() { const c = makeClassList(this); own(this, "classList", c); return c; },
     set classList(v) { own(this, "classList", v); },
     // A text/markup write REPLACES the children, as in a real DOM: kept, every UI
@@ -205,7 +289,7 @@ function createDom(sandbox, runScriptFile) {
     matches() { return false; },
     contains(n) { return n === this; },
     appendChild(c) {
-      if (c && c.nodeType === 1) { this.children.push(c); c.parentNode = c.parentElement = this; }
+      if (c && c.nodeType === 1) { this.children.push(c); c.parentNode = c.parentElement = this; if (c._id) byId.set(c._id, c); }
       this.childNodes.push(c);
       if (c && c.tagName === "SCRIPT" && c.src) runScriptFile(c);
       return c;
@@ -221,11 +305,11 @@ function createDom(sandbox, runScriptFile) {
     replaceWith: noop,
     remove() { if (this.parentNode) this.parentNode.removeChild(this); },
     cloneNode() { return makeElement(this.localName); },
-    setAttribute(k, v) { this.attributes[k] = String(v); if (k === "id") this.id = v; },
+    setAttribute(k, v) { this.attributes[k] = String(v); if (k === "id") this.id = v; else if (k === "hidden") this.hidden = true; },
     getAttribute(k) { return k in this.attributes ? this.attributes[k] : null; },
     hasAttribute(k) { return k in this.attributes; },
-    removeAttribute(k) { delete this.attributes[k]; },
-    toggleAttribute(k, f) { const on = f === undefined ? !(k in this.attributes) : !!f; if (on) this.attributes[k] = ""; else delete this.attributes[k]; return on; },
+    removeAttribute(k) { delete this.attributes[k]; if (k === "hidden") this.hidden = false; },
+    toggleAttribute(k, f) { const on = f === undefined ? !(k in this.attributes) : !!f; if (k === "hidden") this.hidden = on; else if (on) this.attributes[k] = ""; else delete this.attributes[k]; return on; },
     focus: noop, blur: noop, select: noop,
     click() { return this.dispatchEvent({ type: "click" }); },
     scrollIntoView: noop, scrollTo: noop, scrollBy: noop,
@@ -233,7 +317,14 @@ function createDom(sandbox, runScriptFile) {
     requestFullscreen: () => Promise.reject(new Error("fullscreen unavailable")),
     requestPointerLock: noop, setPointerCapture: noop, releasePointerCapture: noop,
     hasPointerCapture: () => false,
-    showModal() { this.open = true; }, show() { this.open = true; }, close() { this.open = false; },
+    showModal() { this._open(true); }, show() { this._open(true); }, close() { this._open(false); },
+    // A dialog's `open` attribute, as UiLayers' openObs sees it in a browser (makeMutationHub).
+    _open(v) {
+      if (this.open === v) return;
+      this.open = v;
+      if (v) this.attributes.open = ""; else delete this.attributes.open;
+      mutations.notify(this, "open", v ? null : "");
+    },
     animate: () => ({ cancel: noop, finish: noop, play: noop, pause: noop, finished: Promise.resolve(), onfinish: null }),
     getAnimations: () => [],
     play: () => Promise.resolve(), pause: noop, load: noop, canPlayType: () => "",
@@ -254,7 +345,7 @@ function createDom(sandbox, runScriptFile) {
     const el = Object.create(tag === "canvas" ? CANVAS : ELEMENT);
     el.tagName = el.nodeName = tag.toUpperCase();
     el.localName = tag;
-    el.id = id || "";
+    if (id) el.id = id;
     el.dataset = {}; el.children = []; el.childNodes = []; el.attributes = []; el.files = [];
     if (tag === "template") el.content = makeElement("div");
     return el;
@@ -264,6 +355,7 @@ function createDom(sandbox, runScriptFile) {
   const head = makeElement("head");
   const body = makeElement("body");
   documentElement.children.push(head, body);
+  head.parentNode = head.parentElement = body.parentNode = body.parentElement = documentElement;   // a subtree observer on <html> sees the page
   const docLs = makeListeners();
   const document = {
     nodeType: 9, documentElement, head, body, defaultView: sandbox,
@@ -271,8 +363,15 @@ function createDom(sandbox, runScriptFile) {
     cookie: "", referrer: "", URL: "http://localhost:3456/", domain: "localhost",
     activeElement: body, fullscreenElement: null, pointerLockElement: null, currentScript: null,
     scrollingElement: documentElement, styleSheets: [], fonts: { ready: Promise.resolve(), status: "loaded", load: () => Promise.resolve([]), check: () => true, add: noop, addEventListener: noop },
+    // Any id still gets a stub; it is hidden as the shell has it, and an id the
+    // shell lacks (a lazily-built layer such as #thumb-trainer) reads hidden,
+    // the closest stand-in for the null a browser returns.
     getElementById: (id) => {
-      if (!byId.has(id)) byId.set(id, makeElement(id === "game" || id === "minimap" ? "canvas" : "div", id));
+      if (!byId.has(id)) {
+        const el = makeElement(id === "game" || id === "minimap" ? "canvas" : "div", id);
+        if (!shell.has(id) || shell.get(id)) el.hidden = true;
+        byId.set(id, el);
+      }
       return byId.get(id);
     },
     createElement: (tag) => makeElement(tag),
@@ -526,6 +625,8 @@ function buildSandbox(opts) {
   sandbox.window = sandbox; sandbox.self = sandbox; sandbox.globalThis = sandbox;
   sandbox.parent = sandbox; sandbox.top = sandbox; sandbox.frames = sandbox;
 
+  const mutations = makeMutationHub(record);
+  Object.defineProperty(sandbox, "__vmMutations", { value: mutations, enumerable: false });
   const ctx = vm.createContext(sandbox);
 
   // Built-in reads through a contextified global go through V8's interceptor:
@@ -566,7 +667,8 @@ function buildSandbox(opts) {
       play() { return Promise.reject(new Error("no audio")); } pause() {} load() {} addEventListener() {} removeEventListener() {} canPlayType() { return ""; } }
     class FileReader extends EventTarget { constructor() { super(); this.result = null; this.onload = null; this.onerror = null; } readAsDataURL() {} readAsText() {} readAsArrayBuffer() {} abort() {} }
     class ResizeObserver { constructor(cb) { this.cb = cb; } observe() {} unobserve() {} disconnect() {} }
-    class MutationObserver { constructor(cb) { this.cb = cb; } observe() {} disconnect() {} takeRecords() { return []; } }
+    class MutationObserver { constructor(cb) { this.cb = cb; } observe(el, o) { __vmMutations.observe(this, el, o); }
+      disconnect() { __vmMutations.disconnect(this); } takeRecords() { return __vmMutations.take(this); } }
     class IntersectionObserver { constructor(cb) { this.cb = cb; } observe() {} unobserve() {} disconnect() {} }
     class PerformanceObserver { constructor(cb) { this.cb = cb; } observe() {} disconnect() {} }
     class HTMLElement {} class HTMLCanvasElement {} class HTMLImageElement {} class Element {} class Node {}
@@ -590,7 +692,7 @@ function buildSandbox(opts) {
         if (typeof el.onerror === "function") el.onerror({ type: "error", error: e });
       }
     });
-  });
+  }, mutations);
   sandbox.document = dom.document;
   sandbox.GLX = makeGlx(record);
 
@@ -841,6 +943,12 @@ async function createGame(opts) {
     // race()) call Tracks.build synchronously, so evaluate the roster here the
     // way ensureScenery() / ensureTrackBuild() does in the browser before a build.
     for (const f of (MANIFEST.LAZY_TRACK_BUILD || [])) {
+      if (SKIP.has(f)) continue;
+      runFile(ctx, f, record);
+    }
+    // LAZY_CAREER: ai-dev / regulations / experience load behind ensureCareerBody() in the browser; career VM tests
+    // read them synchronously (Career.era, aiSetup), so evaluate the roster here, after FULL.
+    for (const f of (MANIFEST.LAZY_CAREER || [])) {
       if (SKIP.has(f)) continue;
       runFile(ctx, f, record);
     }

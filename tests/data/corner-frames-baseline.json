@@ -3,11 +3,13 @@
   "rows": {
     "bahrain|T6": 28,
     "bahrain|T7": 32,
-    "imola|T7": 19
+    "imola|T7": 19,
+    "vegas|T2": 112
   },
   "allow": {
     "bahrain|T6": "Re-seating turn 6 breaks tests/specs/foundation/bahrain.js; the foundation spec pins the current frame (#5652).",
     "bahrain|T7": "Re-seating turn 7 breaks tests/specs/foundation/bahrain.js; the foundation spec pins the current frame (#5652).",
-    "imola|T7": "Tosa half-heading point is pinned by FIA S1 = 115 m; moving it breaks the sector split (#5652)."
+    "imola|T7": "Tosa half-heading point is pinned by FIA S1 = 115 m; moving it breaks the sector split (#5652).",
+    "vegas|T2": "T1-T2 is one continuous left arc on the OpenF1 driven line (#6922); T2 marks its exit, as LEARN's thumb trainer scripts it. Bryce, decision A, 2026-11-27 (relay on PR #7027)."
   }
 }
