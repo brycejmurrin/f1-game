@@ -539,7 +539,7 @@ function lazyFiles() {
     ...(MANIFEST.LAZY_DATA || []),
     ...(MANIFEST.LAZY_NET || []), ...(MANIFEST.LAZY_WORKER || []), ...(MANIFEST.LAZY_EDITOR || []),
     ...(MANIFEST.LAZY_XR || []), ...(MANIFEST.LAZY_CAM_EDITOR || []),
-    ...(MANIFEST.LAZY_CAREER_UI || []), ...(MANIFEST.LAZY_UI_PRESETS || []), ...(MANIFEST.LAZY_SAVES_DATA || []), ...(MANIFEST.LAZY_RESULTS_SHEET || []), ...(MANIFEST.LAZY_GFX_HI || []), ...(MANIFEST.LAZY_PERF || []), ...(MANIFEST.LAZY_REAL_RACE || []), ...(MANIFEST.LAZY_LEARN || []), ...(MANIFEST.LAZY_DRILL_FORK || [])];
+    ...(MANIFEST.LAZY_CAREER_UI || []), ...(MANIFEST.LAZY_CAREER || []), ...(MANIFEST.LAZY_UI_PRESETS || []), ...(MANIFEST.LAZY_SAVES_DATA || []), ...(MANIFEST.LAZY_RESULTS_SHEET || []), ...(MANIFEST.LAZY_GFX_HI || []), ...(MANIFEST.LAZY_PERF || []), ...(MANIFEST.LAZY_REAL_RACE || []), ...(MANIFEST.LAZY_LEARN || []), ...(MANIFEST.LAZY_DRILL_FORK || [])];
 }
 
 test("DEFERRED files have no <script> tag", () => {
@@ -589,7 +589,7 @@ test("sw.js seeds every DEFERRED file into its optional precache set", () => {
                    ...(MANIFEST.LAZY_DATA || []), ...(MANIFEST.LAZY_NET || []),
                    ...(MANIFEST.LAZY_WORKER || []), ...(MANIFEST.LAZY_EDITOR || []),
                    ...(MANIFEST.LAZY_XR || []), ...(MANIFEST.LAZY_CAM_EDITOR || []),
-                   ...(MANIFEST.LAZY_CAREER_UI || []), ...(MANIFEST.LAZY_UI_PRESETS || []), ...(MANIFEST.LAZY_SAVES_DATA || []), ...(MANIFEST.LAZY_RESULTS_SHEET || []), ...(MANIFEST.LAZY_GFX_HI || []), ...(MANIFEST.LAZY_PERF || []), ...(MANIFEST.LAZY_REAL_RACE || []), ...(MANIFEST.LAZY_LEARN || []), ...(MANIFEST.LAZY_DRILL_FORK || [])]) {
+                   ...(MANIFEST.LAZY_CAREER_UI || []), ...(MANIFEST.LAZY_CAREER || []), ...(MANIFEST.LAZY_UI_PRESETS || []), ...(MANIFEST.LAZY_SAVES_DATA || []), ...(MANIFEST.LAZY_RESULTS_SHEET || []), ...(MANIFEST.LAZY_GFX_HI || []), ...(MANIFEST.LAZY_PERF || []), ...(MANIFEST.LAZY_REAL_RACE || []), ...(MANIFEST.LAZY_LEARN || []), ...(MANIFEST.LAZY_DRILL_FORK || [])]) {
     assert.ok(seeded.has(f),
       `${f} is a lazily-injected asset, so sw.js must seed it or it is unreachable offline`);
   }
@@ -613,7 +613,7 @@ test("sw.js stamps every injected asset it seeds", () => {
     ...(MANIFEST.LAZY_DATA || []),
     ...(MANIFEST.LAZY_NET || []), ...(MANIFEST.LAZY_WORKER || []), ...(MANIFEST.LAZY_EDITOR || []),
     ...(MANIFEST.LAZY_XR || []), ...(MANIFEST.LAZY_CAM_EDITOR || []),
-    ...(MANIFEST.LAZY_CAREER_UI || []), ...(MANIFEST.LAZY_UI_PRESETS || []), ...(MANIFEST.LAZY_SAVES_DATA || []), ...(MANIFEST.LAZY_RESULTS_SHEET || []), ...(MANIFEST.LAZY_GFX_HI || []), ...(MANIFEST.LAZY_PERF || []), ...(MANIFEST.LAZY_REAL_RACE || []), ...(MANIFEST.LAZY_LEARN || []), ...(MANIFEST.LAZY_DRILL_FORK || [])];
+    ...(MANIFEST.LAZY_CAREER_UI || []), ...(MANIFEST.LAZY_CAREER || []), ...(MANIFEST.LAZY_UI_PRESETS || []), ...(MANIFEST.LAZY_SAVES_DATA || []), ...(MANIFEST.LAZY_RESULTS_SHEET || []), ...(MANIFEST.LAZY_GFX_HI || []), ...(MANIFEST.LAZY_PERF || []), ...(MANIFEST.LAZY_REAL_RACE || []), ...(MANIFEST.LAZY_LEARN || []), ...(MANIFEST.LAZY_DRILL_FORK || [])];
   const unstamped = injected.filter((f) => !stamps.test(f));
   assert.deepEqual(unstamped, [],
     `these are injected as ?v=<build> but seeded bare, so the cache key is one nothing requests: ${unstamped}`);

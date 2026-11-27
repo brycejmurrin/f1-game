@@ -277,7 +277,7 @@ export function listFiles() {
     ...(manifest.LAZY_CIRCUIT || []), ...(manifest.LAZY_SCENERY || []), ...(manifest.LAZY_DATA || []),
     ...(manifest.LAZY_NET || []), ...(manifest.LAZY_AUDIO || []), ...(manifest.LAZY_EDITOR || []),
     ...(manifest.LAZY_XR || []), ...(manifest.LAZY_CAM_EDITOR || []),
-    ...(manifest.LAZY_CAREER_UI || []), ...(manifest.LAZY_UI_PRESETS || []), ...(manifest.LAZY_SAVES_DATA || []), ...(manifest.LAZY_RESULTS_SHEET || []), ...(manifest.LAZY_GFX_HI || []),
+    ...(manifest.LAZY_CAREER_UI || []), ...(manifest.LAZY_CAREER || []), ...(manifest.LAZY_UI_PRESETS || []), ...(manifest.LAZY_SAVES_DATA || []), ...(manifest.LAZY_RESULTS_SHEET || []), ...(manifest.LAZY_GFX_HI || []),
     ...(manifest.LAZY_PERF || []), ...(manifest.LAZY_REAL_RACE || []), ...(manifest.LAZY_LEARN || []), ...(manifest.LAZY_DRILL_FORK || [])];
   return {
     full: manifest.FULL.slice(),

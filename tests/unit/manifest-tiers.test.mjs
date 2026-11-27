@@ -9,7 +9,7 @@ const MANIFEST = require("../../tools/manifest.cjs");
 
 const TIER_SET = new Set(["boot", "menu", "home", "garage", "race", "career", "tool"]);
 const WHERE_SET = new Set(["page", "worker", "both"]);
-const GROUP_TIER = { LAZY_AGENT: "tool", LAZY_DEV: "tool", LAZY_PERF: "tool", LAZY_CAREER_UI: "career",
+const GROUP_TIER = { LAZY_AGENT: "tool", LAZY_DEV: "tool", LAZY_PERF: "tool", LAZY_CAREER_UI: "career", LAZY_CAREER: "career",
   LAZY_GARAGE_EXTERIOR: "garage", LAZY_RACE: "race", LAZY_RACE_SESSION: "race", LAZY_TRACK_BUILD: "race", LAZY_REAL_RACE: "race" };
 const WORKER_GROUPS = new Set(["LAZY_WORKER", "TRACK_WORKER_EXTRA"]);
 

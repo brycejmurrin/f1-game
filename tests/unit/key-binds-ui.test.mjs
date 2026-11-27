@@ -527,3 +527,19 @@ test("clean-room 12: a pointer-kind flip re-renders KEYBOARD after syncPointerKi
   assert.equal($("pm-keys-section").hidden, false, "desktop class shows the KEYBOARD table");
   assert.equal($("pm-ctl-hint").hidden, true, "and drops the phone hint");
 });
+
+// #6883 row 3: the aria-label overrides the chip text, so an armed slot must not keep announcing "press to change".
+test("an armed slot's aria-label says it is waiting; Esc restores the binding label", () => {
+  const { $, kb, sb } = bootUi(true);
+  const chip = slotOf($("pm-keys"), "throttle", 0);
+  const before = chip.attrs["aria-label"];
+  assert.match(before, /press to change/);
+  chip.onclick();
+  assert.match(chip.attrs["aria-label"], /waiting for a key, Esc cancels/);
+  assert.doesNotMatch(chip.attrs["aria-label"], /press to change/);
+  assert.equal(chip.attrs["aria-pressed"], "true");
+  sb.dispatchEvent({ type: "keydown", code: "Escape", preventDefault() {}, stopPropagation() {} });
+  const again = slotOf($("pm-keys"), "throttle", 0);
+  assert.equal(again.attrs["aria-label"], before, "render() rebuilt the chip with the binding label");
+  assert.equal(again.attrs["aria-pressed"], undefined);
+});

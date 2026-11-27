@@ -26,6 +26,7 @@ function create(G) {
     const body = $("q-table");
     if (!body) return;
     body.textContent = "";
+    body.setAttribute("role", "list");
     if (!rows) return;
     for (const r of rows) {
       const team = Teams.LIST.find((t) => t.id === r.team);
@@ -36,10 +37,14 @@ function create(G) {
       // marks the local player.
       const driven = r.human && !r.isPlayer ? " q-real" : "";
       row.className = `res-row${PODIUM[r.pos] || ""}${r.isPlayer ? " you" : ""}${driven}`;
+      row.setAttribute("role", "listitem");
+      if (r.isPlayer) row.setAttribute("aria-current", "true");
       const sw = span("res-swatch");
       sw.style.background = G.cssCol(team ? team.color : [0.5, 0.5, 0.5]);
       const nm = span("res-name", `${r.code}  ${r.name}`);
       if (driven) nm.appendChild(span("q-real-tag", " " + I18n.t("quali.driven", null, "DRIVEN")));
+      // Text as well as colour (and weight): the YOU row must be nameable without seeing it.
+      if (r.isPlayer) nm.appendChild(span("q-real-tag", " " + I18n.t("quali.you", null, "YOU")));
       const tm = span("res-pts q-time", r.noTime ? I18n.t("quali.noTime", null, "NO TIME") : r.pos === 1 ? poleClock(r.t) : `+${r.gap.toFixed(3)}`);
       row.append(span("res-pos", r.pos), sw, nm, tm);
       body.appendChild(row);
