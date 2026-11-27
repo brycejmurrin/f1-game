@@ -33,6 +33,7 @@ import sharp from "sharp";
 import { launchChromium, shutdown, sleep, startStaticServer } from "../lib/harness.mjs";
 import { screenshotPresentedCanvas } from "../shot/probe-page.mjs";
 import { loadAllModels } from "../shot/capture-fallbacks.mjs";
+import { exitIfHelp } from "../lib/cli-args.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
 const OUT_DIR = resolve(ROOT, "assets", "stills");
@@ -53,6 +54,8 @@ function flag(argv, name, fallback) {
   const i = argv.indexOf(name);
   return i < 0 || i + 1 >= argv.length ? fallback : argv[i + 1];
 }
+const USAGE = "Usage: node tools/gen/track-stills.mjs [--force] [--frac f] [--aim yaw,pitch,dist]\nRenders per-circuit still images in Chromium; --help launches nothing.";
+exitIfHelp(process.argv.slice(2), USAGE);
 const argv = process.argv.slice(2);
 const force = argv.includes("--force");
 const fracArg = flag(argv, "--frac", "");
