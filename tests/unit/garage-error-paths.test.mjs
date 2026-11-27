@@ -109,9 +109,17 @@ test("G3: fitHome with a hull point behind the eye at maxDist returns null, not 
   assert.equal(E.fitHome([...far, 1, 0, 0, 0, 1, 0], RIG, PANE), null);
 });
 
+test("G3: a hull whose LATER point is behind the eye returns null, not a shift fitted to the first point only", () => {
+  const E = experience();
+  const far = [40 * Math.sin(RIG.az) * Math.cos(RIG.el), 0.45 + 40 * Math.sin(RIG.el), 40 * Math.cos(RIG.az) * Math.cos(RIG.el)];
+  assert.equal(E.fitHome([0, 0.45, 0, ...far, 1, 0, 0], RIG, PANE), null);
+});
+
 test("G3: a hull too wide to fit still returns the finite maxDist crop (unchanged)", () => {
   const E = experience();
-  const fit = E.fitHome([-30, 0, 0, 30, 0, 0, 0, 1, 0, 0, 0, 1], RIG, PANE);
+  // ±5 m along the screen-right axis: every point in front of the eye, 1.7 NDC wide at maxDist vs a 1.0 pane.
+  const rx = Math.cos(RIG.az) * 5, rz = -Math.sin(RIG.az) * 5;
+  const fit = E.fitHome([-rx, 0.45, -rz, rx, 0.45, rz, 0, 0.6, 0], RIG, PANE);
   assert.ok(fit && fit.dist === RIG.maxDist);
   for (const k of ["shiftX", "shiftY", "width", "height"]) assert.ok(Number.isFinite(fit[k]), k);
 });
