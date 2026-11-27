@@ -12,8 +12,10 @@ import { createRequire } from "node:module";
 const { createGame } = createRequire(import.meta.url)("../../tools/lib/game-vm.cjs");
 
 // [tag, state, cars, player s, speed, rival s, speed, towing, wake, aeroX, practice goal]
+// steps 36 → 37 on the #7199/#7181 tip (2026-11-27): the tip's own launch takes one more step to stage; re-captured
+// on that tip with the drill still in learn-door.js, identical to the moved drill (PR #7177).
 const GOLDEN = {
-  steps: 36,
+  steps: 37,
   rows: [
     ["start", "race", 2, 100, 56.825, 124, 48.362, 0, 0, 0, "slipstream"],
     ["t1", "race", 2, 114.006, 55.315, 136.16, 48.888, 0.38, 0.38, 0, "slipstream"],
