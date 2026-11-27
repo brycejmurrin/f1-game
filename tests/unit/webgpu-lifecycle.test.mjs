@@ -4385,3 +4385,35 @@ for (const fullPost of [false, true]) test(`capture submission releases readback
     assert.ok(buffers.every(b => b.destroys === 1), failure + ": no double destruction");
   }
 });
+
+// Validation errors never throw: creation returns invalid objects and the GPUError goes to the scope.
+// The post chain and the shadow blocker build must fail closed on a non-null pop.
+const flush = async () => { for (let i = 0; i < 8; i++) await Promise.resolve(); };
+function scopedDevice(popResult, extra = {}) {
+  return {
+    pushErrorScope() {}, popErrorScope: async () => popResult,
+    createSampler: () => ({}), createBindGroupLayout: () => ({}), createShaderModule: () => ({}),
+    createPipelineLayout: () => ({}), createRenderPipeline: () => ({ invalid: true }),
+    createBindGroup: () => ({}), createBuffer: () => ({ destroy() {} }),
+    createTexture: () => ({ createView: () => ({}), destroy() {} }),
+    queue: { writeBuffer() {} }, ...extra,
+  };
+}
+
+for (const err of [null, { message: "invalid pipeline" }]) test(`post chain fails closed on a scoped validation error (err=${!!err})`, async () => {
+  const h = isolatedPost(); h.core.device = Object.assign(scopedDevice(err), { createBuffer: h.core.device.createBuffer });
+  h.core.fsPipe = () => ({ invalid: true });
+  h.post.buildPost(); await flush();
+  if (err) assert.equal(h.core.pComposite, null); else assert.ok(h.core.pComposite);
+});
+
+for (const err of [null, { message: "invalid pipeline" }]) test(`shadow blocker pipeline fails closed on a scoped validation error (err=${!!err})`, async () => {
+  const ctx = vm.createContext({ GPUTextureUsage: {}, GPUBufferUsage: {}, GPUShaderStage: {} });
+  seedLog(ctx);
+  vm.runInContext(`var WGSLChunks = { SHADOW_LVP_BYTES: 64, SHADOW_MODEL_BYTES: 64, SHADOW: "s", BLOCKER: "b" };\n${WGX_SHADOW_SOURCE}\nglobalThis.SF = WGXShadow;`, ctx, { filename: absSrc(P.WGX_SHADOW) });
+  const core = new Proxy({ device: scopedDevice(err), SHADOW_SLOTS: 4, DEPTH_FORMAT: "depth32float", SCENE_FORMAT: "rgba16float", IDENT: new Float32Array(16) },
+    { get: (t, k) => (k in t ? t[k] : undefined) });
+  const shd = ctx.SF.init(core); await flush();
+  assert.ok(shd.blockerView);
+  if (err) assert.equal(shd.blockerPipeline, null); else assert.ok(shd.blockerPipeline);
+});
