@@ -1738,6 +1738,37 @@ test("stuck is the nearest car ahead, not any car inside the window", () => {
   assert.equal(stuck(), false, "1.5 s ahead is free air");
 });
 
+// #7247 member 1: the verdict `why` think() hands back (and stores on c.pitWhy), pinned for five constructed
+// cases with the REAL planner. It must read the same before and after AiDrive's strategy forwarders go.
+test("think(): the pit-call why, one case each (cover, undercut, stuck, caution, worn) and no-pit", () => {
+  const { pits, G, ctx } = strategySession(20);
+  const ai = (prog, over = {}) => Object.assign({ human: false, local: false, speed: 40, lap: 8, prog, pitStops: 0,
+    pitState: "none", tyre: { code: "M", tread: 0 }, tyreWear: 0.5, lapsOnSet: 8,
+    pitPlan: { stops: 1, seq: ["medium", "hard"], stints: [10, 10], lapsAt: [10], pitLossLaps: 0.2 } }, over);
+  const run = (c, others, caution = 0) => {
+    G.cars = [c, ...others]; G.cautionInfo = () => ({ level: caution });
+    const why = pits.think(c);
+    return { why, latched: c._stuckFrom != null, pitWhy: c.pitWhy || null };
+  };
+  const pitted = { pitState: "lane" };
+  // no pit: a plan two laps off, no rival, no caution
+  assert.equal(run(ai(1000), []).why, "", "no call");
+  // cover: a rival right behind is already in the lane, the driver reacts (temper) and the set is worn enough
+  const cover = run(ai(1000, { id: "v", lapsOnSet: 8 }), [ai(980, pitted)]);
+  // stuck: the _stuckFrom latch sets on the first tick behind a car on the same stops; a lap later (STUCK_LAPS) the
+  // same car, still stuck, calls the undercut (its attack temper allowing)
+  const sc = ai(1000, { craft: 0.9, pitPlan: { stops: 1, seq: ["medium", "hard"], stints: [9, 11], lapsAt: [9], pitLossLaps: 0.2 } }), ahead = ai(1020);
+  const stuck = run(sc, [ahead]);
+  const lap = G.track.total * vm.runInContext("AiStrategy.STRAT.STUCK_LAPS", ctx);
+  sc.prog += lap; ahead.prog += lap;
+  const undercut = run(sc, [ahead]);
+  const caution = run(ai(1000), [], 2);
+  const worn = run(ai(1000, { tyreWear: 1.1, pitPlan: { stops: 0, seq: ["medium"], stints: [20], lapsAt: [], pitLossLaps: 0.2 } }), []);
+  const table = { cover: cover.why, undercut: undercut.why, stuck: stuck.latched, caution: caution.why, worn: worn.why };
+  assert.deepEqual(table, { cover: "cover", undercut: "undercut", stuck: true, caution: "caution", worn: "worn" }, JSON.stringify([cover, undercut, stuck, caution, worn]));
+  assert.equal(caution.pitWhy, "caution", "think() records the why on the car");
+});
+
 // ── A box with no garage behind it is a place in the FAST lane (L16) ─────────
 // jeddah, jerez and mont_tremblant have no bays. TrackPit.at() collapsed the
 // working lane onto the fast lane's OUTER edge there, 0.9 m beyond where the
