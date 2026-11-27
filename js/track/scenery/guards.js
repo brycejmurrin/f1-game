@@ -186,6 +186,13 @@ const SceneryGuards = (function () {
     return { pitKeep, pitSide, inPitFootprint, onRoadHit, rejBox, rejRad, onTrack, pitRejected: () => _pitReject };
   }
 
-  return { create };
+  // A prop whose footprint hits the road is dropped and counted by kind; msg is a thunk (a pass builds no string). ctx = the scenery api.
+  function refuseOnRoad(ctx, kind, x, z, margin, msg, pitMargin) {
+    if (!ctx.onTrack(x, z, margin, pitMargin)) return false;
+    ctx.noteSuppressed(kind, msg());
+    return true;
+  }
+
+  return { create, refuseOnRoad };
 })();
 Object.freeze(SceneryGuards);
