@@ -648,12 +648,14 @@ const GLXBackend = (function () {
     // treated as the background loss it is.
     const _nowMs = () => (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now());
     var _shownAt = -1e9;
+    const _undoListeners = [];   // a failed init (link gate) removes everything it attached
+    const _listen = (t, ev, fn) => { t.addEventListener(ev, fn, false); _undoListeners.push(() => t.removeEventListener(ev, fn, false)); };
     try {
-      document.addEventListener("visibilitychange", function () { if (!document.hidden) _shownAt = _nowMs(); });
-      window.addEventListener("pageshow", function (e) { if (e && e.persisted) _shownAt = _nowMs(); });   // bfcache return only: the FIRST load fires pageshow too
+      _listen(document, "visibilitychange", function () { if (!document.hidden) _shownAt = _nowMs(); });
+      _listen(window, "pageshow", function (e) { if (e && e.persisted) _shownAt = _nowMs(); });   // bfcache return only: the FIRST load fires pageshow too
     } catch (_) { /* no document events (harness) */ }
     var _bgLoss = function () { return document.hidden || _nowMs() - _shownAt < 3000; };
-    canvas.addEventListener("webglcontextlost", function (e) {
+    _listen(canvas, "webglcontextlost", function (e) {
       e.preventDefault();
       if (_ctxLost) return;   // one incident, one budget spend (SwiftShader can fire twice)
       _ctxLost = true;
@@ -745,14 +747,14 @@ const GLXBackend = (function () {
           }
         } catch (_) { /* picker absent in harness */ }
       }
-    }, false);
+    });
     // Restore obeys the same two-reload budget; storage failure must not skip reload.
-    canvas.addEventListener("webglcontextrestored", function () {
+    _listen(canvas, "webglcontextrestored", function () {
       if (document.hidden && canvas.__glxVisReload) return;   // the hidden loss's visibility reload covers it (#5699 row 16)
       var n = GfxEscalation.reloadCount(); if (n > 2) return;
       if (_lossCounted) try { sessionStorage.setItem("apex26.ctxLostNotice", "1"); } catch (_) { /* blocked storage */ }
       try { location.reload(); } catch (e) { Log.warn("gfx", "GLX: context restored but reload failed:", e && e.message); }
-    }, false);
+    });
 
     // FRAGMENT UNIFORM BUDGET. LIT_FS's default block is 292 vec4 rows (a row
     // per scalar; glx-light-fit.test.mjs recounts it), above the GLES 3.0 floor
@@ -789,6 +791,8 @@ const GLXBackend = (function () {
         if (prog) gl.deleteProgram(prog);
       }
       litProg = skyProg = markProg = markBatchProg = blobBatchProg = glowProg = lineProg = particleProg = decalProg = null;
+      for (const off of _undoListeners) { try { off(); } catch (_) { /* detached target */ } }   // no handler may outlive the abandoned backend
+      try { const lose = gl.getExtension("WEBGL_lose_context"); if (lose) lose.loseContext(); } catch (_) { /* context already gone */ }
       return false;
     }
     watchCanvasSize();
@@ -2796,7 +2800,7 @@ const GLXBackend = (function () {
     outputTargetState,
     setRenderSizeOverride,
     present: (opts) => {
-      if (ctxGone()) return;
+      if (ctxGone()) { Soft.drainFrameWaiters(); return; }   // a lost context presents nothing: release waiters now, not at their timeout
       frontCCW();   // #5777 R12b: post's fullscreen chain and the blob flush draw CCW
       if (BLOB && BLOB.pending()) BLOB.flush();   // F5: before post takes GL state
       // Occlusion queries go LAST and before post, which is the only moment in

@@ -136,11 +136,12 @@ export function bootGlx(opts = {}) {
   });
 
   const canvasListeners = {};
+  const listenerLog = [];   // [add|remove, canvas|document|window, event] in call order
   const canvas = {
     clientWidth: 640, clientHeight: 360, width: 640, height: 360,
     getContext: (type, attrs) => { contextAttrs.push({ type, attrs }); return type === "webgl2" ? gl : null; },
-    addEventListener: (t, fn) => { canvasListeners[t] = fn; },
-    removeEventListener() {},
+    addEventListener: (t, fn) => { canvasListeners[t] = fn; listenerLog.push(["add", "canvas", t]); },
+    removeEventListener: (t) => { listenerLog.push(["remove", "canvas", t]); },
     getBoundingClientRect: () => ({ width: 640, height: 360, left: 0, top: 0 }),
   };
   const noop = () => {};
@@ -152,7 +153,7 @@ export function bootGlx(opts = {}) {
     setTimeout: (fn) => { sandbox.__timers.push(fn); return sandbox.__timers.length; },
     clearTimeout: noop, __timers: [],
     document: {
-      hidden: false, addEventListener: noop, getElementById: () => null,
+      hidden: false, addEventListener: (t) => { listenerLog.push(["add", "document", t]); }, removeEventListener: (t) => { listenerLog.push(["remove", "document", t]); }, getElementById: () => null,
       // opts.overlay: createElement answers a recording 2D canvas (the #game-soft overlay).
       createElement: () => (opts.overlay ? opts.overlay.make() : { getContext: () => null, width: 0, height: 0 }),
       body: { appendChild: noop },
@@ -163,7 +164,7 @@ export function bootGlx(opts = {}) {
     location: { reload: noop }, matchMedia: () => ({ matches: false, addEventListener: noop }),
     ResizeObserver: class { observe() {} disconnect() {} },
     requestAnimationFrame: () => 0, Image: class {},
-    addEventListener: noop, removeEventListener: noop,
+    addEventListener: (t) => { listenerLog.push(["add", "window", t]); }, removeEventListener: (t) => { listenerLog.push(["remove", "window", t]); },
   };
   // opts.ls seeds localStorage BEFORE GLX.init reads it — the way the game
   // stores it (GameStore JSON-encodes: `{ "apex26.gfxPreset": '"ultra"' }`).
@@ -173,14 +174,14 @@ export function bootGlx(opts = {}) {
   for (const [f, src] of SOURCES) vm.runInContext(src, ctx, { filename: absSrc(f) });
   const GLX = vm.runInContext("GLX", ctx);
   const inited = GLX.init(canvas);
-  if (!inited) throw new Error("glx-mock: GLX.init() refused the mock context");
+  if (!inited && !opts.allowInitFail) throw new Error("glx-mock: GLX.init() refused the mock context");
   // The knob registry, after GLX as in production (knobs.js reads GLX.isMobile at
   // eval): GLX's lit pass reads omitted knobs through PostCommon.knob -> TUNE_DEFS.
   vm.runInContext(KNOBS_SRC, ctx, { filename: absSrc(KNOBS_FILE) });
 
   const count = (name, pred) => calls.reduce((n, c) => n + (c[0] === name && (!pred || pred(c[1])) ? 1 : 0), 0);
   return {
-    GLX, gl, calls, enums, canvas, sandbox,
+    GLX, gl, calls, enums, canvas, sandbox, inited, listenerLog,
     /** The mock's answer table — override to inject a GL fault, e.g.
      *  `h.answers.getError = () => 1282` (INVALID_OPERATION). */
     answers,
