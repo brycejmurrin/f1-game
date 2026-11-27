@@ -579,6 +579,7 @@ const api = {
       vmaxNow: +(G.player._vmaxNow || 0).toFixed(3),
       towing: +(G.player.towing || 0).toFixed(3),   // player slipstream 0..1 — folded into vmaxNow
       wake: +(G.player.wake || 0).toFixed(3),       // dirty air 0..1 — the grip penalty, positions-only
+      dirtyAirMul: G.player._dirtyAirMul ?? 1, frontUtil: G.player.frontUtil || 0, rearUtil: G.player.rearUtil || 0, wheelLock: G.player.wheelLock || 0, brakeStab: G.player.brakeStab ?? 1, brakeDemand: G.player.brakeDemand || 0,   // LEARN drills
       aeroGrip: +(G.player._aeroGrip || 0).toFixed(4),
       // DAMAGE → HANDLING (#1578): per-axle grip ratio from damage (1 = none; always 1 with the opt-in OFF).
       damageAxF: dAx ? +dAx.f.toFixed(4) : 1,

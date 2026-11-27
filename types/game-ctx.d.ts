@@ -174,6 +174,7 @@ interface StoreApi {
     retry); physState is __apex's, null while LAZY_AGENT is absent. */
 interface DrillPort extends Pick<GameCtx, "startRace" | "goRolling" | "store"> {
   retry(): boolean;
+  rerun(variant: string): boolean;
   physState(): Opaque | null;
   announce(msg: string, dur?: number, kind?: string): boolean;
 }

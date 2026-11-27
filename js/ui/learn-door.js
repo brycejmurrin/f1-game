@@ -233,11 +233,14 @@ const LearnDoor = (function () {
   // Defined lazily, never at eval: LAZY_LEARN loads with no edges, so the registry may evaluate after this file.
   function defineDrills() {
     if (typeof DrillRegistry === "undefined") return;
+    if (typeof GripDrill !== "undefined") GripDrill.define();   // js/learn-drills/grip.js, when it evaluated first
     DrillRegistry.define({
       id: "aero", lesson: "aero", title: "Monza Aero Drill",
       setup: { flow: "gp", session: "race", track: "monza", weather: "dry", changeable: false, grid: "tier", duel: false, dirtyAir: "classic", wind: "real" },
       begin: beginAeroDrill,
       guide: createAeroGuide,
+      // A6: the card's RE-RUN IN CFD AIR (registry rerun): the same start in the CFD wake (DirtyAir.LOSS.cfd, λ 12 m).
+      variants: [{ id: "classic", label: "Classic air", dirtyAir: "classic" }, { id: "cfd", label: "CFD air", cta: "RE-RUN IN CFD AIR", dirtyAir: "cfd" }],
       goal: "slipstream",
       sample: sampleAero,
       score: scoreAero,
@@ -253,6 +256,7 @@ const LearnDoor = (function () {
     if (acc.gap0 == null) { acc.gap0 = gap; acc.gapMin = gap; acc.towS = 0; acc.t = G.raceT; }
     acc.gapMin = Math.min(acc.gapMin, gap);
     acc.towS += Math.max(0, G.raceT - acc.t) * (p.towing || 0);
+    acc.gripLoss = Math.max(acc.gripLoss || 0, gripLossPct(p));
     acc.t = G.raceT;
   }
 
@@ -271,12 +275,16 @@ const LearnDoor = (function () {
         ["Closed", value.toFixed(1), "m"],
         ["Nearest gap", Math.max(0, nearest).toFixed(1), "m"],
         ["Tow felt", (acc.towS || 0).toFixed(1), "s"],
+        ["Grip lost (peak)", String(acc.gripLoss || 0), "%"],
         ["Run time", (last.seconds || 0).toFixed(1), "s"],
         ["Run", last.clean ? "clean" : last.reason, ""],
       ],
       verdict,
     };
   }
+
+  /** A5 (#6555): the grip the wake costs this car now, in whole %: 1 − the multiplier player-forces applied. */
+  const gripLossPct = c => (Number.isFinite(c._dirtyAirMul) ? Math.max(0, Math.round(100 * (1 - c._dirtyAirMul))) : 0);
 
   function beginAeroDrill(G) {
     // Start just past the line with a closing speed and a 24 m gap inside
@@ -362,7 +370,7 @@ const LearnDoor = (function () {
         footprint.height = scope.height;
         const field = footprint.getContext("2d");
         for (let d = 1; d < 34; d++) {
-          const strength = PhysicsConsts.DirtyAir.wakeOf(d, 0, "classic");
+          const strength = PhysicsConsts.DirtyAir.wakeOf(d, 0, G.raceDirtyAir || "classic");
           const w = 4 * scaleX;
           const band = field.createLinearGradient(x - w, 0, x + w, 0);
           band.addColorStop(0, "transparent");
@@ -430,7 +438,7 @@ const LearnDoor = (function () {
           const distance = Math.max(0, air.rear - along);
           center += air.cross * distance / air.speed;
           if (air.wake) {
-            const strength = PhysicsConsts.DirtyAir.wakeOf(distance, lane - air.lane, "classic");
+            const strength = PhysicsConsts.DirtyAir.wakeOf(distance, lane - air.lane, G.raceDirtyAir || "classic");
             // Paired counter-rotating vortices open from the rear wheels.
             // The elevated central plume leaves the rival visible between them.
             const direction = Math.sign(lane - air.lane);
@@ -497,7 +505,8 @@ const LearnDoor = (function () {
       const angle = Math.atan2(wind.wx, wind.wz) - player.head;
       // The road's right vector is the negative angular direction from heading.
       const arrow = windArrows[(Math.round(-angle * 4 / Math.PI) % 8 + 8) % 8];
-      const status = [player.towing > 0.08 ? "Tow active" : "Clear of tow", wing,
+      const loss = gripLossPct(player);   // A5: the wake's corner cost, beside the tow it buys
+      const status = [player.towing > 0.08 ? "Tow active" : "Clear of tow", loss > 0 ? "grip −" + loss + " %" : "", wing,
         wind.on ? "Wind " + arrow + " " + AppearanceOpts.speed(wind.kmh) + " " + AppearanceOpts.unitLabel() : ""].filter(Boolean).join(" · ");
       if (readout.textContent !== status) readout.textContent = status;
       count = 0;
@@ -538,6 +547,6 @@ const LearnDoor = (function () {
   /** Every lesson id in the curriculum, in index order (tests/unit/learn-curriculum.test.mjs's coverage pin). */
   const lessonIds = () => curriculum.flatMap(([, , lessons]) => lessons.map(([id]) => id));
 
-  return { open, defineDrills, reopen, lessonIds };
+  return { open, defineDrills, reopen, lessonIds, gripLossPct };
 })();
 Object.freeze(LearnDoor);

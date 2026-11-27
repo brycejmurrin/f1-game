@@ -3,6 +3,7 @@
 const RaceInsights = (function () {
   const DRILLS = Object.freeze({ free: "Free practice", sector: "Finish this sector cleanly", corner: "Drive through the next corner",
     lap: "One full lap from the line", cooling: "Measure a cooling lap on this tyre set", braking: "Brake to a controlled stop", trail: "Release the brake into a turn",
+    grip: "Brake into the next turn and drive 150 m past it",   // LEARN's friction-circle drill (js/learn-drills/grip.js) scores it
     slalom: "Six clean direction changes", launch: "Standing start to racing speed",
     start: "Gain a place off the line",
     // THE RIVAL DRILLS. Every drill above judges the car against the road; these
@@ -55,6 +56,7 @@ const RaceInsights = (function () {
   // vTop(), the same shape AiDrive.otWant uses for its own margin.
   const THREAT = 0.02;
   const HOLD_CAP = 30;         // seconds of pressure that count as a full defence
+  const GRIP_GATE = 150;       // m past the turn: the grip drill's finish gate (#6551 §2)
   const BRAKE_REF = 50;        // m/s: a braking score is the stop scaled to this entry speed (v², #5888)
   const SLOW = 0.06, TRAFFIC_N = 3;   // a "backmarker" is 6% down on your own _vmaxNow; three of them is a stint through traffic
   const CLEAR_S = 1.5;         // held clear before a pass is a pass
@@ -104,7 +106,7 @@ const RaceInsights = (function () {
       if (mode === "cooling" && (!G.practice || !G.tyres || !G.tyres.on() || !coolingSample(c))) {
         G.announce("COOLING LAP NEEDS UNSCORED PRACTICE AND TYRE WEAR", 3, "practice"); return false;
       }
-      if (["braking", "trail"].includes(mode) && Math.abs(c.speed) < G.vTop() * .3) {
+      if (["braking", "trail", "grip"].includes(mode) && Math.abs(c.speed) < G.vTop() * .3) {
         G.announce("BUILD SPEED BEFORE SETTING THIS DRILL", 2, "practice"); return false;
       }
       // ONE stopped-car test for both standing-start goals, so the absolute
@@ -164,6 +166,14 @@ const RaceInsights = (function () {
         attacked: false, conceded: false, gifted: false, gaveUp: false, cleared: 0,
         passing: new Set(), clearedIds: new Set(),
         clean: true, reason: "", done: false };
+      // GRIP: the next curated turn (track.def.turns, racing-lap fractions as the thumb drill reads them: metadata,
+      // never the curvature table) and a gate GRIP_GATE m past it, in the car's own cumulative arc.
+      if (mode === "grip") {
+        const L = G.track && G.track.total, turns = (G.track && G.track.def && G.track.def.turns) || [];
+        const ahead = L > 0 ? Math.min(...turns.map(f => ((f * L - c.s) % L + L) % L).filter(d => d > 1)) : Infinity;
+        if (!Number.isFinite(ahead)) { G.announce("NO TURN AHEAD TO BRAKE FOR", 2, "practice"); drill = null; return false; }
+        drill.apexProg = c.prog + ahead; drill.gateProg = drill.apexProg + GRIP_GATE;
+      }
       if (mode === "cooling") drill.cooling = { car: c, track: G.track, tyre: c.tyre,
         stint: c.tyreStints || 0, compound: c.tyre && c.tyre.id, wet: G.trackWetness ? G.trackWetness() : 0, start: null };
       event("practice", DRILLS[mode] + " — unscored");
@@ -390,6 +400,9 @@ const RaceInsights = (function () {
       } else if (drill.mode === "trail") {
         if (drill.turnSeen && brake < .05 && turning && moving) finishDrill(current, c);
         else if (v < 1) { failDrill("stopped before releasing the brake"); finishDrill(current, c); }
+      } else if (drill.mode === "grip") {
+        if (current.prog >= drill.gateProg) finishDrill(current, c);
+        else if (v < 1) { failDrill("stopped before the gate"); finishDrill(current, c); }
       } else if (drill.mode === "slalom" && drill.changes >= 6) finishDrill(current, c);
       else if (drill.rival) observeRival(c, current, v, moving, now);
     }
@@ -636,7 +649,7 @@ const RaceInsights = (function () {
       G.store.set("incidentLog", { version: 1, sessions: kept.concat({ id: runId, entries: rows.slice(-40) }).slice(-5) });
       return rows;
     }
-    function summary() { return { distance, drill: drill ? { mode: drill.mode, done: drill.done, clean: drill.clean, changes: drill.changes, reason: drill.reason, phase: drill.phase } : null, lastDrill: lastDrill ? { ...lastDrill, ...(lastDrill.recovery ? { recovery: { ...lastDrill.recovery } } : {}) } : null }; }
+    function summary() { return { distance, drill: drill ? { mode: drill.mode, done: drill.done, clean: drill.clean, changes: drill.changes, reason: drill.reason, phase: drill.phase, apexProg: drill.apexProg, gateProg: drill.gateProg } : null, lastDrill: lastDrill ? { ...lastDrill, ...(lastDrill.recovery ? { recovery: { ...lastDrill.recovery } } : {}) } : null }; }
     return { update, reset, event, settle, startDrill, forecast, network, summary, mastery, debrief, journal: () => events.map(e=>({...e})),
       attempts: mode => (attempts[mode] || []).map(a => ({ ...a })), brakingRef };
   }

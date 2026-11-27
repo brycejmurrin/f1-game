@@ -3891,6 +3891,11 @@
       "roster": "LAZY_LEARN"
     },
     {
+      "path": "js/learn-drills/grip.js",
+      "global": "GripDrill",
+      "roster": "LAZY_LEARN"
+    },
+    {
       "path": "js/learn-drills/registry.js",
       "global": "DrillRegistry",
       "roster": "LAZY_LEARN"
