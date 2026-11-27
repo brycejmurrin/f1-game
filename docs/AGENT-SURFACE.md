@@ -51,7 +51,6 @@ the task with an explicit persona label, OWNED paths, forbidden actions,
 allowed tools, and the required hand-back format. Claude frontmatter such as
 `readonly`, `tools`, `background` and `model` is reference metadata in Codex;
 repeat the safety limits in the launch prompt. Landing is GitHub's (`land.yml`, skill `steward` §Land).
-work (for example `deploy-research`), never ready/arm/merge authority.
 
 The doctor catalog warning is host metadata, not a repository failure. If the
 host provides a redacted JSON snapshot, inspect it with
@@ -461,8 +460,6 @@ Pins the wrap always applies (you cannot override them):
   existing JSON file under `artifacts/` or `scratch/` (symlinks resolved); never
   `--out` / `--fleet` / `--diff` / `--pose`. The fleet sweep
   (`frame-report.mjs --fleet`, ~10 min) and `--diff old.json new.json` stay CLI.
-  `paths` that start with `-` are refused so none reaches the CLI as a flag
-  token / API down) is a tool error. Watching a run stays a Monitor on the CLI
 - `apex_cursor_agents` → `cursor-agents.mjs <verb>`, READ verbs only (§Per vendor): ONE tool with a `verb` argument,
   only `verb`, `id`, `options` and `dryRun` published (the listing is byte-capped, so the per-verb `options` live in
   the text `apex_help` returns and are checked strictly per verb with a did-you-mean). Needs `CURSOR_API_KEY` in the
