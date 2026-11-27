@@ -3,8 +3,9 @@
  * The strategy drills (epic #6559 steps 16-18) answer "what if I had boxed?" by running that race, so the three
  * promises the epic's B2 row names are pinned here:
  *   1. a branch re-run is BYTE-IDENTICAL at +3 laps (the card's numbers are reproducible, not one roll of the dice);
- *   2. a CULLED field differs from the full field by less than noise() (the phone-speed shortcut changes nothing
- *      the drill can measure);
+ *   2. a CULLED field differs from the full field by less than twice the spread of 6 draws (the base stream and 5
+ *      neighbouring seeds; Bryce's `decision: A`, #7169 comment 7210172460): the phone-speed shortcut changes nothing
+ *      the drill can measure beyond the race's own randomness;
  *   3. the LIVE world is restored after a branch: every primitive of all 22 cars, the clock and the seeded stream
  *      position, so the race that continues is the one that would have continued with no branch at all.
  * Plus: the time slice decides only how many ticks run per call (a step(job, 0) loop equals one run()), and a
@@ -147,8 +148,20 @@ test("a culled field differs from the full field by less than noise()", () => {
   assert.equal(full.result.culled.length, 0);
   const n = DF.noise(F, [], until, opts(null), 3);
   assert.ok(n >= 1 / 60, "noise() is floored at one tick");
+  // Bryce's `decision: A` (#7169, comment 7210172460). A culled field consumes the random stream
+  // differently, so the culled run is one more draw, and culled-vs-full is a DIFFERENCE OF TWO draws. The yardstick is
+  // therefore the spread of the base stream plus 5 neighbouring seeds (the same seeds noise() steps through), doubled
+  // for the difference of two draws. After #6575 (the AI chaser lane) one seed moves the player by ~0.15-0.2 s on
+  // redbull, which a 3-seed range alone underestimates (culled 0.200 s vs noise 0.150 s on e8d7088b).
+  const draws = [full.result.player.timeS];
+  for (let j = 1; j <= 5; j++) {
+    const nb = DF.run(DF.branch(F, [], until, Object.assign({}, opts(null), { seed: ((F.seed + j * 7919) >>> 0) || 1 })));
+    assert.equal(nb.state, "done", nb.error);
+    draws.push(nb.result.player.timeS);
+  }
+  const spread = Math.max(...draws) - Math.min(...draws);
   const d = Math.abs(culled.result.player.timeS - full.result.player.timeS);
-  assert.ok(d < n, `culled vs full: ${d.toFixed(3)} s, noise ${n.toFixed(3)} s`);
+  assert.ok(d < 2 * Math.max(n, spread), `culled vs full: ${d.toFixed(3)} s, 2 x spread of 6 draws ${(2 * Math.max(n, spread)).toFixed(3)} s`);
 });
 
 test("a branch that throws, at its start or mid-run, and a cancelled one, all hand the live world back", () => {
