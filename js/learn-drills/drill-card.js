@@ -18,7 +18,7 @@ const DrillCard = (function () {
   /** The medal a run earns: "gold" | "silver" | "bronze" | null. */
   function medalOf(r, tiers) {
     const v = r && Number.isFinite(r.value) ? r.value : -Infinity;
-    if (!tiers) return null;
+    if (!tiers || (tiers.cleanRequired && !(r && r.clean))) return null;   // cleanRequired: an unclean run earns nothing (charge.js)
     if (v >= tiers.gold && (!tiers.goldClean || r.clean)) return "gold";
     if (v >= tiers.silver) return "silver";
     if (v >= tiers.bronze) return "bronze";
