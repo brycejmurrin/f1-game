@@ -4154,3 +4154,11 @@ Human step: `ratchet-raise`.
 (`togglePocket`, `paintPocket`) live in the eager race-settings.js; the sheet is built at boot, so there is no lazy home. `(tree) shellNodes`
 2335 → **2337** (+2): the `#rs-pocket` button and its `<small>`. Fragment: `ratchets.d/claude--pocket-weekend-7042.json`.
 Human step: `ratchet-raise`.
+
+## 2026-11-27 — PR #7206 (claude/hot-path-memo-7070): lowGrip once per step, a stable stallSweep callback (#7070 rows 2 + 6)
+
+`(tree) eagerCodeBytes` 4027157 → **4027407** (+250): `RaceControl.lowGrip` gains a per-step memo (`stepGrip(on)`, the
+`gripWin`/`gripMemo` pair) and game.js brackets its per-car `updateCar` loop with `raceCtl.stepGrip(true)` … `finally
+stepGrip(false)`; both live in eager files that run every step, so there is no lazy home. It buys ~196 fewer road-wetness
+reads per step on a 22-car wet race (200 → 4), bit-identical to base. `js/game.js` lines/codeLines +1 (the named
+`stallRetire`). Fragment: `ratchets.d/claude--hot-path-memo-7070.json`. Human step: `ratchet-raise`.
