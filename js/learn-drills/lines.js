@@ -65,7 +65,7 @@ const LinesDrill = (function () {
     return true;
   }
 
-  const lerp = (a, b, f) => a + (b - a) * f;
+  const lerp = M4.lerp;        // the shared scalar helper (js/core/mat4.js; aliased at eval, tests/unit/shared-math.test.mjs)
   /** Read-only accumulator, one call per host tick: the marks of this run, then each one as the car crosses it. */
   function sample(G, acc) {
     const p = G.player, tr = G.track;

@@ -19,6 +19,7 @@ const plain = v => JSON.parse(JSON.stringify(v));
 
 function pure() {
   const ctx = vm.createContext({ console, Math, Object, Array, Number, String, Map, Set, Error });
+  vm.runInContext(readFileSync(absSrc("js/core/mat4.js"), "utf8"), ctx, { filename: absSrc("js/core/mat4.js") });
   vm.runInContext(readFileSync(absSrc("js/learn-drills/registry.js"), "utf8"), ctx, { filename: absSrc("js/learn-drills/registry.js") });
   vm.runInContext(SRC, ctx, { filename: absSrc("js/learn-drills/lines.js") });
   return ctx;
