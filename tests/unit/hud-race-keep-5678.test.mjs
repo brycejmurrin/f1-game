@@ -12,6 +12,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { loadDom } from "../helpers/dom-vm.mjs";
 import { withI18n } from "../helpers/i18n-ctx.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -20,6 +21,7 @@ const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
 function readouts(ArrayType = Float64Array) {
   const ctx = { Math, Number, Float64Array: ArrayType, Map };
   vm.createContext(ctx);
+  loadDom(ctx);
   vm.runInContext(read("js/ui/hud-readouts.js") + "; this.HudReadouts = HudReadouts;", ctx, { filename: absSrc("js/ui/hud-readouts.js") });
   return ctx.HudReadouts;
 }
@@ -76,6 +78,7 @@ test("gapClock reuses both buffers while a car reverses and records fresh crossi
 function withClock(mod, name, extra = {}) {
   const ctx = { Math, Number, Float64Array, Map, console, ...extra };
   vm.createContext(ctx); withI18n(ctx);
+  loadDom(ctx);
   vm.runInContext(read("js/ui/hud-readouts.js") + "; this.HudReadouts = HudReadouts;", ctx, { filename: absSrc("js/ui/hud-readouts.js") });
   if (mod) vm.runInContext(read(mod) + "; this." + name + " = " + name + ";", ctx, { filename: absSrc(mod) });
   return ctx;
@@ -175,6 +178,7 @@ function layout({ W = 844, H = 390, ins = { "--sal": 47, "--sar": 47, "--sat": 0
     GameStore: { store: { get: (k, d) => d, set() {} } } };
   vm.createContext(ctx);
   vm.runInContext(read("js/camera/cam-groups.js"), ctx, { filename: absSrc("js/camera/cam-groups.js") });
+  loadDom(ctx);
   vm.runInContext(read("js/ui/hud-layout.js").replace(/^const HudLayout\b/m, "var HudLayout"), ctx, { filename: absSrc("js/ui/hud-layout.js") });
   sectors.setAttribute("data-hl-user", ""); sectors.setAttribute("data-hl", "");   // as apply() paints a saved piece
   return { H: vm.runInContext("HudLayout", ctx), sectors, vals };

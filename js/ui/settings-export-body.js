@@ -16,6 +16,10 @@ const {
 const EXCLUDED = "photo library and personal background images, garage (parts, liveries, setup sheets, MY TEAM), saves (career, the season save, replays, daily challenge), accounts and network (Spotify, TURN, relays), renderer self-heal latches, developer flags. Time-trial leaderboards are optional in the ttlb section, and season setup, circuit mastery, ghosts, onboarding marks and your own circuits in the progress section (best laps and progress merge, season setup is replaced)";
 const BUTTON_RESPONSE_SCHEMA = 2;   // Phone and touchscreen now have independent responses.
 
+// ── DATA: collect / apply / reset ───────────────────────────────────────────
+// The file logic: what each file holds, how a loaded one is checked and written back,
+// what a section reset clears. No DOM is built here and nothing closes over create(G);
+// G arrives as an argument. Tests reach the internals through _data.
 function same(a, b) {
   if (a === b) return true;
   if (isObj(a) && isObj(b)) {
@@ -258,7 +262,7 @@ function typeOk(v, def, row) {
 }
 // Which kind of device this page runs on, read the way collect() writes file.device.desktop.
 function thisDesktop(G) {
-  try { if (document.body.classList) return document.body.classList.contains("desktop"); } catch (_) { /* no DOM */ }
+  if (typeof document !== "undefined" && document.body && document.body.classList) return Dom.isDesktop();
   return G && G.gfx && typeof G.gfx.isMobile === "boolean" ? !G.gfx.isMobile : null;
 }
 // The primary pointer can change when a tablet docks. Use the same hardware
@@ -316,39 +320,6 @@ function resetSettings(section) {
     const result = writePreferences(writes);
     return { ...result, ok: result.failed === 0, reason: result.failed ? "Storage refused the reset; preferences were restored where possible." : null };
   } catch (_) { return { ok: false, applied: 0, failed: 1, reason: "Storage is unavailable. Nothing was reset." }; }
-}
-
-/** @type {null | (() => void)} */
-let resetPrompt = null;
-let resetLeave = false;
-/** @param {{ focus?: boolean }} [opts] */
-function resetRow(section, button, opts) {
-  const scope = resetInfo(section);
-  if (!scope || !button?.parentNode) return;
-  if (resetPrompt) resetPrompt();
-  const host = document.createElement("div"), note = document.createElement("p");
-  const confirm = document.createElement("button"), cancel = document.createElement("button");
-  note.className = "adv-help"; note.setAttribute("data-help", "keep"); note.setAttribute("role", "status");
-  note.textContent = scope + " The game reloads after resetting, ending the current race. Saved progress is kept.";
-  confirm.type = cancel.type = "button";
-  confirm.textContent = "CONFIRM RESET & RELOAD"; cancel.textContent = "CANCEL";
-  confirm.setAttribute("aria-label", "Confirm reset. " + scope + " Reload ends the current race.");
-  const clear = () => { host.remove(); resetPrompt = null; };
-  cancel.onclick = () => { clear(); button.focus(); };
-  confirm.onclick = () => {
-    confirm.disabled = cancel.disabled = true;
-    const result = resetSettings(section);
-    if (!result.ok) {
-      note.textContent = result.reason; confirm.disabled = cancel.disabled = false; return;
-    }
-    location.reload();
-  };
-  host.append(note, confirm, cancel); button.parentNode.insertBefore(host, button.nextSibling);
-  resetPrompt = clear;
-  if (!resetLeave && typeof SettingsNav !== "undefined" && SettingsNav.onLeave) {
-    SettingsNav.onLeave(() => { if (resetPrompt) resetPrompt(); }); resetLeave = true;
-  }
-  if (!opts || opts.focus !== false) confirm.focus();
 }
 
 function writePreferences(writes) {
@@ -722,6 +693,9 @@ async function applyCareer(file, revisions) {
   return { ok: true, applied, skipped: skipped + (Array.isArray(r.rejected) ? r.rejected.length : 0), failed, reason: null };
 }
 
+// ── FILE I/O: save caps, download, restore summaries ─────────────────────────
+// The thin edge between the data and the page: a save's size cap, the blob
+// download, and the text a restore reports.
 const RESTORE_LIMIT_MSG = "File exceeds the restore limit";
 const CAREER_FILE_MAX_BYTES = 5 * 1024 * 1024;   // CareerBackup.MAX_BYTES before that lazy module lands
 function saveCap(format) {
@@ -777,6 +751,40 @@ function stamp() {
   const d = new Date();
   const p = (n) => String(n).padStart(2, "0");
   return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`;
+}
+
+// ── UI: the SETTINGS › FILES page, the reset prompt, the GARAGE / CAREER rows ─
+/** @type {null | (() => void)} */
+let resetPrompt = null;
+let resetLeave = false;
+/** @param {{ focus?: boolean }} [opts] */
+function resetRow(section, button, opts) {
+  const scope = resetInfo(section);
+  if (!scope || !button?.parentNode) return;
+  if (resetPrompt) resetPrompt();
+  const host = document.createElement("div"), note = document.createElement("p");
+  const confirm = document.createElement("button"), cancel = document.createElement("button");
+  note.className = "adv-help"; note.setAttribute("data-help", "keep"); note.setAttribute("role", "status");
+  note.textContent = scope + " The game reloads after resetting, ending the current race. Saved progress is kept.";
+  confirm.type = cancel.type = "button";
+  confirm.textContent = "CONFIRM RESET & RELOAD"; cancel.textContent = "CANCEL";
+  confirm.setAttribute("aria-label", "Confirm reset. " + scope + " Reload ends the current race.");
+  const clear = () => { host.remove(); resetPrompt = null; };
+  cancel.onclick = () => { clear(); button.focus(); };
+  confirm.onclick = () => {
+    confirm.disabled = cancel.disabled = true;
+    const result = resetSettings(section);
+    if (!result.ok) {
+      note.textContent = result.reason; confirm.disabled = cancel.disabled = false; return;
+    }
+    location.reload();
+  };
+  host.append(note, confirm, cancel); button.parentNode.insertBefore(host, button.nextSibling);
+  resetPrompt = clear;
+  if (!resetLeave && typeof SettingsNav !== "undefined" && SettingsNav.onLeave) {
+    SettingsNav.onLeave(() => { if (resetPrompt) resetPrompt(); }); resetLeave = true;
+  }
+  if (!opts || opts.focus !== false) confirm.focus();
 }
 
 // Settings backups have their own page; renderer diagnostics stay in DISPLAY.
@@ -1271,6 +1279,10 @@ function ensureMounted() { if (_ui && typeof _ui.mount === "function") _ui.mount
 
 return { collect, collectGarage, collectCareer, collectTtlb, ttlbParseBoard, applySettings, applyGarage, applyCareer,
          applyTtlb, resetGarage, resetSettings, resetInfo, resetRow, create, ensureMounted,
+         // Test-visible internals of the DATA and FILE I/O sections (#7053); not a caller API.
+         _data: Object.freeze({ same, objDiff, mergeChangedFields, typeOk, thisDesktop, resetOwns, migrateSlot,
+                                careerRowReason, futureCareerSlot, poisonedCareerMoney, saveCap, settingsScope,
+                                restoreSummary, RESET_INFO }),
          garageRow: () => (_ui && _ui.garageRow ? _ui.garageRow() : null),
          careerRow: () => (_ui && _ui.careerRow ? _ui.careerRow() : null) };
 })();

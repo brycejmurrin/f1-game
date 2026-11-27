@@ -171,7 +171,7 @@ const HudRelative = (function () {
     if (!root || !root.getBoundingClientRect || !doc.getElementById) return "";
     // fitRows measures nothing for an edited card or on desktop: neither does the net.
     if (root.hasAttribute && root.hasAttribute("data-hl-user")) return "user";
-    if (doc.body && doc.body.classList && doc.body.classList.contains("desktop")) return "desktop";
+    if (Dom.isDesktop(doc)) return "desktop";
     const r = (b) => Math.round(b.left) + "," + Math.round(b.top) + "," + Math.round(b.width) + "," + Math.round(b.height);
     let k = r(root.getBoundingClientRect());
     for (let i = 0; i < CLEAR_IDS.length; i++) {
@@ -254,8 +254,7 @@ const HudRelative = (function () {
     // An edited card keeps all occupied rows and the geometry the player chose.
     // Restore any rows a previous automatic fit hid before handing ownership back.
     if (root.hasAttribute && root.hasAttribute("data-hl-user")) return;
-    const b = doc && doc.body;
-    if (b && b.classList && b.classList.contains("desktop")) return;
+    if (Dom.isDesktop(doc)) return;
     let measured = false;
     if (root.getBoundingClientRect && doc.getElementById && root.style) {
       measured = true;

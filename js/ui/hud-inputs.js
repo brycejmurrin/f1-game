@@ -89,7 +89,7 @@ const HudInputs = (function () {
     }
     const iw = vw, ih = vh, z = zSeen;
     // The unplaced touch chart uses a smaller CSS box than a placed or desktop chart.
-    const small = !doc.body.classList.contains("desktop") && !root.hasAttribute?.("data-hl-user");
+    const small = !Dom.isDesktop(doc) && !root.hasAttribute?.("data-hl-user");
     if (small === mKey[5] && iw === mKey[0] && ih === mKey[1] && dpr === mKey[2] && hl === mKey[3] && z === mKey[4]) return;
     mKey[0] = iw; mKey[1] = ih; mKey[2] = dpr; mKey[3] = hl; mKey[4] = z; mKey[5] = small;
     cssW = cv.clientWidth || 128; cssH = cv.clientHeight || 48;
