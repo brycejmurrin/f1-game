@@ -264,5 +264,88 @@
       "gold": 3,
       "goldClean": true
     }
+  },
+  "taper": {
+    "how": "node tests/helpers/taper-drill-vm.mjs --write: 10 runs of the Monza Taper Hunt (20 m past the line at 0.42 vTop, 1.0 Apex MJ store, 400 m to the gate), one boot, a warm-up run, then RETRY before each run, full throttle, no steering, BOOST pressed once at 0.0 to 4.5 s",
+    "metric": "speed bought = 3.6 x the integral of DEPLOY_A x taper while deploying, dash km/h (js/learn-drills/taper.js score); straight time from RaceInsights' taper goal",
+    "rule": "over the clean runs: gold = the least speed bought among the fastest runs; silver = their median; bronze = their lowest; floored to 0.1 km/h",
+    "runs": [
+      {
+        "pressAt": 0,
+        "bought": 16.2,
+        "seconds": 10.1,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "pressAt": 0.5,
+        "bought": 19.9,
+        "seconds": 10,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "pressAt": 1,
+        "bought": 22.4,
+        "seconds": 9.9,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "pressAt": 1.5,
+        "bought": 23.6,
+        "seconds": 9.9,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "pressAt": 2,
+        "bought": 22.3,
+        "seconds": 10,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "pressAt": 2.5,
+        "bought": 20.8,
+        "seconds": 10.1,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "pressAt": 3,
+        "bought": 19.2,
+        "seconds": 10.1,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "pressAt": 3.5,
+        "bought": 17.7,
+        "seconds": 10.2,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "pressAt": 4,
+        "bought": 16.2,
+        "seconds": 10.2,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "pressAt": 4.5,
+        "bought": 14.8,
+        "seconds": 10.3,
+        "clean": true,
+        "reason": ""
+      }
+    ],
+    "tiers": {
+      "bronze": 14.8,
+      "silver": 19.5,
+      "gold": 22.4,
+      "goldClean": true
+    }
   }
 }

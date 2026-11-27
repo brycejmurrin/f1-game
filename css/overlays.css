@@ -6,7 +6,7 @@
 :root { --tap-floor44: 0px; }
 body:not(.desktop) { --tap-floor44: calc(44.2px / var(--ui-scale)); }
 /* The lesson's instruction card leaves all driving input with the HUD. */
-#learn-aero-guide {
+#learn-aero-guide, #learn-taper-guide {
   position: fixed;
   z-index: 8;
   pointer-events: none;
@@ -21,19 +21,25 @@ body:not(.desktop) { --tap-floor44: calc(44.2px / var(--ui-scale)); }
   font-family: var(--font-hud);
   text-align: center;
 }
-#learn-aero-guide:not([hidden]) { display: flex; align-items: center; gap: .65rem; text-align: left; }
+#learn-aero-guide:not([hidden]), #learn-taper-guide:not([hidden]) { display: flex; align-items: center; gap: .65rem; text-align: left; }
 #learn-aero-guide canvas {
   width: clamp(5.5rem, 10vw, 8.75rem); height: auto; flex: none;
   background: var(--hud-ink-dark); border-radius: var(--r-md);
 }
-@media (max-height: 500px) {
-  #learn-aero-guide { top: max(calc(var(--sat) + 2rem), 13%); padding: .25rem .45rem; }
+/* The Taper Hunt's scope is a wider 280x148 chart (js/learn-drills/taper.js). */
+#learn-taper-guide canvas {
+  width: clamp(8rem, 18vw, 17.5rem); height: auto; flex: none;
+  background: var(--hud-ink-dark); border-radius: var(--r-md);
 }
-#learn-aero-guide strong, #learn-aero-guide span { display: block; }
-#learn-aero-guide strong { font-size: var(--fs-3); }
-#learn-aero-guide span { font-size: var(--fs-2); color: var(--dim); }
+@media (max-height: 500px) {
+  #learn-aero-guide, #learn-taper-guide { top: max(calc(var(--sat) + 2rem), 13%); padding: .25rem .45rem; }
+}
+#learn-aero-guide strong, #learn-aero-guide span, #learn-taper-guide strong, #learn-taper-guide span { display: block; }
+#learn-aero-guide strong, #learn-taper-guide strong { font-size: var(--fs-3); }
+#learn-aero-guide span, #learn-taper-guide span { font-size: var(--fs-2); color: var(--dim); }
 /* The guide card's RETRY chip (#6555 A4) is its one tap target; the rest of the card still leaves input to the HUD. */
 #learn-aero-retry { pointer-events: auto; flex: none; min-height: var(--tap); min-width: var(--tap); padding: 0 var(--pad); font: inherit; font-weight: 700; }
+#learn-taper-retry { pointer-events: auto; flex: none; min-height: var(--tap); min-width: var(--tap); padding: 0 var(--pad); font: inherit; font-weight: 700; }
 /* The Tyre Thermal Lab's strip chart card (js/learn-drills/tyre-heat.js): the Aero card's place and type. */
 #learn-tyre-heat-guide {
   position: fixed; z-index: 8; pointer-events: none;

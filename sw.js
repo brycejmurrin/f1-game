@@ -960,6 +960,7 @@ async function precacheAssetLists() {
     "js/learn-drills/thumb-drill.js",
     "js/learn-drills/lines.js",
     "js/learn-drills/tyre-heat.js",
+    "js/learn-drills/taper.js",
     "learn/appearance.js",
     "learn/replay.js",
     "learn/replay.css",

@@ -70,6 +70,7 @@ test("PaceMath global is frozen; create returns the named surface", () => {
   for (const k of [
     "vTop", "vStd", "aStd", "xVmaxGain", "paceRef", "xCoastCut", "isErsDeploying",
     "regenFor", "otTimeFor", "aeroDfMult", "gearHi", "rpmFor", "xDfLoss", "drainFor",
+    "deployTaper", "regenSpeedK",
   ]) {
     assert.equal(typeof env.api[k], "function", k);
   }
@@ -152,4 +153,42 @@ test("X-mode: an AI car (human === false) trades at the neutral wing; a human ke
     }
   }
   assert.ok(api.xVmaxGain({ aeroLoad: 1, human: true }) > api.xVmaxGain({ aeroLoad: 0, human: true }), "the player's big wing still gains more from opening");
+});
+
+// ERS-PURE (#6550 addition 1, #6559 step 6): deployTaper / regenSpeedK moved from game.js into PaceMath. OLD is the
+// game.js text as it was before the move (deployTaper and regenSpeedK in js/game.js at tip f7819205); the new instance and pure functions must
+// return the same value, bit for bit, at every vStd 0..90 m/s (0.25 steps), with OVERTAKE on and off, at four PACEs.
+test("deployTaper / regenSpeedK: old game.js = new PaceMath over vStd 0..90, OVERTAKE on and off", () => {
+  const env = load();
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));   // M4.clamp
+  const { TAPER_LO, TAPER_HI, TAPER_FLOOR, REGEN_FULL_V } = env.PC;
+  let n = 0;
+  for (const pace of [0.5, 1, 1.37, 2]) {
+    env.setPACE(pace);
+    const vStd = env.api.vStd;
+    const OLD = {
+      deployTaper(c) {
+        if (c.otT > 0) return 1;
+        const t = clamp(1 - (vStd(c.speed) - TAPER_LO) / (TAPER_HI - TAPER_LO), 0, 1);
+        return TAPER_FLOOR + (1 - TAPER_FLOOR) * t;
+      },
+      regenSpeedK(c) { return clamp(vStd(c.speed) / REGEN_FULL_V, 0, 1); },
+    };
+    for (let k = 0; k <= 360; k++) {
+      const vs = k * 0.25, speed = vs * env.api.vTop() / env.PC.VMAX;
+      for (const otT of [0, 1.5]) {
+        const c = { speed, otT };
+        assert.equal(Object.is(env.api.deployTaper(c), OLD.deployTaper(c)), true, `taper pace ${pace} vs ${vs} ot ${otT}`);
+        assert.equal(Object.is(env.api.regenSpeedK(c), OLD.regenSpeedK(c)), true, `regen pace ${pace} vs ${vs}`);
+        n++;
+      }
+      assert.equal(env.PaceMath.taperAt(vs, true), 1);
+      assert.equal(env.PaceMath.regenSpeedAt(vs), clamp(vs / REGEN_FULL_V, 0, 1));
+    }
+  }
+  assert.equal(n, 4 * 361 * 2);
+  // The documented shape: full below TAPER_LO, the floor above TAPER_HI, reversing harvests nothing.
+  assert.equal(env.PaceMath.taperAt(TAPER_LO - 1, false), 1);
+  assert.equal(env.PaceMath.taperAt(TAPER_HI + 1, false), TAPER_FLOOR);
+  assert.equal(env.PaceMath.regenSpeedAt(-3), 0);
 });

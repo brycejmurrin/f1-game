@@ -811,6 +811,7 @@
         "tests/unit/drill-aero-vm.test.mjs",
         "tests/unit/drill-fork-vm.test.mjs",
         "tests/unit/drill-lines-vm.test.mjs",
+        "tests/unit/drill-taper-vm.test.mjs",
         "tests/unit/drill-tyre-heat-vm.test.mjs",
         "tests/unit/drive-to-box-vm.test.mjs",
         "tests/unit/driving-line-pace.test.mjs",
@@ -957,6 +958,7 @@
         "tests/unit/drill-aero-vm.test.mjs",
         "tests/unit/drill-fork-vm.test.mjs",
         "tests/unit/drill-lines-vm.test.mjs",
+        "tests/unit/drill-taper-vm.test.mjs",
         "tests/unit/drill-tyre-heat-vm.test.mjs",
         "tests/unit/drive-to-box-vm.test.mjs",
         "tests/unit/driving-line-pace.test.mjs",
@@ -1140,6 +1142,7 @@
         "tests/unit/drill-aero-vm.test.mjs",
         "tests/unit/drill-fork-vm.test.mjs",
         "tests/unit/drill-lines-vm.test.mjs",
+        "tests/unit/drill-taper-vm.test.mjs",
         "tests/unit/drill-tyre-heat-vm.test.mjs",
         "tests/unit/drive-to-box-vm.test.mjs",
         "tests/unit/driving-line-pace.test.mjs",
@@ -3936,6 +3939,11 @@
     {
       "path": "js/learn-drills/registry.js",
       "global": "DrillRegistry",
+      "roster": "LAZY_LEARN"
+    },
+    {
+      "path": "js/learn-drills/taper.js",
+      "global": "TaperDrill",
       "roster": "LAZY_LEARN"
     },
     {

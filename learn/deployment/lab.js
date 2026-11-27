@@ -155,4 +155,28 @@
       };
     },
   });
+  // TRY IT IN THE CAR: the Taper Hunt drill (js/learn-drills/taper.js), only inside the game's LEARN frame. BACK TO
+  // LESSON posts the last run here (js/ui/learn-door.js reopen()).
+  if (typeof window !== "undefined" && window.frameElement?.id === "learn-lab") {
+    const lab = document.getElementById("lab");
+    const launch = document.createElement("button");
+    launch.type = "button";
+    launch.id = "launch-taper-drill";
+    launch.textContent = "Try it in the car: Taper Hunt";
+    launch.addEventListener("click", () => window.parent.postMessage({type: "apex-learn-scenario", id: "taper"}, window.location.origin));
+    const result = document.createElement("p");
+    result.id = "taper-drill-result";
+    result.setAttribute("role", "status");
+    result.hidden = true;
+    lab.append(launch, result);
+    window.addEventListener("message", event => {
+      const data = event.data;
+      if (event.origin !== window.location.origin || event.source !== window.parent || data?.type !== "apex-learn-result" ||
+          data.id !== "taper" || !data.result) return;
+      const r = data.result, medal = r.medal ? r.medal.toUpperCase() : "No medal";
+      result.textContent = "Your last drill: " + medal + " · BOOST bought " + Number(r.value).toFixed(1) + " km/h"
+        + (Number.isFinite(r.best) ? " (best " + r.best.toFixed(1) + ")" : "") + ". " + (r.verdict || "");
+      result.hidden = false;
+    });
+  }
 })();
