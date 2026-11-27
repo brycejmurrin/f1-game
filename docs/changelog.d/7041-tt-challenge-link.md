@@ -1,0 +1,1 @@
+New: A Time Trial ghost link is now a challenge: it carries the lap's weather and time of day, and opening it stages that circuit in those conditions against the ghost, with "BEAT <lap time>" as the target (#7041).
