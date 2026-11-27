@@ -1,0 +1,1 @@
+Fixed: LEARN drills recover at once when a Thumb drill race fails to load, never run two drills at the same time, ignore Escape and R on the result card while the pause menu is open or you are typing, and keep your best score when a run records a bad value (#7246).
