@@ -48,7 +48,7 @@ var GameAudioSoundtrack = (function () {
     // loads the next url near the end of the current track; streamTrack swaps it in so a
     // track change needs no fetch. Dropped on stop/context reset.
     const PRELOAD_LEAD_S = 20;
-    let preEl = null, preNode = null, preUrl = null, preFailed = false;
+    let preEl = null, preNode = null, preUrl = null, preFailed = false, preBadUrl = null;
     let streamUnlockPending = null; // only a refused play owned by the current track may retry on a gesture
     // UPLOADS STREAM ON EVERY PLATFORM. music-lib.js caps an upload at 25 MB of
     // BYTES, which is not a bound on PCM: 25 MB of 64 kbps Opus is ~55 min, or
@@ -158,7 +158,7 @@ var GameAudioSoundtrack = (function () {
       const d = +el.duration, t = +el.currentTime || 0;
       if (!(d > 0) || !Number.isFinite(d) || d - t > PRELOAD_LEAD_S) return;
       const i = seekEligible(musicIndex, 1), e = i >= 0 ? PLAYLIST[i] : null;
-      if (!e || i === musicIndex || e.url === musicElUrl || preUrl === e.url || (e.builtin && !streamMusic())) return;
+      if (!e || i === musicIndex || e.url === musicElUrl || preUrl === e.url || preBadUrl === e.url || (e.builtin && !streamMusic())) return;
       if (!preEl) {
         try {
           preEl = new Audio(); preEl.preload = "auto";
@@ -167,7 +167,7 @@ var GameAudioSoundtrack = (function () {
         } catch (err) { preEl = preNode = null; preFailed = true; return; }
       }
       const pe = preEl;
-      pe.onerror = () => { if (pe === preEl) dropPreload(); };
+      pe.onerror = () => { if (pe === preEl) { preBadUrl = preUrl; dropPreload(); } };   // a failed url is not re-requested on every timeupdate
       preUrl = e.url;
       pe.src = e.url;
     }
@@ -245,6 +245,7 @@ var GameAudioSoundtrack = (function () {
       };
       musicElUrl = url; musicStreaming = true;
       if (!preloaded) el.src = url;
+      else if (off > 0) { try { el.currentTime = off; } catch (e) { /* unseekable: from the top */ } }
       playStream(el, url, token);
       return true;
     }
@@ -672,7 +673,7 @@ var GameAudioSoundtrack = (function () {
       try { if (musicElNode) musicElNode.disconnect(); } catch (e) { /* the old context is closing */ }
       dropPreload();
       try { if (preNode) preNode.disconnect(); } catch (e) { /* the old context is closing */ }
-      preEl = preNode = preUrl = null; preFailed = false;
+      preEl = preNode = preUrl = preBadUrl = null; preFailed = false;
       musicEl = musicElNode = musicElUrl = null;   // bound to the dead context
       musicGain = null;
       for (const k in musicBuffers) delete musicBuffers[k];

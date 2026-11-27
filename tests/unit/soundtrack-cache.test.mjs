@@ -309,3 +309,35 @@ test("an upload still decodes when streaming is unavailable", async () => {
   await flush();
   assert.deepEqual(decoded.filter((u) => u.startsWith("blob:")), ["blob:d"]);
 });
+
+test("a failing preload is not re-requested on every timeupdate, and stop releases the spare", async () => {
+  StreamAudio.all = [];
+  const { A, mediaEls } = boot({ Audio: StreamAudio, mediaSource: true });
+  A.init(); await flush();
+  A.setMusicSource("builtin");
+  A.playTrackId("builtin:song2"); await flush();
+  const cur = mediaEls[0];
+  cur.duration = 200; cur.currentTime = 190;
+  cur.ontimeupdate();
+  const pre = mediaEls[1];
+  pre.onerror();
+  cur.ontimeupdate(); cur.ontimeupdate();
+  assert.deepEqual(pre.srcSets, ["assets/music/song3.mp3"], "one request for the failed url");
+  A.stopMusic();
+  assert.equal(pre.src, "", "the spare drops its src when music stops");
+});
+
+test("a swapped-in preload applies a pending resume offset", async () => {
+  StreamAudio.all = [];
+  const { A, mediaEls } = boot({ Audio: StreamAudio, mediaSource: true });
+  A.init(); await flush();
+  A.setMusicSource("builtin");
+  A.playTrackId("builtin:song2"); await flush();
+  const cur = mediaEls[0];
+  cur.duration = 200; cur.currentTime = 190; cur.ontimeupdate();
+  const pre = mediaEls[1];
+  pre.currentTime = 0;
+  cur.onended(); await flush();
+  assert.equal(pre.paused, false);
+  assert.equal(pre.currentTime, 0, "a fresh track starts at the top");
+});
