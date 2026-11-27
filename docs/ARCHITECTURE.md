@@ -230,7 +230,7 @@ _Module index over 34 directories, in load order. `tag` = a `<script>` in index.
 
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
-| `dom.js` | `Dom` | tag | Dom: the DOM/format helpers every DOM-built screen shares (el / paintFold / fmtLap / fmtRaceClock / fmtGap). |
+| `dom.js` | `Dom` | tag | Dom: the DOM/format helpers every DOM-built screen shares (el / paintFold / fmtLap / fmtRaceClock / fmtGap / isDesktop). |
 | `title-fx.js` | `TitleFx` | tag | TitleFx: title-screen motion, wash and the background drawing. |
 | `track-maps.js` | `TrackMaps` | tag | TrackMaps: offline 2D circuit outlines for the track picker. |
 | `flags.js` | `Flags` | tag | national flags as inline SVG, for the circuit picker's flag strip and the hero caption beside a circuit's name. |

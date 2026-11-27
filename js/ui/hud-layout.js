@@ -192,7 +192,7 @@ const HudLayout = (function () {
   const isSet = (s) => SETS.indexOf(s) >= 0;
   const isProf = (p) => PROFILES.indexOf(p) >= 0;
   /** A touch screen (no body.desktop — js/ui/platform-session.js keeps it live). */
-  const touch = () => !!(doc && doc.body && doc.body.classList && !doc.body.classList.contains("desktop"));
+  const touch = () => !!(doc && doc.body && doc.body.classList) && !Dom.isDesktop(doc);
   /** The shipped {x, y, s} of element `id` in style `pn`, camera set `sn` (a
    *  touch screen takes TOUCH_SHIPPED's for the sets that have one). */
   const shippedEl = (id, sn, pn) => normEl(touch() && TOUCH_SHIPPED[sn] ? TOUCH_SHIPPED[sn][id] : SHIPPED[pn] && SHIPPED[pn][sn] && SHIPPED[pn][sn][id]);
@@ -664,7 +664,7 @@ const HudLayout = (function () {
     clearReadouts(W, H);
   }
   function packPhonePrimary(W, H) { /* PACK_MARK_Q2_4159 */
-    if (!doc || !doc.body || !doc.body.classList || doc.body.classList.contains("desktop")) return;
+    if (!doc || !doc.body || !doc.body.classList || Dom.isDesktop(doc)) return;
     let pct = 100;
     if (store && typeof store.get === "function") pct = +store.get("hudScale", 100) || 100;
     try {
@@ -756,7 +756,7 @@ const HudLayout = (function () {
       if (!(r.width && r.height)) continue;
       // Desktop: ignore touch discs that stay in the tree but are not the
       // player's controls; keep SPEED & GEAR so INPUTS still clears them.
-      if (el.classList && el.classList.contains("touchbtn") && doc.body && doc.body.classList.contains("desktop")) continue;
+      if (el.classList && el.classList.contains("touchbtn") && Dom.isDesktop(doc)) continue;
       btns.push(r);
     }
     if (!btns.length) return;

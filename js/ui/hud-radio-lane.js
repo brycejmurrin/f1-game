@@ -134,7 +134,7 @@ function announceLane(root, paintedBand) {
   // Prefer an outer lane on landscape touch: keep the central road corridor
   // clear when either side can carry readable text. Retain the full gap when
   // neither side fits, rather than discarding a radio call on a crowded HUD.
-  if (!document.body.classList.contains("desktop") && W > H) {
+  if (!Dom.isDesktop() && W > H) {
     const leftEnd = Math.min(right, W * 0.4), rightStart = Math.max(left, W * 0.6);
     const leftW = leftEnd - left, rightW = right - rightStart;
     if (Math.max(leftW, rightW) >= RADIO_TOP_MIN + RADIO_TOP_GAP * 2) {

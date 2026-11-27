@@ -33,6 +33,7 @@ import { fileURLToPath } from "node:url";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { cssRules, decl, ruleFor } from "../helpers/css-rules.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { loadDom } from "../helpers/dom-vm.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (name) => fs.readFileSync(path.join(ROOT, name), "utf8");
@@ -113,9 +114,12 @@ function boot(opts = {}) {
   vm.runInNewContext(src("js/ui/live-region.js"), sb, { filename: absSrc("js/ui/live-region.js") });
   vm.runInNewContext(src("js/ui/hud-skin.js"), sb, { filename: absSrc("js/ui/hud-skin.js") });
   vm.runInNewContext(src("js/ui/hud-minimap.js"), sb, { filename: absSrc("js/ui/hud-minimap.js") });   // GameHud.create builds its HudMinimap (#1656)
+  loadDom(sb);
   vm.runInNewContext(src("js/ui/hud-radio-lane.js"), sb, { filename: absSrc("js/ui/hud-radio-lane.js") });   // …and its HudRadioLane (#3261)
   // GameHud builds its sector painter from it (#6500); `readouts: false` pins the no-HudReadouts fallbacks.
+  loadDom(sb);
   if (opts.readouts !== false) vm.runInNewContext(src("js/ui/hud-readouts.js"), sb, { filename: absSrc("js/ui/hud-readouts.js") });
+  loadDom(sb);
   vm.runInNewContext(src("js/ui/hud.js"), sb, { filename: absSrc("js/ui/hud.js") });
   // The OVERTAKE chip converts the allowance to MJ through the real module.
   vm.runInNewContext(src("js/race/overtake-mode.js"), sb, { filename: absSrc("js/race/overtake-mode.js") });

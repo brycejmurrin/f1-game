@@ -9,6 +9,7 @@ import assert from "node:assert/strict";
 import vm from "node:vm";
 import { read, boot, bootUi, fakePad, plain, rawPad, setBtn } from "../helpers/key-binds-rig.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { loadDom } from "../helpers/dom-vm.mjs";
 
 test("malformed imported binding slots cannot stop Controls initialization", () => {
   for (const kind of ["keys", "pad"]) {
@@ -21,6 +22,7 @@ test("malformed imported binding slots cannot stop Controls initialization", () 
     sb.window = sb;
     const ctx = vm.createContext(sb);
     vm.runInContext(read("js/ui/settings-export.js"), ctx, { filename: absSrc("js/ui/settings-export.js") });
+    loadDom(ctx);
     vm.runInContext(read("js/ui/settings-export-body.js"), ctx, { filename: absSrc("js/ui/settings-export-body.js") });   // the LAZY_SAVES_DATA body (#4748)
     const settings = vm.runInContext("SettingsExport", ctx);
     const hostile = JSON.parse('{"toString":null,"valueOf":null}');
