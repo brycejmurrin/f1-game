@@ -116,6 +116,6 @@ const TvGraphics = (function () {
     return { tick, stop, reset, status, element: () => host };
   }
 
-  return { TICK_S, LOWER_S, snapshot, diff, flagOf, create };
+  return { diff, flagOf, create };
 })();
 Object.freeze(TvGraphics);
