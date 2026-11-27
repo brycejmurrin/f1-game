@@ -38,7 +38,7 @@ test("the camera-mode scope lists its registrants in order, all on the 'cut' why
   const g = await createGame({ track: "monza" });
   games.push(g);
   const S = g.sandbox.Scopes;
-  assert.deepEqual(plain(S.ids("camera-mode")), ["cam-feel", "game-cams", "extra-rigs", "trackside"]);
+  assert.deepEqual(plain(S.ids("camera-mode")), ["cam-feel", "game-cams", "extra-rigs", "trackside", "cam-fx"]);
   for (const r of plain(S.describe("camera-mode"))) assert.deepEqual([r.on, r.phase], [["cut"], null], r.id);
   assert.deepEqual(plain(S.ids("race")).filter((id) => ["results-cam", "quit-cams"].includes(id)), ["results-cam", "quit-cams"]);
 });

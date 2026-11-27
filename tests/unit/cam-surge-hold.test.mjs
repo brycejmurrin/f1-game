@@ -202,3 +202,43 @@ test("I3: obs() and lap time are identical with the hold on and off (game VM)", 
     assert.equal(on2.digest, on.digest, "the hold-on replay is itself deterministic");
   } finally { try { g.G.store.set("impactHold", true); } catch (_) {} g.close(); }
 });
+
+// #7350 C1: the white flash obeys comfort / REDUCE MOTION like the eye hold does.
+function flashSpy(b) {
+  const calls = [];
+  const el = { style: {}, setAttribute() {}, animate: (k) => { calls.push(k); } };
+  b.ctx.document = { createElement: () => el, getElementById: () => null, body: { appendChild() {} } };
+  return calls;
+}
+test("C1: no impact flash under comfort; the flash and hold are unchanged with it off", () => {
+  const DT = 1 / 60;
+  const off = boot(), offCalls = flashSpy(off);
+  off.ctx.Fx.hold([0, 0, 0], false, { dt: DT, reduceMotion: false });
+  assert.equal(off.ctx.Fx.impact(0.8), true);
+  assert.equal(offCalls.length, 1, "comfort off: one flash");
+  assert.ok(Math.abs(offCalls[0][0].opacity - 0.22 * 0.8) < 1e-12);
+  const on = boot(), onCalls = flashSpy(on);
+  on.ctx.Fx.hold([0, 0, 0], false, { dt: DT, reduceMotion: true });
+  assert.equal(on.ctx.Fx.impact(0.8), true, "impact() still reports the hit");
+  assert.equal(onCalls.length, 0, "REDUCE MOTION / comfort: no white flash");
+  // Comfort switched back off on a later solve: the flash returns.
+  on.ctx.Fx.hold([0, 0, 0], false, { dt: DT, reduceMotion: false });
+  on.ctx.Fx.impact(0.8);
+  assert.equal(onCalls.length, 1, "comfort off again: the flash is back");
+});
+
+// #7350 C2: CamFx.reset rides the camera-mode cut, so a hold or surge never leaks into a new vantage.
+test("C2: a camera-mode cut clears the hold and the surge", () => {
+  const ctx = vm.createContext({ Math, JSON, Object, Array, Number, String, Error, Set, Map,
+    GameStore: { store: { get: (k, d) => d } }, Log: { info() {}, debug() {}, warn() {}, error() {} }, document: undefined });
+  for (const f of ["js/core/mat4.js", "js/core/scopes.js", "js/camera/feel-fx.js"])
+    vm.runInContext(fs.readFileSync(path.join(root, f), "utf8"), ctx, { filename: absSrc(f) });
+  const Fx = vm.runInContext("CamFx", ctx), S = vm.runInContext("Scopes", ctx);
+  assert.ok(S.ids("camera-mode").includes("cam-fx"));
+  Fx.impact(1);
+  Fx.surge("chase", 1, 1 / 60, false);
+  assert.ok(Fx.state().t > 0);
+  S.exit("camera-mode", { why: "cut", mode: "chase" });
+  assert.equal(Fx.state().t, 0, "the hold is gone after a cut");
+  assert.ok(Fx.surge("chase", 0, 1 / 60, false) === 0, "the surge restarts from rest");
+});

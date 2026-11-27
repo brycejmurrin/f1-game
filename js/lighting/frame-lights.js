@@ -90,6 +90,7 @@ function appendCarTailLights(frame, track, cars, player, mobileTier, groundPose,
   // Selection is sorted and may shrink; capacity must survive both. Release
   // inactive car references so a smaller/new grid does not retain the old one.
   for (let i = _tlN; i < _tlPool.length; i++) _tlPool[i].c = null;
+  if (_tlN) _held = true;
   _tlSel.length = _tlN;      // drop stale entries from earlier (busier) frames
   _tlSel.sort(_byDistAsc);   // hoisted comparator, shared with setFrameLights
   const nT = Math.min(_tlSel.length, 5);
@@ -237,7 +238,7 @@ function _hshOf(o) {
     const next = new Float32Array(Math.max(lamp + 1, _hshC.length * 2, 1024));
     next.set(_hshC);
     next.fill(-1, _hshC.length);
-    _hshC = next;
+    _hshC = next; _held = true;
   }
   let h = _hshC[lamp];
   if (h < 0) { const x = Math.sin((o + 13) * 91.17) * 43758.5453; h = _hshC[lamp] = x - Math.floor(x); }
@@ -670,7 +671,11 @@ const _viewOut = { lights: null, tailStart: 0, tailCount: 0 };
 // setFrameLights again, so anything left kept the old track._lights (thousands
 // x 15 numbers) and its entry ramps reachable until the next lit world. The
 // track itself is already only weakly held (_lampTrackRef).
+// _held: anything to drop. The empty-set return calls release() per frame (#7350).
+let _held = true;
 function release() {
+  if (!_held) return;
+  _held = false;
   _last.src = null; _last.fl = null; _last.ranked = false;
   _lsSrc = null; _lsLen = -1;
   _alSrc = null; _alLen = -1; _alFl = null;
@@ -721,6 +726,7 @@ function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier, srcSet)
   if (!src || !src.length) { frame.lights = frame.lampLum = null; release(); return; }
   const prevTrack = _lampTrackRef && _lampTrackRef.deref();
   if (track !== prevTrack) release();   // a new world: no cache keyed on the old one's lamps (before the set key below)
+  _held = true;
   // frame.lampLum[i]: record i's max-channel level WITHOUT flicker (time-of-day
   // scale, warm-up and the cull fade kept). The lamp-shadow pick scores on it:
   // scored on the flickered level, two floods near equal range swapped the
