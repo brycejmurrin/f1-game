@@ -3148,6 +3148,10 @@ test("leaving the room releases the host's custom circuit from Tracks.LIST (#731
     s.deliver("settings", initialGuestSettings({ track: -1, circuit: { name: "Loop", pts: [[0, 0], [1, 0], [1, 1]] }, revision: 1 }));
     assert.equal(ctx.Tracks.LIST.length, before + 1, "the host's circuit was installed");
     assert.equal(h.G.trackIdx, before, "…and picked");
+    h.G.netPlay = { active: () => true };   // mid-race: restoreOwnRules must keep the circuit
+    h.lobby.cancel();
+    assert.equal(ctx.Tracks.LIST.length, before + 1, "never released mid-race");
+    h.G.netPlay = { active: () => false };
   } finally { h.lobby.cancel(); }
   assert.equal(h.context.Tracks.LIST.length, 1, "cancel() released the slot");
   assert.equal(h.G.trackIdx, 0, "the guest's own track is back");
