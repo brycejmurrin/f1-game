@@ -1833,6 +1833,7 @@
         "tests/unit/shared-track-foundation-characterization.test.cjs",
         "tests/unit/spline-project-height.test.mjs",
         "tests/unit/stand-curve-gap-fleet.test.mjs",
+        "tests/unit/terrain-over-road-fleet.test.mjs",
         "tests/unit/track-build-vm-release.test.mjs",
         "tests/unit/track-detail.test.mjs",
         "tests/unit/track-line-circuits.test.mjs",
