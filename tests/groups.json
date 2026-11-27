@@ -2667,6 +2667,7 @@
         "tests/unit/career-planning-ui-download.test.mjs",
         "tests/unit/career-planning.test.mjs",
         "tests/unit/career-readslot-quota.test.mjs",
+        "tests/unit/career-refused-calendar-7069.test.mjs",
         "tests/unit/career-regulations.test.mjs",
         "tests/unit/career-save-integrity-6744.test.mjs",
         "tests/unit/career-save-kept.test.mjs",
