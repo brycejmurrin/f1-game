@@ -12,6 +12,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { withM4 } from "../helpers/mat4-vm.mjs";
 import { symbolSource, GAME_REL } from "../helpers/game-source.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -465,6 +466,7 @@ function sceneHarness(textures = false, { crew = false } = {}) {
     console, Math, Object, Array, Number, String, JSON, Float32Array, Uint16Array, Uint32Array, isFinite, parseFloat, parseInt, Date,
     Log: { info() {}, warn() {}, error() {}, debug() {}, enabled: () => false },
   });
+  withM4(ctx);
   for (const f of ["js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/scene-equipment.js",
                    "js/garage/scene-live.js", "js/garage/scene-dress.js", "js/garage/experience.js",
                    ...(crew ? ["js/garage/crew-draw.js", "js/garage/scene-crew.js"] : []), "js/garage/scene.js"])
@@ -778,6 +780,7 @@ function exteriorHarness({ load, geometry, upload, surfaceHeight } = {}) {
       return {ground:geo(),road:geo(),props:geo(),stats:{trackId:def.id},anchor:{s:0}};
     } } });
   vm.runInContext(read('js/garage/experience.js'), context, {filename:absSrc('js/garage/experience.js')});
+  withM4(context);
   vm.runInContext(read('js/garage/exterior.js'), context, {filename:absSrc('js/garage/exterior.js')});
   const API = vm.runInContext('GarageExterior', context);
   const freedSet = new Set();
@@ -1156,6 +1159,7 @@ function exteriorSection({ steps = 3, supported = true, hang = false } = {}) {
   c.gfx = { createMesh: (d) => ({ d }), freeMesh() {}, draw() {} };
   c.deps = { prepareExterior: (id) => hang ? new Promise(() => {}) : Promise.resolve(tracks.find((t) => t.id === id) || null) };
   vm.runInContext(read("js/garage/experience.js"), c, { filename: absSrc("js/garage/experience.js") });
+  withM4(c);
   vm.runInContext(read("js/garage/exterior.js"), c, { filename: absSrc("js/garage/exterior.js") });
   const cam = read("js/garage/setup-camera.js");
   const a = cam.indexOf("// Optional, detached circuit slice"), b = cam.indexOf("function releaseExterior(");

@@ -1138,6 +1138,7 @@
     "tests/unit/selected-gate-verdict.test.mjs",
     "tests/unit/session-contracts.test.mjs",
     "tests/unit/session-entry-vm.test.mjs",
+    "tests/unit/session-predicates.test.mjs",
     "tests/unit/session-status.test.mjs",
     "tests/unit/session-stub-surface.test.mjs",
     "tests/unit/session-transcript.test.mjs",

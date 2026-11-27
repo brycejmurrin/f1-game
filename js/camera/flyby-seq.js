@@ -1990,14 +1990,9 @@ const FlybySeq = (function () {
      night/wet catalog (FlybyOverrides) never reached a session and was
      removed (#5995; revive it from git history). */
   const WHEN_KEYS = ["night", "wet"];
-  function isNight(info) {
-    const tod = info && info.tod, track = info && (info.track || info.def);
-    return tod === "night" || (tod === "default" && !!(track && track.night));
-  }
-  function isWet(info) {
-    const w = info && info.weather;
-    return w === "wet" || w === "rain" || w === "storm";
-  }
+  // The session predicates are M4.isNight / M4.isWet (one home, #6858 item 1).
+  const isNight = (info) => M4.isNight(info && info.tod, info && (info.track || info.def));
+  const isWet = (info) => M4.isWet(info && info.weather);
   function whenMatch(when, info) {
     if (when == null) return true;
     if (typeof when !== "object" || Array.isArray(when)) return false;
@@ -2080,7 +2075,7 @@ const FlybySeq = (function () {
     solve: viaStore(solve), shotAt, warmProgress, airCorner, reset, clearEye, floorEye, insideProp, blockers, isSolid, onRoadPose,
     landmarks, bounds, lmBase, landmarkFallback: viaStore(landmarkFallback), planShot: viaStore(planShot),
     anchorS, posePoint, cornerS, cornerSide, cornerTurn,
-    poseFromWorld, shotFromView, select, whenMatch, isNight, isWet, vary, setPlayerSlot, slotIndex, slotKnown, withoutSlot, withoutGrid,
+    poseFromWorld, shotFromView, select, whenMatch, vary, setPlayerSlot, slotIndex, slotKnown, withoutSlot, withoutGrid,
     bindCorners: viaStore(bindCorners), warm: viaStore(warm), cancelWarm, setDuration, planSteps: viaStore(planSteps),
     boundaries, presentation, swayAt, setHeroCars, driveHero: viaStore(driveHero), rollHero: viaStore(rollHero), gridProgress,
     DEFAULT, GRID_SHOTS,
