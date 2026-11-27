@@ -83,7 +83,11 @@
     // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
     // re-seats turns when the start line moves.
     sectors: [0.2899,  0.6219],   // timing lines snapped onto straights, |k| < 0.0035 (was [0.3, 0.62])
-    turns: [0.0525, 0.0696, 0.0918, 0.0968, 0.1123, 0.2588, 0.299, 0.3321, 0.341, 0.3636, 0.4405, 0.4924, 0.5238, 0.840, 0.848, 0.8555, 0.9885],
+    // Seated on the built centreline's curvature peaks (tools/track/corner-frames.cjs, #6922): T1 0.0525 -> 0.0496;
+    // T3-T5 the right-hand peaks 0.0876 / 0.0960 / 0.1166 (were 0.0918 / 0.0968 / 0.1123); T7 0.2964, T8 0.3344,
+    // T10 0.3666, T11 0.4439, T12 0.4961. T2 stays at its OpenF1 position 0.0696: it is the exit of T1's one long
+    // left arc on the driven line and has no curvature peak of its own (LEARN's thumb trainer reads it as a left).
+    turns: [0.0496, 0.0696, 0.0876, 0.0960, 0.1166, 0.2588, 0.2964, 0.3344, 0.341, 0.3666, 0.4439, 0.4961, 0.5238, 0.840, 0.848, 0.8555, 0.9885],
     barrier: { a: [0.97, 0.84, 0.12], b: [0.10, 0.10, 0.12], c: [0.85, 0.12, 0.48], night: [0.28, 0.10, 0.32], tyre: [0.97, 0.84, 0.12] },  // casino gold/black + neon magenta
     furniture: { tree: "none",  fol: [0.22, 0.42, 0.18], lamp: "arm",   lc: [1.0, 0.86, 0.55] },
     kit: { marshal: "hut",       rail: "armco",       fence: "chainlink", tyre: "tecpro",  board: "led",       gantry: "portal",     camera: "scaffold",  hoarding: "led" },
