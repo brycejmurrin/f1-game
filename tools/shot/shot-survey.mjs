@@ -20,19 +20,16 @@ import { prepareSurveyPlans, runSurvey } from "./lib/survey-runner.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
 const argv = process.argv.slice(2);
-if (!argv.includes("--help") && !argv.includes("-h")) {
-  parseFlags(argv, ["--angles", "--cold-sessions", "--count", "--designs", "--dry-run", "--fracs", "--gl", "--label",
-    "--list-locations", "--location", "--locations", "--no-index", "--no-panel", "--out", "--plan-file", "--plan-json",
-    "--preset", "--profile", "--reports", "--resume", "--save-plan", "--seed", "--select", "--tod", "--track", "--tracks",
-    "--weather", "--weathers"]);
-}
-const flag = (n, d) => {
-  const i = argv.indexOf(n);
-  return i >= 0 && i + 1 < argv.length ? argv[i + 1] : d;
-};
-const has = (n) => argv.includes(n);
-const designsFile = flag('--designs', '');
-const customDesigns = designsFile ? loadSurveyDesigns(path.resolve(ROOT, designsFile)) : null;
+const helpRequested = argv.includes("--help") || argv.includes("-h");
+// --help answers before anything else is parsed or loaded (a bad --designs must not break it).
+const F = helpRequested ? null : parseFlags(argv, ["--angles", "--cold-sessions", "--count", "--designs", "--dry-run", "--fracs", "--gl", "--label",
+  "--list-locations", "--location", "--locations", "--no-index", "--no-panel", "--out", "--plan-file", "--plan-json",
+  "--preset", "--profile", "--reports", "--resume", "--save-plan", "--seed", "--select", "--tod", "--track", "--tracks",
+  "--weather", "--weathers"]);
+// Values read through the shared reader: `--x=v` works and a following flag is never swallowed as the value.
+const flag = (n, d) => (F ? F.flag(n, d) : d);
+const has = (n) => (F ? F.has(n) : argv.includes(n));
+let customDesigns = null;
 
 function usage(code = 2) {
   console.error(`usage: node tools/shot/shot-survey.mjs --tracks id[,id…] [--preset scenery|quick|dual_lite|night_pass|lap|dual|inspect|full|custom]
@@ -44,6 +41,10 @@ function usage(code = 2) {
   process.exit(code);
 }
 
+if (helpRequested) usage(0);
+const designsFile = flag("--designs", "");
+customDesigns = designsFile ? loadSurveyDesigns(path.resolve(ROOT, designsFile)) : null;
+
 if (has("--list-locations")) {
   const track = flag("--track", flag("--tracks", ""));
   console.log(JSON.stringify({ locations: track ? listSurveyLocations(track, customDesigns, { oneTrack: true }) : SURVEY_LOCATIONS,
@@ -51,7 +52,6 @@ if (has("--list-locations")) {
     cameras: CAMERA_RECIPES }, null, 2));
   process.exit(0);
 }
-if (has("--help") || has("-h")) usage(0);
 
 // Rebuild a portable gallery from saved surveys without booting Chromium.
 if (has("--reports")) {
@@ -86,8 +86,14 @@ const planJson = flag("--plan-json", "");
 if (planJson) Object.assign(planArgs, JSON.parse(planJson), { preset, label });
 if (tod) planArgs.tod = tod;
 if (weather) planArgs.weather = weather;
-if (count) planArgs.count = Number(count);
-if (fracsRaw) planArgs.fracs = fracsRaw.split(",").map(Number);
+if (count) {
+  planArgs.count = Number(count);
+  if (!Number.isInteger(planArgs.count) || planArgs.count < 1) throw new Error(`--count must be a positive integer (got "${count}")`);
+}
+if (fracsRaw) {
+  planArgs.fracs = fracsRaw.split(",").map((x) => (x.trim() === "" ? NaN : Number(x)));
+  if (planArgs.fracs.some((x) => !Number.isFinite(x))) throw new Error(`--fracs must be comma-separated numbers (got "${fracsRaw}")`);
+}
 if (has("--location")) planArgs.location = flag("--location", "");
 if (has("--locations")) planArgs.locations = flag("--locations", "").split(',');
 if (has("--angles")) planArgs.angles = flag("--angles", "").split(",");
@@ -100,7 +106,14 @@ const plans = prepareSurveyPlans(planArgs, tracks);
 const plan = plans.get(tracks[0]);
 for (const p of plans.values()) if (new Set(p.shots.map(s=>s.name)).size !== p.shots.length) throw new Error("Shot names must be unique");
 if (has('--save-plan') && planArgs.locations && tracks.length > 1) throw new Error('Save named-location plans one track at a time');
-if (has("--save-plan")) fs.writeFileSync(flag("--save-plan", ""), JSON.stringify({preset:"custom",label,shots:plan.shots},null,2));
+if (has("--save-plan")) {
+  // One file per track: several tracks used to save only the first.
+  const base = flag("--save-plan", "");
+  for (const [id, p] of plans) {
+    const file = plans.size > 1 ? base.replace(/(\.json)?$/, `.${id}$1`) : base;
+    fs.writeFileSync(file, JSON.stringify({ preset: "custom", label, shots: p.shots }, null, 2));
+  }
+}
 const source = sourceIdentity(ROOT);
 if (customDesigns) source.designsHash = customDesigns.digest;
 const estimateMs = [...plans.values()].reduce((sum, p) => sum + estimateSurveyMs(p.shots.length, 1), 0);

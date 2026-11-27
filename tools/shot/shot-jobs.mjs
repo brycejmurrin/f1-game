@@ -19,6 +19,12 @@ export function has(argv, name) {
   return argv.includes(name);
 }
 
+function finiteNumber(name, raw) {
+  const value = parseFloat(raw);
+  if (!Number.isFinite(value)) throw new Error(`bad ${name}: ${raw}`);
+  return value;
+}
+
 /** Infer capture type from path / --jpeg. JPEG is for human review; PNG for diffs. */
 export function imageFormatFor(outPath, { jpegFlag = false } = {}) {
   const ext = extname(String(outPath || "")).toLowerCase();
@@ -50,9 +56,9 @@ export function normalizeJob(raw, defaults = {}) {
   if (!CAMS.has(cam)) throw new Error(`unknown cam "${cam}" — park|eye|orbit|cinematic|trackside`);
   const frac = parseFloat(raw.frac ?? defaults.frac ?? 0.1);
   if (!Number.isFinite(frac)) throw new Error(`bad frac: ${raw.frac}`);
-  const az = parseFloat(raw.az ?? defaults.az ?? 45);
-  const el = parseFloat(raw.el ?? defaults.el ?? 18);
-  const dist = parseFloat(raw.dist ?? defaults.dist ?? 45);
+  const az = finiteNumber("az", raw.az ?? defaults.az ?? 45);
+  const el = finiteNumber("el", raw.el ?? defaults.el ?? 18);
+  const dist = finiteNumber("dist", raw.dist ?? defaults.dist ?? 45);
   const side = parseInt(raw.side ?? defaults.side ?? 1, 10) || 1;
   const tod = String(raw.tod ?? defaults.tod ?? "day");
   const weather = String(raw.weather ?? defaults.weather ?? "dry");
@@ -112,34 +118,38 @@ export function loadBatchFile(path) {
   });
 }
 
+const SHOT_VALUE_FLAGS = ["--batch", "--team", "--wait", "--backend", "--az", "--el", "--dist", "--side", "--tod", "--weather"];
+const SHOT_BOOL_FLAGS = ["--raster", "--jpeg", "--hud", "--clear", "--traffic", "--no-line", "--all-models"];
+
 /** Single-shot positionals + flags → one job. */
 export function parseShotArgv(argv, ROOT) {
   const capture = parseCaptureOptions(argv);
   argv = capture.positionals;
   // An unknown bare flag used to be skipped as a "value-taking" flag and the shot ran on defaults.
-  makeFlags(argv, ["--batch", "--raster", "--jpeg", "--team", "--wait", "--backend", "--az", "--el", "--dist",
-    "--side", "--tod", "--weather", "--hud", "--clear", "--traffic", "--no-line", "--all-models"]);
-  const batchPath = flag(argv, "--batch", null);
-  const raster = has(argv, "--raster");
-  const jpeg = has(argv, "--jpeg");
-  const allModels = has(argv, "--all-models");
-  const TEAM = flag(argv, "--team", null);
-  const WAIT_MS = Math.max(5, parseFloat(flag(argv, "--wait", "120"))) * 1000;
+  const f = makeFlags(argv, [...SHOT_VALUE_FLAGS, ...SHOT_BOOL_FLAGS]);
+  const batchPath = f.flag("--batch", null);
+  const raster = f.has("--raster");
+  const jpeg = f.has("--jpeg");
+  const allModels = f.has("--all-models");
+  const TEAM = f.flag("--team", null);
+  const waitS = parseFloat(f.flag("--wait", "120"));
+  if (!Number.isFinite(waitS)) throw new Error(`bad --wait: ${f.flag("--wait")}`);
+  const WAIT_MS = Math.max(5, waitS) * 1000;
   const defaults = {
-    ROOT, capture, backend: flag(argv, "--backend", "three"),
-    az: flag(argv, "--az", "45"),
-    el: flag(argv, "--el", "18"),
-    dist: flag(argv, "--dist", "45"),
-    side: flag(argv, "--side", "1"),
-    tod: flag(argv, "--tod", "day"),
-    weather: flag(argv, "--weather", "dry"),
-    showHud: has(argv, "--hud"),
+    ROOT, capture, backend: f.flag("--backend", "three"),
+    az: f.flag("--az", "45"),
+    el: f.flag("--el", "18"),
+    dist: f.flag("--dist", "45"),
+    side: f.flag("--side", "1"),
+    tod: f.flag("--tod", "day"),
+    weather: f.flag("--weather", "dry"),
+    showHud: f.has("--hud"),
     team: TEAM,
     jpeg,
     raster,
-    clear: has(argv, "--clear"),
-    traffic: has(argv, "--traffic"),
-    noLine: has(argv, "--no-line"),
+    clear: f.has("--clear"),
+    traffic: f.has("--traffic"),
+    noLine: f.has("--no-line"),
   };
 
   if (batchPath) {
@@ -151,9 +161,7 @@ export function parseShotArgv(argv, ROOT) {
   const positionals = [];
   for (let i = 0; i < argv.length; i++) {
     if (argv[i].startsWith("--")) {
-      if (argv[i] !== "--hud" && argv[i] !== "--jpeg" && argv[i] !== "--raster" && argv[i] !== "--clear"
-        && argv[i] !== "--traffic" && argv[i] !== "--no-line" && argv[i] !== "--all-models"
-        && i + 1 < argv.length && !argv[i + 1].startsWith("--")) i++;
+      if (SHOT_VALUE_FLAGS.includes(argv[i]) && i + 1 < argv.length && !argv[i + 1].startsWith("--")) i++;
       continue;
     }
     positionals.push(argv[i]);
