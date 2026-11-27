@@ -1,0 +1,136 @@
+{
+  "_doc": "LEARN drill medal references (#6559 §1e rule 4): one block per drill, from VM rollouts, then re-tuned from Bryce's phone runs. Each block names its generator; tests/unit/drill-aero-vm.test.mjs pins the Aero block.",
+  "aero": {
+    "how": "node tests/helpers/learn-drill-vm.mjs --write: 20 runs of the Monza Aero drill (24 m start, Classic dirty air), one boot, RETRY between runs, throttle duty 1.00 down to 0.05, no steering",
+    "metric": "metres closed = start gap - nearest gap reached (js/ui/learn-door.js scoreAero)",
+    "rule": "bronze = median of the 20; silver = furthest before dropping out of the wake; gold = shortest clean finish (clean required); floored to 0.1 m",
+    "runs": [
+      {
+        "duty": 1,
+        "closed": 15.99,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "duty": 0.95,
+        "closed": 15.85,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "duty": 0.9,
+        "closed": 16.13,
+        "clean": true,
+        "reason": ""
+      },
+      {
+        "duty": 0.85,
+        "closed": 17.12,
+        "clean": false,
+        "reason": "left the track"
+      },
+      {
+        "duty": 0.8,
+        "closed": 15.65,
+        "clean": false,
+        "reason": "left the track"
+      },
+      {
+        "duty": 0.75,
+        "closed": 16.55,
+        "clean": false,
+        "reason": "left the track"
+      },
+      {
+        "duty": 0.7,
+        "closed": 9.25,
+        "clean": false,
+        "reason": "dropped out of the wake"
+      },
+      {
+        "duty": 0.65,
+        "closed": 8.52,
+        "clean": false,
+        "reason": "dropped out of the wake"
+      },
+      {
+        "duty": 0.6,
+        "closed": 7.85,
+        "clean": false,
+        "reason": "dropped out of the wake"
+      },
+      {
+        "duty": 0.55,
+        "closed": 7.32,
+        "clean": false,
+        "reason": "dropped out of the wake"
+      },
+      {
+        "duty": 0.5,
+        "closed": 6.88,
+        "clean": false,
+        "reason": "dropped out of the wake"
+      },
+      {
+        "duty": 0.45,
+        "closed": 6.4,
+        "clean": false,
+        "reason": "dropped out of the wake"
+      },
+      {
+        "duty": 0.4,
+        "closed": 6.04,
+        "clean": false,
+        "reason": "dropped out of the wake"
+      },
+      {
+        "duty": 0.35,
+        "closed": 5.69,
+        "clean": false,
+        "reason": "dropped out of the wake"
+      },
+      {
+        "duty": 0.3,
+        "closed": 5.38,
+        "clean": false,
+        "reason": "dropped out of the wake"
+      },
+      {
+        "duty": 0.25,
+        "closed": 5.13,
+        "clean": false,
+        "reason": "dropped out of the wake"
+      },
+      {
+        "duty": 0.2,
+        "closed": 4.88,
+        "clean": false,
+        "reason": "dropped out of the wake"
+      },
+      {
+        "duty": 0.15,
+        "closed": 4.64,
+        "clean": false,
+        "reason": "dropped out of the wake"
+      },
+      {
+        "duty": 0.1,
+        "closed": 4.42,
+        "clean": false,
+        "reason": "dropped out of the wake"
+      },
+      {
+        "duty": 0.05,
+        "closed": 4.24,
+        "clean": false,
+        "reason": "dropped out of the wake"
+      }
+    ],
+    "tiers": {
+      "bronze": 7.1,
+      "silver": 9.2,
+      "gold": 15.8,
+      "goldClean": true
+    }
+  }
+}

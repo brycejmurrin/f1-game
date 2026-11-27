@@ -6,6 +6,11 @@
    race; end(reason) puts every one back (the flow through G's setter, MenuQuitTail.keepFlow last, #6713).
    active() and guide() are read every frame: they return stable references and allocate nothing. `staging` stays a
    plain field on the active drill, so game.js holds the countdown until begin() runs.
+   A scored drill also names `goal` (the RaceInsights practice goal whose finish ends one run), `sample(G, acc)` (a
+   read-only accumulator, run by tick() while the run is live), `score(G, last, acc)` and `medals` (DrillCard.medalOf
+   tiers). tick() turns each finished run into a result, persists it (DrillCard.record, apex26.learnMedals.v1) and
+   shows the card: RETRY is retry() (the coach's checkpoint), BACK TO LESSON quits the race, and end() then reopens
+   the lesson with {type:"apex-learn-result"} posted into it (#6559 step 2, #7039).
    THE ARC NEVER REACHES THE DRIVER: nothing in js/learn-drills/ reads curvature or the racing line
    (tests/unit/drill-registry.test.mjs). Not RaceInsights.DRILLS (practice goals): a separate namespace.
    LAZY_LEARN; js/ui/learn-door.js defines the Aero drill lazily (its open()), never at eval: the bundle loads with no
@@ -28,19 +33,21 @@ const DrillRegistry = (function () {
   const ids = () => [...defs.keys()];
   const forLesson = lesson => [...defs.values()].filter(d => d.lesson === lesson);
 
-  /** hooks: { retry() (the coach's RETRY LAP), setDirtyAir(level) (raceDirtyAir is a game.js let) }. The host builds
-   *  the DrillPort (types/game-ctx.d.ts) a drill's begin() gets: G's own members plus those two, never all of G. */
+  /** hooks: { retry() (the coach's RETRY LAP), setDirtyAir(level) (raceDirtyAir is a game.js let), insights() (the
+   *  coach's RaceInsights), reopenLesson?(lesson, result) (default LearnDoor.reopen) }. The host builds the DrillPort
+   *  (types/game-ctx.d.ts) a drill's begin() and guide() get: G's own members plus the host's retry, never all of G. */
   function create(G, hooks) {
     const { setDirtyAir } = hooks;
     const port = Object.freeze({
       startRace: () => G.startRace(),
       goRolling: () => G.goRolling(),
-      retry: () => hooks.retry(),
+      retry: () => retry(),
       physState: () => (typeof window !== "undefined" && window.__apex ? window.__apex.physState() : null),   // null while LAZY_AGENT is absent
       announce: (msg, dur, kind) => G.announce(msg, dur, kind),
       store: G.store,
     });
     let current = null;
+    let lastResult = null;
 
     // Use the production race, wind, aero and checkpoint code. These settings
     // belong to the drill and are restored when its race ends or cannot start.
@@ -56,11 +63,16 @@ const DrillRegistry = (function () {
       };
       // The quit tail runs after restore(): it gets the player's flow (#6713).
       const quitFlow = { flow: G.flow, session: G.session };
-      const guide = d.guide ? d.guide(G) : null;
+      const guide = d.guide ? d.guide(G, port) : null;
+      lastResult = null;
       current = {
         id,
+        d,
         guide,
         staging: false,
+        run: null,       // {acc, prog}: the live run's accumulator, made on its first tick
+        result: null,    // the last finished run's result, while its card is up
+        attempt: 0,
         begin() {
           this.staging = false;
           if (guide) guide.hide();
@@ -95,21 +107,81 @@ const DrillRegistry = (function () {
       return true;
     }
 
-    /** The drill's race ended or could not start (game.js quitToMenu): restore first, then forget it. */
+    /** The drill's race ended or could not start (game.js quitToMenu): restore first, forget it, then reopen its
+     *  lesson with the last result (#6555 A2). A start that never placed the cars reopens nothing. */
     function end(reason) {
       if (!current) return false;
-      current.restore();   // reason ("quit"): the one end today; drills that score a finish will read it
+      const { d } = current, result = lastResult;
+      if (typeof DrillCard !== "undefined") DrillCard.hide();
+      current.restore();
       current = null;
+      lastResult = null;
+      if (reason !== "place-failed") {
+        const reopen = hooks.reopenLesson || ((lesson, r) => typeof LearnDoor !== "undefined" && LearnDoor.reopen(lesson, r));
+        reopen(d.lesson, result ? { id: d.id, result } : null);
+      }
       return true;
+    }
+
+    /** RETRY (the card, the guide's chip): back to the begin() checkpoint, a fresh run. */
+    function retry() {
+      if (!current) return false;
+      if (typeof DrillCard !== "undefined") DrillCard.hide();
+      current.result = null;
+      current.run = null;
+      return !!hooks.retry();
+    }
+
+    /** One finished run: score, medal, save, card. */
+    function finish(last) {
+      const a = current, d = a.d;
+      const scored = d.score(G, last, a.run.acc);
+      const r = { id: d.id, variant: "classic", title: d.title || d.id, attempt: ++a.attempt, ...scored };
+      r.medal = DrillCard.medalOf(r, d.medals);
+      const saved = DrillCard.record(G.store, d.id + "|" + r.variant, r);
+      r.best = saved.row.best;
+      r.improved = saved.improved;
+      a.result = lastResult = r;
+      a.run = null;
+      Log.info("ui", "drill " + d.id + " " + r.value.toFixed(1) + " " + r.unit + " " + (r.medal || "no medal"));
+      DrillCard.show(r, { retry, back: () => G.quitToMenu() });
+      return r;
+    }
+
+    /** Called where the coach updates (game.js). Samples the live run read-only; a finished run becomes a result.
+     *  A run is the goal's RaceInsights drill, finished once after this host saw it live: RETRY, the RECOVER key and
+     *  REWIND restart it, and a backward jump in progress starts a new accumulator. */
+    function tick() {
+      const a = current;
+      if (!a || !a.d.goal || G.state !== "race" || !hooks.insights) return null;
+      const insights = hooks.insights(), p = G.player;
+      const s = insights && insights.summary();
+      if (!p || !s || !s.drill || s.drill.mode !== a.d.goal) return null;
+      if (!s.drill.done) {
+        if (!a.run || p.prog < a.run.prog - 10) {
+          if (a.result && typeof DrillCard !== "undefined") DrillCard.hide();   // a new run took the card's place
+          a.result = null;
+          a.run = { acc: {}, prog: p.prog };
+        }
+        a.run.prog = p.prog;
+        if (a.d.sample) a.d.sample(G, a.run.acc);
+        return null;
+      }
+      if (!a.run || !s.lastDrill) return null;
+      return finish(s.lastDrill);
     }
 
     return {
       launch,
       begin: () => (current ? current.begin() : false),
       end,
+      tick,
+      retry,
+      lastResult: () => lastResult,
       active: () => current,
       guide: () => (current ? current.guide : null),
-      state: () => (current ? { id: current.id, staging: current.staging } : null),
+      state: () => (current ? { id: current.id, staging: current.staging, attempt: current.attempt, live: !!current.run,
+        result: current.result ? { value: current.result.value, medal: current.result.medal } : null } : null),
     };
   }
 

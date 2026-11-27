@@ -805,6 +805,7 @@
         "tests/unit/determinism-replay-vm.test.mjs",
         "tests/unit/dev-tools-vm.test.mjs",
         "tests/unit/drift-vm.test.mjs",
+        "tests/unit/drill-aero-vm.test.mjs",
         "tests/unit/drive-to-box-vm.test.mjs",
         "tests/unit/driving-line-pace.test.mjs",
         "tests/unit/elevation-tracks-vm.test.mjs",
@@ -939,6 +940,7 @@
         "tests/unit/determinism-replay-vm.test.mjs",
         "tests/unit/dev-tools-vm.test.mjs",
         "tests/unit/drift-vm.test.mjs",
+        "tests/unit/drill-aero-vm.test.mjs",
         "tests/unit/drive-to-box-vm.test.mjs",
         "tests/unit/driving-line-pace.test.mjs",
         "tests/unit/episode-transients.test.mjs",
@@ -1042,6 +1044,7 @@
         "tests/unit/collisions-deep-vm.test.mjs",
         "tests/unit/collisions-vm.test.mjs",
         "tests/unit/curvature-contract-vm.test.mjs",
+        "tests/unit/drill-aero-vm.test.mjs",
         "tests/unit/episode-transients.test.mjs",
         "tests/unit/factory-parts-pace-vm.test.mjs",
         "tests/unit/game-flow-5100-vm.test.mjs",
@@ -3862,6 +3865,11 @@
       "path": "js/input/touch-button-actions.js",
       "global": "TouchButtonActions",
       "roster": "LAZY_RACE_SESSION"
+    },
+    {
+      "path": "js/learn-drills/drill-card.js",
+      "global": "DrillCard",
+      "roster": "LAZY_LEARN"
     },
     {
       "path": "js/learn-drills/registry.js",

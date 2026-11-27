@@ -86,6 +86,8 @@ const SaveSchemaRegistry = (function () {
     "career.freeMoney": entry("js/career/career.js", "json", 1, "bool"),
     "careerSlot": entry("js/career/career.js", "json", 1, "careerSlot"),
     "circuitMastery": entry("js/race/race-insights.js", "json", 1, "json"),
+    // LEARN drill medals (#6559 §1b): {"<drill>|<variant>": {best, medal, n}}; never career currency.
+    "learnMedals.v1": entry("js/learn-drills/drill-card.js", "json", 1, "json"),
     "customTeam": entry("js/career/custom-team.js", "json", 1, "json"),
     "daily.v1": entry("js/race/daily-challenge.js", "json", 1, "json"),
     "debrisCap": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
@@ -252,13 +254,13 @@ const SaveSchemaRegistry = (function () {
   const EXACT_SECTIONS = {
     garage: ["customTeam", "customLogo", "team", "driver"],
     career: ["career", "career.freeMoney", "careerSlot", "season", "badges", "daily.v1", "records"],
-    progress: ["inputGhost.v1", "circuitMastery", "onboarded", "onboardRaces", "pitTaught", "seasonCfg", "customTracks"],
+    progress: ["inputGhost.v1", "circuitMastery", "learnMedals.v1", "onboarded", "onboardRaces", "pitTaught", "seasonCfg", "customTracks"],
   };
   const EXACT_FAM = {
     team: { health: OTHER, mirror: null }, driver: { health: OTHER, mirror: null },
     season: { health: "Season saves", writerLock: false },
     badges: CAREER_META, "daily.v1": CAREER_META, records: CAREER_META,
-    circuitMastery: { health: OTHER }, onboarded: { health: OTHER }, onboardRaces: { health: OTHER }, pitTaught: { health: OTHER },
+    circuitMastery: { health: OTHER }, "learnMedals.v1": { health: OTHER }, onboarded: { health: OTHER }, onboardRaces: { health: OTHER }, pitTaught: { health: OTHER },
     seasonCfg: { health: "Season saves", mirror: "career" },
     customTracks: { health: "Authored circuits" },
     customTrackDraft: { health: "Authored circuits" }, customTrackDraftPrev: { health: "Authored circuits" },

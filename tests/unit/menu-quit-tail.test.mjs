@@ -124,7 +124,7 @@ test("keepFlow: the next quit restores the kept flow/session, later quits reset 
 });
 
 function element() {
-  return { hidden: false, width: 0, height: 0, setAttribute() {}, append() {}, remove() {}, getContext: () => null };
+  return { hidden: false, width: 0, height: 0, setAttribute() {}, append() {}, addEventListener() {}, remove() {}, getContext: () => null };
 }
 
 test("Aero Lab drill: quitting returns the player to the flow and session they came from (#6713)", () => {
@@ -154,7 +154,7 @@ test("Aero Lab drill: quitting returns the player to the flow and session they c
   // The wired tail drives game.js's setFlow / session, which G.flow / G.session read in game.
   deps.setFlow = (v) => { calls.setFlow.push(v); G.flow = v; };
   Object.defineProperty(deps, "session", { get: () => G.session, set: (v) => { G.session = v; } });
-  const drills = DrillRegistry.create(G, { setDirtyAir: () => {} });
+  const drills = DrillRegistry.create(G, { setDirtyAir: () => {}, reopenLesson() {} });
   drills.launch("aero");
   assert.deepEqual(G.started, { flow: "gp", session: "race" }, "the drill races a GP");
   // quitToMenu: the host's end() restores first, then the (possibly deferred) tail.

@@ -35,10 +35,30 @@ const LearnDoor = (function () {
   let dialog;
   let frame;
   const lessonDoors = new Map();
+  // A drill's last result, posted into its lesson once the reopened lab loads (#6555 A2): {lesson, id, result}.
+  let pendingResult = null;
+
+  const MEDAL_LABEL = { gold: "GOLD", silver: "SILVER", bronze: "BRONZE" };
+  /** Each drilled lesson's door shows its best medal (apex26.learnMedals.v1, js/learn-drills/drill-card.js). */
+  function paintMedals() {
+    const store = typeof GameStore !== "undefined" ? GameStore.store : null;
+    if (!store || typeof DrillCard === "undefined" || typeof DrillRegistry === "undefined") return;
+    for (const [id, button] of lessonDoors) {
+      const drillIds = DrillRegistry.forLesson(id).map(d => d.id);
+      if (!drillIds.length) continue;
+      const medal = DrillCard.bestMedal(store, drillIds);
+      let badge = button.querySelector("[data-medal]");
+      if (!medal) { if (badge) badge.remove(); continue; }
+      if (!badge) { badge = Dom.el("span", ""); button.appendChild(badge); }
+      badge.dataset.medal = medal;
+      badge.textContent = MEDAL_LABEL[medal];
+    }
+  }
 
   function open(door, openDataHub, launchDrill, openTrainer) {
     defineDrills();
     if (!dialog) build();
+    paintMedals();
     dialog.hidden = false;
     // A deep link (js/ui/deep-link.js) names the lesson on the door it clicks.
     const lesson = door.dataset.openLesson;
@@ -104,6 +124,12 @@ const LearnDoor = (function () {
       // Same-origin lab: a controller or paired phone walks its controls (js/input/pad-menu.js).
       frame.dataset.padScope = "lesson";
       frame.hidden = true;
+      frame.addEventListener("load", () => {
+        const p = pendingResult;
+        if (!p || p.lesson !== sheet.dataset.lesson) return;
+        pendingResult = null;
+        frame.contentWindow?.postMessage({ type: "apex-learn-result", id: p.id, result: p.result }, location.origin);
+      });
       body.append(index, frame);
 
       const footer = Dom.el("div", "sheet-foot");
@@ -180,16 +206,75 @@ const LearnDoor = (function () {
     }
   }
 
+  /** BACK TO LESSON and every other drill end (DrillRegistry end()): the title's LEARN door reopens on the lesson,
+   *  and its lab gets the run's result once it loads. Waits for the title, as a deep link does. */
+  function reopen(lesson, payload) {
+    if (typeof document === "undefined") return false;
+    pendingResult = payload && payload.id ? { lesson, id: payload.id, result: payload.result } : null;
+    let tries = 0;
+    const go = () => {
+      const door = document.getElementById("mb-learn");
+      if (!door || door.hidden) return;
+      if (UiLayers.top()?.id !== "overlay") { if (++tries < 30) setTimeout(go, 100); return; }
+      door.dataset.openLesson = lesson;
+      door.click();
+    };
+    setTimeout(go, 0);
+    return true;
+  }
+
+  // The Aero Lab's medal tiers, in metres closed on the rival (the best approach from the 24 m start). Derived from
+  // 20 VM runs (tests/data/learn-drill-refs.json, pinned by tests/unit/drill-aero-vm.test.mjs): bronze is their median,
+  // silver the furthest a run got before it dropped out of the wake, gold the shortest clean finish in the wake.
+  const AERO_MEDALS = Object.freeze({ bronze: 7.1, silver: 9.2, gold: 15.8, goldClean: true });
+
   // The Aero Lab's Scenario: a Monza GP, both cars at speed in the tow (js/learn-drills/registry.js hosts it).
   // Defined lazily, never at eval: LAZY_LEARN loads with no edges, so the registry may evaluate after this file.
   function defineDrills() {
     if (typeof DrillRegistry === "undefined") return;
     DrillRegistry.define({
-      id: "aero", lesson: "aero",
+      id: "aero", lesson: "aero", title: "Monza Aero Drill",
       setup: { flow: "gp", session: "race", track: "monza", weather: "dry", changeable: false, grid: "tier", duel: false, dirtyAir: "classic", wind: "real" },
       begin: beginAeroDrill,
       guide: createAeroGuide,
+      goal: "slipstream",
+      sample: sampleAero,
+      score: scoreAero,
+      medals: AERO_MEDALS,
     });
+  }
+
+  // Read-only on the cars (#6559 §1e rule 1): the gap to the rival, its nearest point and the tow actually felt.
+  function sampleAero(G, acc) {
+    const p = G.player, rival = G.cars.find(c => c !== p);
+    if (!p || !rival) return;
+    const gap = rival.prog - p.prog;
+    if (acc.gap0 == null) { acc.gap0 = gap; acc.gapMin = gap; acc.towS = 0; acc.t = G.raceT; }
+    acc.gapMin = Math.min(acc.gapMin, gap);
+    acc.towS += Math.max(0, G.raceT - acc.t) * (p.towing || 0);
+    acc.t = G.raceT;
+  }
+
+  /** Metres closed = the start gap less the nearest gap reached: a run that falls out of the tow keeps the ground it
+   *  made. last is RaceInsights' lastDrill (clean, reason, seconds). Every number is measured. */
+  function scoreAero(G, last, acc) {
+    const gap0 = Number.isFinite(acc.gap0) ? acc.gap0 : 24, nearest = Number.isFinite(acc.gapMin) ? acc.gapMin : gap0;
+    const value = Math.max(0, gap0 - nearest);
+    const verdict = last.clean
+      ? "You closed " + value.toFixed(1) + " m and finished in the wake: the tow did the work while the rival punched the air."
+      : "The run ended: " + last.reason + ". You got within " + Math.max(0, nearest).toFixed(1)
+        + " m. Stay in the cyan wake on full throttle to close the rest.";
+    return {
+      value, unit: "m", better: "high", clean: !!last.clean, reason: last.reason || "",
+      metrics: [
+        ["Closed", value.toFixed(1), "m"],
+        ["Nearest gap", Math.max(0, nearest).toFixed(1), "m"],
+        ["Tow felt", (acc.towS || 0).toFixed(1), "s"],
+        ["Run time", (last.seconds || 0).toFixed(1), "s"],
+        ["Run", last.clean ? "clean" : last.reason, ""],
+      ],
+      verdict,
+    };
   }
 
   function beginAeroDrill(G) {
@@ -218,10 +303,16 @@ const LearnDoor = (function () {
 
   // Rendering-only lesson cues. Use the driving-line shader so the cars and
   // cockpit occlude the lesson markings as they do any other road marking.
-  function createAeroGuide(G) {
+  function createAeroGuide(G, port) {
     const root = document.createElement("div");
     root.id = "learn-aero-guide";
     root.hidden = true;
+    // RETRY (#6555 A4): back to the drill's start from the card, without the pause menu (a 44 px chip).
+    const retry = document.createElement("button");
+    retry.type = "button";
+    retry.id = "learn-aero-retry";
+    retry.textContent = "RETRY";
+    retry.addEventListener("click", () => { if (port) port.retry(); });
     const task = document.createElement("strong");
     task.setAttribute("role", "status");
     const readout = document.createElement("span");
@@ -233,7 +324,7 @@ const LearnDoor = (function () {
     const ctx = scope.getContext("2d");
     const copy = document.createElement("div");
     copy.append(task, readout, demoLabel);
-    root.append(scope, copy);
+    root.append(scope, copy, retry);
     document.body.append(root);
     const sample = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0] };
     const stride = DrivingLine.STRIDE;
@@ -443,6 +534,9 @@ const LearnDoor = (function () {
     return { draw, hide, car: () => demo, remove: () => root.remove() };
   }
 
-  return { open, defineDrills };
+  /** Every lesson id in the curriculum, in index order (tests/unit/learn-curriculum.test.mjs's coverage pin). */
+  const lessonIds = () => curriculum.flatMap(([, , lessons]) => lessons.map(([id]) => id));
+
+  return { open, defineDrills, reopen, lessonIds };
 })();
 Object.freeze(LearnDoor);
