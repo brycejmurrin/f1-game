@@ -148,6 +148,26 @@ test("I3: the hold reaches the live chase solve through vantage", () => {
   assert.ok(solve(520) > e0 + 10, "the hold releases and the rig follows again");
 });
 
+// Review on #7186: the TV director and broadcast chooseShot also pass extra.att (with noLook), and
+// a cut-time shot has dt 0. Only the player's own solve may drive CamFx's single state.
+test("I1/I3: a TV-director solve between player frames never touches the surge or the hold", () => {
+  const b = boot();
+  const DT = 1 / 60;
+  const player = (z) => b.ctx.GC.vantage(b.track, "chase", z, 0, 40, 0,
+    { carPos: [0, z], carHead: 0, dt: DT, att: { axEstSm: 7 } }).eye[2];
+  const tv = (dt) => b.ctx.GC.vantage(b.track, "chase", 900, 0, 40, 0,
+    { carPos: [0, 900], carHead: 0, dt, snap: !dt, noLook: true, frameSubject: true, att: { axEstSm: 0 } });
+  for (let i = 0; i < 120; i++) player(500);
+  const surged = 500 - player(500);
+  tv(DT); tv(0);
+  assert.ok(Math.abs((500 - player(500)) - surged) < 1e-9, "a TV solve neither eased nor zeroed the player's surge");
+  b.ctx.Fx.impact(1);
+  const e0 = player(500);
+  tv(0); tv(DT);                       // a director cut (dt 0) and a live TV frame
+  assert.equal(player(501), e0, "the player's eye is still held");
+  assert.ok(b.ctx.Fx.state().t > 0.08, `one decrement per player frame (${b.ctx.Fx.state().t.toFixed(3)} s left)`);
+});
+
 // The Done-when for I3, on the real game: obs() and the lap clock are identical
 // with the hold on and off while impacts fire and real frames (sim + render) pump.
 test("I3: obs() and lap time are identical with the hold on and off (game VM)", async () => {
