@@ -705,6 +705,8 @@
     "// getContext TDZ before G exists: gesture listeners and restoreOnEngine must not throw or latch early.",
     "tests/unit/lazy-bundles-getcontext.test.mjs",
     "tests/unit/lazy-bundles-prefetch.test.mjs",
+    "// #7241: bridge-link / audio-serial loads are strict (one inject); bindAgent latches across a retried agent load.",
+    "tests/unit/lazy-bundles-strict-dedupe.test.mjs",
     "// D·DP3: warmFlaps mints flap set/element meshes during race/menu warm (not solve-only).",
     "tests/unit/lazy-race-geom-warm.test.mjs",
     "tests/unit/lazy-track-build.test.mjs",
