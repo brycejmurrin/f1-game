@@ -217,8 +217,10 @@ var VoicePack = (() => {
         for (const c of parts) { out.set(c, n); n += c.byteLength; }
         return out.buffer;
       };
-      const get = (f, t) => {
-        try { return Promise.resolve(fetch(base + f, controller ? { signal: controller.signal } : undefined))
+      const get = (f, t, fresh) => {
+        // `fresh`: the worker serves a cached .bin cache-first (#7075), so a digest miss re-asks past it.
+        const init = controller ? { signal: controller.signal } : undefined;
+        try { return Promise.resolve(fetch(base + f, fresh ? Object.assign({ cache: "reload" }, init) : init))
           .then((r) => {
             if (!r.ok) throw new Error(f + " " + r.status);
             arm();
@@ -239,6 +241,10 @@ var VoicePack = (() => {
         if (hex !== meta.sha256) throw new Error("voice binary integrity mismatch");
         return bin;
       };
+      const verified = async (first, f, meta) => {
+        try { return await verify(await first, meta); }
+        catch (e) { return verify(await get(f, "arrayBuffer", true), meta); }
+      };
       // The Opus twin only where this browser decodes its container. Any failure
       // of it (fetch, digest, empty) falls back to the MP3 .bin, never to silence.
       const opusOf = (man) => {
@@ -257,11 +263,11 @@ var VoicePack = (() => {
           const o = opusOf(man);
           if (o && can[o.container] === true) {
             try {
-              const bin = await verify(await get(o.file, "arrayBuffer"), o.binary);
+              const bin = await verified(get(o.file, "arrayBuffer"), o.file, o.binary);
               return [Object.assign({}, man, { clips: o.clips }), bin, "opus-" + o.container];
             } catch (e) { Log.info("audio", "VoicePack " + id + " opus unavailable, using mp3: " + (e && e.message)); }
           }
-          return [man, await verify(await (mp3Early || get(id + ".bin", "arrayBuffer")), man && man.binary), "mp3"];
+          return [man, await verified(mp3Early || get(id + ".bin", "arrayBuffer"), id + ".bin", man && man.binary), "mp3"];
         });
       v.loading = Promise.race([timeout, pair])
         .then(([man, bin, fmt]) => {
