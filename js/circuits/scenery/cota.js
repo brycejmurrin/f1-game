@@ -347,12 +347,19 @@
         // short prisms, each TILTED along its own inner→outer ground line
         // (terrainYAt, falling back to the anchor height off the ribbon) and
         // sunk 0.4 m so its downhill toe stays in the grass.
-        const ground = (x, z, fb) => { const g = terrainYAt(x, z); return g == null ? fb : g; };
+        // Each end's own anchor is the off-ribbon fallback (the floor slab out
+        // there), not the bank centre's height: one null end would tilt the
+        // segment towards the wrong ground.
+        const groundAtDist = (d) => {
+          const e = anchor(K(sf), 1, d).c;
+          const g = terrainYAt(e[0], e[2]);
+          return g == null ? e[1] : g;
+        };
         const seg = len / 3;
         for (let j = -1; j <= 1; j++) {
           const m = vadd(aa.c, aa.r, j * seg);
-          const yIn = ground(m[0] - aa.r[0] * seg / 2, m[2] - aa.r[2] * seg / 2, aa.c[1]);
-          const yOut = ground(m[0] + aa.r[0] * seg / 2, m[2] + aa.r[2] * seg / 2, aa.c[1]);
+          const yIn = groundAtDist(dist + j * seg - seg / 2);
+          const yOut = groundAtDist(dist + j * seg + seg / 2);
           const rl = Math.hypot(aa.r[0] * seg, yOut - yIn, aa.r[2] * seg);
           const fr = [aa.r[0] * seg / rl, (yOut - yIn) / rl, aa.r[2] * seg / rl];
           // up = fr × t, flipped to point skyward.
