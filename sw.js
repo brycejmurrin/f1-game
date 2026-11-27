@@ -530,6 +530,7 @@ async function precacheAssetLists() {
     "js/camera/extra-rigs.js",
     "js/camera/trackside.js",
     "js/camera/cam-avoid.js",
+    "js/camera/feel-fx.js",
     "js/ui/podium-beat.js",
     "js/race/podium-beat.js",
     "js/race/parc-ferme.js",
@@ -1235,7 +1236,7 @@ async function precacheGeneration(onName) {
   // manifest or relying on the first online boot loses the pack after an update.
   const packManifest = PACK_MANIFEST_KEY_PREFIX + build;
   const stamped = urls.optional.map((u) =>
-    /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/|^js\/core\/sim-state\.js$|^js\/audio\/|^js\/race\/|^js\/fx\/visor-optics\.js$|^js\/data\/|^js\/render\/shared\/(?:mesh-detail|gfx-hi)\.js$|^js\/car\/car-hero\.js$|^js\/garage\/(departure-wheels|entrance-motion|arrival-rows|hi-prims|exterior(?:-geometry)?)\.js$|^js\/net\/|^js\/editor\/|^js\/xr\/|^js\/camera\/(tuner-panel|flyby-editor|extra-rigs|trackside|cam-avoid)\.js$|^js\/career\/career-(ui|planning-ui|backup)\.js$|^js\/career\/(regulations|ai-dev|experience)\.js$|^js\/perf\/(thermal-drift|soak-run|gpu-test-run|phone-recorder|bench-capture|bench-run|metrics-panel)\.js$|^js\/input\/(?:phone-pad(?:-codec|-page)?|touch-button-actions)\.js$|^js\/ui\/(podium-beat|layout-presets|look-avail|touch-button-settings|appearance-(?:studio-ui|arrangement-picker)|companion-return|photo-studio-ui|results-sheet|quali-sheet|watch-transport|progress-backup|save-health|settings-export-body|learn-door|thumb-trainer|circuit-details-panel|hud-inputs|screen-(regions|placement|arranger)|hud-arrange|hud-layout-editor|desktop-graphics|dock-toolbar)\.js$|^js\/share\/share-card(?:-chips|-data|-layout)?\.js$|^js\/lighting\/(presets|tuner-panel)\.js$|^js\/garage\/garage-data\.js$|^js\/track\/(build-worker\.js$|scenery\/|core\/hidden-faces\.js$)|^js\/workers\/|^js\/learn-drills\//.test(u)
+    /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/|^js\/core\/sim-state\.js$|^js\/audio\/|^js\/race\/|^js\/fx\/visor-optics\.js$|^js\/data\/|^js\/render\/shared\/(?:mesh-detail|gfx-hi)\.js$|^js\/car\/car-hero\.js$|^js\/garage\/(departure-wheels|entrance-motion|arrival-rows|hi-prims|exterior(?:-geometry)?)\.js$|^js\/net\/|^js\/editor\/|^js\/xr\/|^js\/camera\/(tuner-panel|flyby-editor|extra-rigs|trackside|cam-avoid|feel-fx)\.js$|^js\/career\/career-(ui|planning-ui|backup)\.js$|^js\/career\/(regulations|ai-dev|experience)\.js$|^js\/perf\/(thermal-drift|soak-run|gpu-test-run|phone-recorder|bench-capture|bench-run|metrics-panel)\.js$|^js\/input\/(?:phone-pad(?:-codec|-page)?|touch-button-actions)\.js$|^js\/ui\/(podium-beat|layout-presets|look-avail|touch-button-settings|appearance-(?:studio-ui|arrangement-picker)|companion-return|photo-studio-ui|results-sheet|quali-sheet|watch-transport|progress-backup|save-health|settings-export-body|learn-door|thumb-trainer|circuit-details-panel|hud-inputs|screen-(regions|placement|arranger)|hud-arrange|hud-layout-editor|desktop-graphics|dock-toolbar)\.js$|^js\/share\/share-card(?:-chips|-data|-layout)?\.js$|^js\/lighting\/(presets|tuner-panel)\.js$|^js\/garage\/garage-data\.js$|^js\/track\/(build-worker\.js$|scenery\/|core\/hidden-faces\.js$)|^js\/workers\/|^js\/learn-drills\//.test(u)
       ? stampKey(u) : u).filter((u) => {
         const bare = u.replace(/\?v=.*$/, "");
         // GLX and career UI went in `required`; runtime-only doors are skipped.

@@ -221,6 +221,7 @@ const SPEC = [
   { k: "cockpitTurnChaseLead", lane: "raw", group: "camera", def: "0.4", src: "js/camera/cockpit-opts.js LEAD_DEFAULT" },
   { k: "lookBackLatch", lane: "json", group: "camera", def: false, src: "js/camera/feel.js LOOK BACK LATCH (hold vs press-to-latch)" },
   { k: "speedVignette", lane: "json", group: "camera", def: false, src: "js/camera/feel.js SPEED VIGNETTE (off by default)" },
+  { k: "impactHold", lane: "json", group: "camera", def: true, src: "js/camera/feel-fx.js IMPACT HOLD (feel.js row; #7095)" },
   // LIGHTING TUNER (js/lighting)
   { k: "lightTune", mergeDepth: 2, lane: "json", group: "lighting", def: {}, src: "js/lighting/knobs.js TUNE_DEFS (the file holds {\"track|tod|weather\":{knob:value}} edits)" },
   // DRIVING / RACE RULES (js/game.js, js/race/race-control.js)
