@@ -98,7 +98,7 @@ variables inside `bash -c`, an absolute interpreter path writing a file,
 pre-commit `gen:check` are the backstops, and no card pretends otherwise.
 `readonly:` and `is_background:` were Cursor-only keys Claude Code ignored;
 they are gone. "Flat prohibitions: AGENTS.md §Verification 10, 5 and 4 (no
-Playwright/test-bg/test-solo/chrome-start, no --wait); what a card may write
+Playwright/test-bg/chrome-start, no --wait); what a card may write
 is its `tools:` list, not a hook." stays as every card's last line: no hook
 refuses a subagent's js/ or css/ write (protect-files guards generated files
 and, in a worktree, its `SHARED` list).
