@@ -242,7 +242,7 @@ const TyreModel = (function () {
   // has to be divided into that scale, the AI's is simply written in it.
   // A FULL TANK EATS TYRES. A heavier car works its rubber harder, which is
   // both true and the thing that makes a strategy MIX — harder rubber early,
-  // softer late (AiDrive.stintPlan carries the same constant and would believe
+  // softer late (AiStrategy.stintPlan carries the same constant and would believe
   // it whether or not the sim did, which is the inconsistency this removes).
   // Applied to both load scales, so the player and the field pay it alike.
   const FUEL_LOAD = 0.22;
