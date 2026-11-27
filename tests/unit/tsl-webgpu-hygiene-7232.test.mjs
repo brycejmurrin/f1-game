@@ -42,5 +42,10 @@ test("R3 + R4: MAT taps carry explicit gradients; the dead uniformArray hedge is
   assert.deepEqual(
     [taps(/(matNormalNode|matAlbedoNode)\.sample\(uv\)\.grad\(uvDx, uvDy\)\.depth\(/g), taps(/(matNormalNode|matAlbedoNode)\.sample\(uv\)\.depth\(/g)],
     [2, 0], "both MAT taps use .grad, none is implicit");
+  // The derivatives sit above each live/far/fade gate (the tap itself is emitted inside it on first use).
+  for (const fn of ["applyMaterialTexNormal = ", "applyMaterialTex = "]) {
+    const at = src.indexOf(fn);
+    assert.equal(at > 0 && src.indexOf("const uvDx = dFdx(uv)", at) < src.indexOf("If(live.and(", at), true, `${fn}: derivatives precede the gate`);
+  }
   assert.equal(taps(/matTexScale\.needsUpdate|matTexScale\.array \|\||r186/g), 0, "R4 leftovers");
 });
