@@ -180,8 +180,10 @@ test("the committed index in docs/DEBUG-HOOKS.md has exactly the live hooks", ()
 });
 
 // ---- the def() registry (js/agent/apex-play.js, #6962) ------------------------------------------
-// Nothing ships a def yet, so the fixture is registered INSIDE the test: ApexPlay.def, then a second
-// ApexApi.create(G) on the booted VM (the same call game.js makes once, after every LAZY_AGENT script).
+// The shipped defs are __apex.drill* (js/agent/apex-drill.js, #7067); the fixture is registered INSIDE the
+// test after them: ApexPlay.def, then a second ApexApi.create(G) on the booted VM (the same call game.js
+// makes once, after every LAZY_AGENT script).
+const SHIPPED = ["drillList", "drillLaunch", "drillState", "drillRetry", "drillFinish", "drillEnd"];
 async function bootWithFixture() {
   const { createGame } = require("../../tools/lib/game-vm.cjs");
   const g = await createGame({ carMeshes: false });
@@ -194,7 +196,7 @@ test("the def() registry: every ApexPlay hook has doc, args, a unique name and i
   const { g, api } = await bootWithFixture();
   try {
     const rows = g.ctx.ApexPlay.rows();
-    assert.deepEqual(Array.from(rows, (r) => r.name), ["playFixture", "playFixtureTrack"]);
+    assert.deepEqual(Array.from(rows, (r) => r.name), [...SHIPPED, "playFixture", "playFixtureTrack"]);
     for (const r of [...rows, ...PLAY]) {
       assert.ok(r.doc.trim(), r.name + " doc");
       assert.equal(typeof r.args, "string", r.name + " args");
@@ -203,7 +205,7 @@ test("the def() registry: every ApexPlay hook has doc, args, a unique name and i
     for (const r of PLAY) assert.ok(LIVE.includes(r.name), r.name + " is not a live __apex key");
     assert.equal(new Set(PLAY.map((r) => r.name)).size, PLAY.length, "duplicate names");
     for (const r of rows) assert.equal(typeof api[r.name], "function", r.name + " not spread into api");
-    assert.deepEqual(Array.from(g.apex.agentHelp().play, (r) => r.name), ["playFixture", "playFixtureTrack"], "agentHelp().play lists the registry rows");
+    assert.equal(g.apex.agentHelp().play.names, [...SHIPPED, "playFixture", "playFixtureTrack"].join(","), "agentHelp().play names the registry rows");
     assert.throws(() => g.ctx.ApexPlay.def("playFixture", { doc: "d", fn() {} }), /duplicate/);
     assert.throws(() => g.ctx.ApexPlay.def("no.dots", { doc: "d", fn() {} }), /bad hook name/);
     assert.throws(() => g.ctx.ApexPlay.def("playNoDoc", { doc: " ", fn() {} }), /doc is required/);
