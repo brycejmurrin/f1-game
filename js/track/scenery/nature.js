@@ -727,7 +727,7 @@ const SceneryNature = (function () {
     };
     const conifer = (k, side, dist, h, col) => {
       const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
-      if (onTrack(a.c[0], a.c[2], 3)) return;
+      if (SceneryGuards.refuseOnRoad(ctx, "conifer", a.c[0], a.c[2], 3, () => `conifer SUPPRESSED at k=${k} side=${side}: dist=${dist}`)) return;
       const c2 = [col[0] * 0.86, col[1] * 0.92, col[2] * 0.82];
       const vr = hash(k * 6.7 + side * 2.3 + dist), j = 0.85 + hash(k * 3.1 + side * 1.7 + dist) * 0.3;
       const lean = vr > 0.6 ? (vr - 0.6) * 1.3 * side : 0;

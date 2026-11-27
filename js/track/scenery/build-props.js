@@ -2178,7 +2178,7 @@ const TrackBuildProps = (function () {
         const side = (mi % 2 === 0) ? 1 : -1;
         if (dressingExcluded("lamps", k, side)) continue;
         const a = anchor(k, side, 6);
-        if (onTrack(a.c[0], a.c[2], 1.2)) continue;
+        if (SceneryGuards.refuseOnRoad(ctx, "lampMast", a.c[0], a.c[2], 1.2, () => `lampMast SUPPRESSED at k=${k} side=${side}`)) continue;
         const kind = pickKind(k, hash(mi * 13.7 + 3.1));
         if (noMasts && kind !== "flood_bank") continue;
         const lensCol = lensAlbedo(kind);
@@ -2235,7 +2235,7 @@ const TrackBuildProps = (function () {
           // onTrack hit here is the lower carriageway. On suzuka's oblique
           // crossover one stood 4 m inside the lower road's tarmac (frac 0.439,
           // lateral -3.0), a 9 m column the lower road drove straight through.
-          if (onTrack(x, z, 0.8)) continue;
+          if (SceneryGuards.refuseOnRoad(ctx, "bridgePillar", x, z, 0.8, () => `bridgePillar SUPPRESSED at x=${x | 0} z=${z | 0}`)) continue;
           // From the GROUND under the pillar, not y = -0.5: the deck height is
           // absolute, so on raised terrain a 0-based column stood mostly
           // underground (Suzuka's crossover sits on ~11.5 m of terrain, burying
