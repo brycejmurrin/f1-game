@@ -51,6 +51,10 @@
 
 "use strict";
 
+if (require.main === module && process.argv.slice(2).some((a) => a === "--help" || a === "-h" || a === "help")) {
+  console.log("Usage: node tools/track/coplanar-audit.cjs [options]\nZ-fighting detector — same-facing coplanar faces (`dot ≥ 0.999`); `--gate` ratchets against `coplanar-baseline.json`.\n--help prints this and exits 0.");
+  process.exit(0);
+}
 const fs = require("fs");
 const path = require("path");
 const { buildContext, shipped, primKey, ROOT, RAW_FRAME } = require("../lib/track-build-vm.cjs");

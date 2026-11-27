@@ -26,6 +26,8 @@
  * (`--update`), or to the model's integrated lap (`--model-only`). Then `npm run gen` and commit both files.
  * The test drives a DIFFERENT sample (slots i % 4 == 0), so it is a check of this file, not a copy of it.
  */
+import { exitIfHelp } from "../lib/cli-args.mjs";
+exitIfHelp(process.argv[1]?.endsWith("/quali-calibrate.mjs") ? process.argv.slice(2) : [], "Usage: node tools/check/quali-calibrate.mjs [options]\nQualifying calibration (VM): measures solo flying laps and writes `tests/data/quali-calibration.json`.\n--help prints this and exits 0.");
 import fs from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";

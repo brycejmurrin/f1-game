@@ -16,6 +16,8 @@
 // (>150 % of English). --guard fails on a new 3+ letter string literal reaching
 // textContent / aria-label|title|placeholder / Dom.el text in a migrated file
 // unless it is an I18n.t argument or an allowlist row (same shape as html-sink).
+import { exitIfHelp } from "../lib/cli-args.mjs";
+exitIfHelp(process.argv[1]?.endsWith("/i18n-lint.mjs") ? process.argv.slice(2) : [], "Usage: node tools/check/i18n-lint.mjs [options]\nLocale lint: unknown keys, placeholders, CLDR plurals; --guard bans new literals in migrated files.\n--help prints this and exits 0.");
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";

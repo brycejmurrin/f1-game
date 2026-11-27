@@ -32,6 +32,10 @@
 // No browser. ~1-3 s per circuit (a full headless build, for the scenery capture).
 "use strict";
 
+if (require.main === module && process.argv.slice(2).some((a) => a === "--help" || a === "-h" || a === "help")) {
+  console.log("Usage: node tools/track/corner-frames.cjs [options]\nFleet audit: turns[] on curvature peaks, bankZones and corner-labelled scenery kits on the corner they name.\n--help prints this and exits 0.");
+  process.exit(0);
+}
 const fs = require("fs");
 const path = require("path");
 

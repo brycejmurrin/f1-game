@@ -28,6 +28,8 @@
 // guessed half-name is a false positive and a false positive is how a lint gets
 // switched off. Missing a dynamic name costs one finding; crying wolf costs the
 // rule.
+import { exitIfHelp } from "../lib/cli-args.mjs";
+exitIfHelp(process.argv[1]?.endsWith("/class-usage.mjs") ? process.argv.slice(2) : [], "Usage: node tools/check/class-usage.mjs [options]\nFinds classes APPLIED by index.html or js/ that no css/ rule defines (the opposite of the dead-class check).\n--help prints this and exits 0.");
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";

@@ -13,6 +13,8 @@
  * qualifying flying lap over the model's uncalibrated lap, to 4 decimals. CALIB_DEFAULT is the
  * median of the factors (a circuit with no row).
  */
+import { exitIfHelp } from "../lib/cli-args.mjs";
+exitIfHelp(process.argv[1]?.endsWith("/gen-quali-calib.mjs") ? process.argv.slice(2) : [], "Usage: node tools/gen/gen-quali-calib.mjs [options]\nRegenerates the qualifying factors in `js/race/quali-model.js` from `tests/data/quali-calibration.json`; `--check`.\n--help prints this and exits 0.");
 import fs from "node:fs";
 import path from "node:path";
 import { emit, isMain, readRepo, ROOT } from "./gen-lib.mjs";

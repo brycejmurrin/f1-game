@@ -14,6 +14,8 @@
 //
 //   node tools/perf/hot-bench.mjs
 //   node tools/perf/hot-bench.mjs --update
+import { exitIfHelp } from "../lib/cli-args.mjs";
+exitIfHelp(process.argv[1]?.endsWith("/hot-bench.mjs") ? process.argv.slice(2) : [], "Usage: node tools/perf/hot-bench.mjs [options]\nVM microbench of step, physState and nodeAt: 6x hang ceiling vs a checked-in per-call baseline.\n--help prints this and exits 0.");
 import { createRequire } from "node:module";
 import { performance } from "node:perf_hooks";
 import { readFileSync, writeFileSync, existsSync } from "node:fs";

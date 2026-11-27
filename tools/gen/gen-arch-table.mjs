@@ -34,6 +34,8 @@
  * rows). Directory count alone rarely collides that way; the rows themselves
  * merge. Same class as the old committed ladder figures (removed 2026-09-30).
  */
+import { exitIfHelp } from "../lib/cli-args.mjs";
+exitIfHelp(process.argv[1]?.endsWith("/gen-arch-table.mjs") ? process.argv.slice(2) : [], "Usage: node tools/gen/gen-arch-table.mjs [options]\nGenerates the module index block of `docs/ARCHITECTURE.md` from the manifest + each file's header; `--check` drift.\n--help prints this and exits 0.");
 import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";

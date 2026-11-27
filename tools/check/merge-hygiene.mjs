@@ -25,6 +25,8 @@
  * JSON.parse / Object.entries — key order is formatting only. After --fix,
  * run `node tools/gen/gen-test-groups.mjs` so tooling-fast.mjs matches.
  */
+import { exitIfHelp } from "../lib/cli-args.mjs";
+exitIfHelp(process.argv[1]?.endsWith("/merge-hygiene.mjs") ? process.argv.slice(2) : [], "Usage: node tools/check/merge-hygiene.mjs [options]\nKeep ratchets.json + groups.json one-entry-per-line and stably sorted; `--check` (default) / `--fix`.\n--help prints this and exits 0.");
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";

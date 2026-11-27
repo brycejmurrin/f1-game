@@ -15,6 +15,8 @@
 // actions, ref confusion) are NOT run; the check must work with no network at test time.
 // Binaries: tools/env/install-lint-bins.sh (pinned, checksummed). Exit 0 clean or SKIPPED, 1 findings
 // (or SKIPPED under --require), 2 tool error.
+import { exitIfHelp } from "../lib/cli-args.mjs";
+exitIfHelp(process.argv[1]?.endsWith("/workflow-lint.mjs") ? process.argv.slice(2) : [], "Usage: node tools/check/workflow-lint.mjs [options]\nactionlint + zizmor over .github/workflows, offline; skips LOUDLY (fails under --require) without the binary.\n--help prints this and exits 0.");
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";

@@ -9,6 +9,8 @@
 // ARN and keep the files under ignored artifacts/. WebKit prints "Memory usage info dump at MainFrameLoadStarted /
 // MainFrameLoadCompleted" for a WebContent process on every main-frame load, so a footprint sample exists only at a
 // navigation, never in the middle of a race. runningboardd prints each extension's memory limit at launch.
+import { exitIfHelp } from "../lib/cli-args.mjs";
+exitIfHelp(process.argv[1]?.endsWith("/devicefarm-syslog.mjs") ? process.argv.slice(2) : [], "Usage: node tools/perf/devicefarm-syslog.mjs [options]\nDevice Farm iOS syslog -> WebContent footprint dumps, process memory limits, jetsam/kill and GPU-buffer lines.\n--help prints this and exits 0.");
 import fs from "node:fs";
 import readline from "node:readline";
 import { fileURLToPath } from "node:url";
