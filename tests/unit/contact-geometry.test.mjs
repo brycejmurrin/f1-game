@@ -14,7 +14,7 @@ function setup(options = {}) {
   const geometry=vm.runInContext("ContactGeometry",ctx);
   const ai=vm.runInContext("AiDrive",ctx);
   const Collide=vm.runInContext("Collide",ctx);
-  const G={track:{total:1000},player:null,netPlay:{owns:c=>!!c.remote},PACE:1,raceT:0,
+  const G={track:{total:1000},player:null,netPlay:{owns:c=>!!c.remote},PACE: 1, pace: { k: Math.max(1, 0.05) },raceT:0,
     wrapS:s=>(s%1000+1000)%1000,worldFromTrack:(s,x)=>({x,z:s})};
   const collision=Collide.create(G,options.onEffect || (()=>{}));
   return {geometry,collision,G,ai,Collide};
