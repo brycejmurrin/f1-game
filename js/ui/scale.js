@@ -10,28 +10,10 @@ const UiScale = (() => {
   function media(query) {
     try { return window.matchMedia?.(query); } catch (_) { return null; }
   }
-  // The viewport's short side, read ONCE and held until the window resizes (#6487). innerWidth/innerHeight
-  // after a DOM write force a whole-document style recalc (~4 ms each at boot, ~200 ms across the four phone
-  // tests). Capture listeners run before every other window resize handler, so none reads a stale side.
-  let short = null, cached = false;
-  try {
-    const drop = () => { short = null; };
-    const on = (t, n) => t?.addEventListener?.(n, drop, { capture: true, passive: true });
-    if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
-      on(window, "resize"); on(window, "orientationchange"); on(window.visualViewport, "resize");
-      cached = true;
-    }
-  } catch (_) { /* no events: read fresh every time */ }
-  function shortSide() {
-    if (short !== null) return short;
-    const s = Math.min(window.innerWidth, window.innerHeight);
-    if (cached) short = s;
-    return s;
-  }
-  /** The one phone test (hud-elements, screen-looks, title-layout and phoneUi below): touch AND a short side <= 500. */
-  function phone() {
-    try { return !!media("(pointer: coarse)")?.matches && shortSide() <= 500; } catch (_) { return false; }
-  }
+  // The viewport reads (phone test, short side) live in js/ui/ui-shape.js (#7259).
+  const shortSide = () => UiShape.shortSide();
+  /** The one phone test: UiShape.phone(). */
+  const phone = () => UiShape.phone();
   // Foldable hinge stamp: html[data-fold="horizontal"|"vertical"] from the viewport-segments
   // queries. The width tier html[data-layout] that sat beside it until 2026-11-07 is gone (UI
   // contract 2026-11-06 gap 20): it called an 852/844 landscape phone "tablet" and nothing in
@@ -90,9 +72,8 @@ const UiScale = (() => {
     const BTN_DEFAULT = 1.25;
     const PHONE_BTN_DEFAULT = 143.25;
     const PHONE_UI_DEFAULT = 70;
-    const coarsePointer = media("(pointer: coarse)");
-    const coarseUi = () => !!coarsePointer?.matches;
-    const phoneUi = () => coarseUi() && shortSide() <= 500;
+    const coarseUi = UiShape.coarsePointer;
+    const phoneUi = UiShape.phoneUi;
     const roomyDesktop = media("(pointer: fine) and (min-width: 1600px) and (min-height: 900px)");
     const scaleSnap = (v, k) => {
       const n = Math.max(minFor(k), Math.min(maxFor(k), +v));
@@ -270,7 +251,7 @@ const UiScale = (() => {
     applyBtnScale();
     roomyDesktop?.addEventListener?.("change", applyUiRow);
     const refreshTouchScale = () => { applyUiRow(); applyBtnScale(); };
-    coarsePointer?.addEventListener?.("change", refreshTouchScale);
+    media("(pointer: coarse)")?.addEventListener?.("change", refreshTouchScale);
     media("(pointer: coarse) and (max-height: 500px), (pointer: coarse) and (max-width: 500px)")?.addEventListener?.("change", refreshTouchScale);
     syncLayout();
     // Resize events fire per frame during a drag/rotation: coalesce syncLayout to one run per animation frame.

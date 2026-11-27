@@ -2,6 +2,7 @@
  * the mini-dom. Each test supplies only what differs (observers, rAF/timer
  * policy, viewport, getComputedStyle) via `overrides(dom)`; the rest is the
  * common sandbox. Returns { dom, sb, sheet }. */
+import { loadUiShape } from "./ui-shape-load.mjs";
 import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
@@ -34,6 +35,7 @@ export function bootSheetShape(overrides = () => ({})) {
   sb.window = sb;
   sb.self = sb;
   vm.createContext(sb);
+  loadUiShape(sb);
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/ui/sheet-shape.js"), "utf8"),
     sb, { filename: path.join(ROOT, "js/ui/sheet-shape.js") });
   return { dom, sb, sheet: sb.SheetShape };

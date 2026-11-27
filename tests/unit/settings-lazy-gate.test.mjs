@@ -11,6 +11,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { loadUiShape } from "../helpers/ui-shape-load.mjs";
 
 const read = (f) => fs.readFileSync(new URL("../../" + f, import.meta.url), "utf8");
 
@@ -40,6 +41,7 @@ function boot(file, extra = {}, dom = {}) {
     ...extra,
   });
   ctx.globalThis = ctx; ctx.self = ctx;
+  loadUiShape(ctx);
   for (const f of [file].flat()) {
     vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   }

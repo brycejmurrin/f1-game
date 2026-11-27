@@ -12,6 +12,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { absSrc } from "../helpers/abs-src.mjs";
 import { loadDom } from "../helpers/dom-vm.mjs";
+import { loadUiShape } from "../helpers/ui-shape-load.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const SRC = fs.readFileSync(path.join(ROOT, "js/ui/hud-arrange.js"), "utf8");
@@ -29,7 +30,7 @@ function visibilityPolicy(elements, stored = {}, rows = {}, environment = {}) {
   loadDom(ctx);
   vm.runInContext(EDITOR, ctx, { filename: absSrc("js/ui/hud-layout-editor.js") });
   loadDom(ctx);
-  vm.runInContext(POLICY.replace(/^const\b/gm, 'var'), ctx);
+  loadUiShape(ctx); vm.runInContext(POLICY.replace(/^const\b/gm, 'var'), ctx);
   return ctx.HudLayout;
 }
 
@@ -38,7 +39,8 @@ function load() {
     M4: { clamp: (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v) } };   // the shared clamp the module aliases
   vm.createContext(ctx);
   loadDom(ctx);
-  vm.runInContext(SRC.replace(/^const\b/gm, "var"), ctx);
+  loadUiShape(ctx);
+  loadUiShape(ctx); vm.runInContext(SRC.replace(/^const\b/gm, "var"), ctx);
   return ctx.HudArrange;
 }
 // vm-realm objects fail deepStrictEqual on prototype identity: compare plain copies.
@@ -54,15 +56,6 @@ test("dragTo: screen offsets remain unbounded and invalid gestures retain prior 
   assert.deepEqual(plain(A.dragTo({ x: 120.25, y: -80.5 }, Infinity, NaN, 844, 390)), { x: 120.25, y: -80.5 });
 });
 
-test("placedOrig: an auto-placed radio card's first drag starts from where it sits, measured from the fixed point", () => {
-  const A = load();
-  // 844x390: the fixed point is (422, 97.5). A card at (633, 117) is +25 % across and +5 % down from it.
-  assert.deepEqual(plain(A.placedOrig({ x: 0, y: 0, s: 100 }, 633, 117, 844, 390)), { x: 25, y: 5, s: 100 });
-  assert.deepEqual(plain(A.placedOrig({ x: 10, y: -4, s: 120 }, 633, 117, 844, 390)), { x: 10, y: -4, s: 120 }, "an already moved card keeps its offset");
-  const back = A.dragTo(A.placedOrig({ x: 0, y: 0, s: 100 }, 211, 97.5, 844, 390), 0, 0, 844, 390);
-  assert.deepEqual(plain(back), { x: -25, y: 0 }, "a still press leaves it in place");
-});
-
 test("pinchTo: preserves any positive finite size without upper or visual lower bounds", () => {
   const A = load();
   assert.equal(A.pinchTo(100, 100, 150), 150);
@@ -75,13 +68,14 @@ test("pinchTo: preserves any positive finite size without upper or visual lower 
   assert.equal(A.pinchTo(100, 100, 0), 100, "no second distance: unchanged");
 });
 
-test("stepSize: toolbar grows beyond 200 and can repeatedly shrink below one percent", () => {
+test("stepSize: toolbar grows beyond 200 and steps down to the floor and stays there", () => {
   const A = load();
   assert.equal(A.stepSize(100, 1), 100 + A.STEP);
   assert.equal(A.stepSize(55, -1), 45);
   assert.equal(A.stepSize(200, 1), 210);
   assert.equal(A.stepSize(10, -1), 5);
-  assert.equal(A.stepSize(.1, -1), .05);
+  assert.equal(A.stepSize(.1, -1), .1, "an already tiny size is never pushed lower (#7240)");
+  assert.equal(A.stepSize(12, -1), 5, "a step never crosses the floor");
   assert.equal(A.stepSize(Number.MAX_VALUE, 1), Number.MAX_VALUE);
 });
 
@@ -220,7 +214,8 @@ function editor(pieceId = "piece", options = {}) {
     MutationObserver: class { constructor(fn) { observers.push(fn); } observe() {} } };
   vm.createContext(ctx); vm.runInContext(ROW, ctx); ctx.SettingRow = ctx.window.SettingRow;
   loadDom(ctx);
-  vm.runInContext(SRC.replace(/^const\b/gm, 'var'), ctx);
+  loadUiShape(ctx);
+  loadUiShape(ctx); vm.runInContext(SRC.replace(/^const\b/gm, 'var'), ctx);
   const api = ctx.HudArrange.create({ $: id => ids.get(id) });
   const fire = (name, args = {}) => { const e = { target: ids.get(pieceId), pointerId: 1, clientX: 100, clientY: 100, preventDefault() {}, stopPropagation() {}, stopImmediatePropagation() {}, ...args }; for (const fn of listeners[name] || []) fn(e); };
   const tick = () => { const todo = [...frames.values()]; frames.clear(); for (const fn of todo) fn(); };
@@ -738,7 +733,7 @@ test("arrange shows factory-relative and painted sizes when they differ", () => 
   assert.equal(e.ids.get("hud-arrange-name").textContent, "142.9% · 100% painted");
 });
 
-test('editor: size labels are concise without rounding stored fractional or tiny positive sizes', () => {
+test('editor: size labels are concise without rounding stored fractional and floors the − step', () => {
   const e = editor('map', { on: true,
     rect: { left: 10, top: 10, width: 100, height: 40 }, manualSize: { width: 150, height: 60 } });
   e.api.setEditing(true); e.fire('pointerdown'); e.fire('pointerup', { clientX: 110 });
@@ -749,10 +744,9 @@ test('editor: size labels are concise without rounding stored fractional or tiny
   assert.equal(e.get('map').s, fractional, 'painting the label never rounds the stored size');
   for (let i = 0; i < 40; i++) e.ids.get('hud-arrange-smaller').onclick();
   const tiny = e.get('map').s, count = e.writes.length;
-  assert.ok(tiny > 0 && tiny < 1e-6);
+  assert.ok(tiny >= 5, 'the − step floors the size (#7240), got ' + tiny);
   const label = e.ids.get('hud-arrange-name').textContent;
-  assert.ok(parseFloat(label) > 0, 'a tiny positive size must not display as zero');
-  assert.ok(label.length <= 12, 'scientific notation keeps a tiny-size label compact: ' + label);
+  assert.ok(parseFloat(label) > 0 && label.length <= 12, label);
   e.ids.get('hud-arrange-element').onchange();
   assert.equal(e.get('map').s, tiny); assert.equal(e.writes.length, count);
 });
@@ -880,4 +874,36 @@ test("selecting the finish card shows its sample and Cancel hides it again", () 
   assert.equal(e.ids.get("finish").hidden, false);
   e.api.setEditing(false, true, false);
   assert.equal(e.ids.get("finish").hidden, true);
+});
+
+test("#7240: stepSize floors at 5 and never reaches a vanishing size", () => {
+  const A = load();
+  let s = 100;
+  for (let i = 0; i < 60; i++) s = A.stepSize(s, -1);
+  assert.ok(s >= 5, "repeated − stays at or above the floor, got " + s);
+  for (const v of [12, 14, 3, 100]) assert.ok(A.stepSize(v, -1) >= Math.min(v, 5), "− from " + v + " stays at or above the floor: " + A.stepSize(v, -1));
+  assert.equal("placedOrig" in A, false, "the unused export is gone");
+});
+test("#7240: every arrange-bar button's accessible name contains its visible text; step has aria-pressed at build", () => {
+  const e = editor('map', { on: true, rect: { left: 10, top: 10, width: 100, height: 40 }, manualSize: { width: 150, height: 60 } });
+  e.api.setEditing(true);
+  const bad = [];
+  for (const [id, el] of e.ids) {
+    if (!id.startsWith('hud-arrange-') || el.tagName !== 'BUTTON' || /^[−+]$/.test(el.textContent)) continue;
+    if (!String(el.getAttribute('aria-label')).toLowerCase().includes(el.textContent.toLowerCase())) bad.push(id);
+  }
+  assert.deepEqual(bad, []);
+  assert.ok(e.ids.get('hud-arrange-reset-screen') && e.ids.get('hud-arrange-reset-screen').tagName === 'BUTTON', 'the check really sees the buttons');
+  assert.equal(e.ids.get('hud-arrange-step').getAttribute('aria-pressed'), 'false');
+  assert.equal(e.ids.get('hud-arrange-name').getAttribute('aria-live'), 'off');
+});
+test("#7240: a no-op size step adds no undo entry", () => {
+  const e = editor('map', { on: true,
+    rect: { left: 10, top: 10, width: 100, height: 40 }, manualSize: { width: 150, height: 60 } });
+  e.api.setEditing(true); e.fire('pointerdown'); e.fire('pointerup', { clientX: 110 });
+  for (let i = 0; i < 40; i++) e.ids.get('hud-arrange-smaller').onclick();
+  assert.equal(e.get('map').s, 5);
+  for (let i = 0; i < 5; i++) e.ids.get('hud-arrange-smaller').onclick();   // changes nothing
+  e.ids.get('hud-arrange-undo').onclick();
+  assert.ok(e.get('map').s > 5, 'one undo steps back over the last REAL change, not a duplicate: ' + e.get('map').s);
 });

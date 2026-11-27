@@ -2,6 +2,7 @@
 /* Live race HUD arrangement. See docs/notes/SCREEN-LOOKS-STORAGE.md. */
 const HudArrange = (() => {
   const STEP = 10;     // toolbar − / + size step, %
+  const MIN_SIZE = 5;  // the − step never takes a piece below this %: below it a piece can vanish and only RESET recovers
   const TOUCH_CARRIED = ["ot", "aero", "bb"];
   const MIN_CLASH = 3; // px of overlap on BOTH axes before a pair is a clash (touching is not)
   const T = 44;        // every toolbar control's touch target, CSS px — fixed chrome, never scaled (#5198)
@@ -13,13 +14,6 @@ const HudArrange = (() => {
     const x = finite(orig && orig.x, 0), y = finite(orig && orig.y, 0);
     return { x: finite(x + (dx / Math.max(1, W)) * 100, x), y: finite(y + (dy / Math.max(1, H)) * 100, y) };
   }
-  /** Pure: the offset that keeps an auto-placed radio card where it is (left/top screen px) once moving it
-   *  hangs it from css/hud.css's fixed point (50vw, 25svh) instead. Its first drag starts from here. */
-  function placedOrig(orig, left, top, W, H) {
-    if (orig && (orig.x || orig.y)) return orig;
-    const w = Math.max(1, W), h = Math.max(1, H);
-    return Object.assign({}, orig, { x: (left - w / 2) / w * 100, y: (top - h / 4) / h * 100 });
-  }
   /** Pure: a positive finite size after a pinch, without visual bounds. */
   function pinchTo(s0, d0, d1) {
     if (!(d0 > 0) || !(d1 > 0)) return s0;
@@ -30,7 +24,7 @@ const HudArrange = (() => {
   // tower remains a group, while race messages and flags are event-driven.
   /** Pure: s (%) stepped by `dir` (±1) on the toolbar's step. */
   const stepSize = (s, dir) => {
-    const next = dir < 0 && s <= STEP ? s / 2 : s + dir * STEP;
+    const next = dir < 0 ? Math.max(Math.min(s, MIN_SIZE), s <= STEP ? s / 2 : s - STEP) : s + dir * STEP;
     return Number.isFinite(next) && next > 0 ? next : s;
   };
   /** Pure: the painted size (%) of a widget stored at `s` under CSS zoom `z` (#5256): `--hl-s` is a `scale`, the band
@@ -105,9 +99,17 @@ const HudArrange = (() => {
       const state = HudLayout.visibility(id);
       return state && visibilityDraft[id] ? { ...state, value: visibilityDraft[id] } : state;
     }
+    const snapshot = () => ({ layout: HudLayout.arrangeSnapshot(context.set, context.profile), choices: {...visibilityDraft}, colors: HudLayout.colors?.snapshot() });
     function remember() {
+      const snap = snapshot(), last = history[history.length - 1];
+      if (last && JSON.stringify(last) === JSON.stringify(snap)) return;
       if (history.length >= 64) history.shift();
-      history.push({ layout: HudLayout.arrangeSnapshot(context.set, context.profile), choices: {...visibilityDraft}, colors: HudLayout.colors?.snapshot() });
+      history.push(snap);
+    }
+    /* An edit that changed nothing (a − at the size floor, a nudge into the same place) leaves no undo entry. */
+    function dropIfUnchanged() {
+      const last = history[history.length - 1];
+      if (last && JSON.stringify(last) === JSON.stringify(snapshot())) history.pop();
     }
     function undoEdit() {
       if (!history.length) return;
@@ -180,6 +182,7 @@ const HudArrange = (() => {
       nameEl = document.createElement("output");
       nameEl.id = "hud-arrange-name";
       nameEl.setAttribute("aria-label", "Selected element size");
+      nameEl.setAttribute("aria-live", "off");   // <output> is an implicit live region; it is rewritten every gesture frame
       nameEl.style.cssText = "flex:none;font-weight:800;max-width:14ch;line-height:1.15;overflow-wrap:anywhere;";
       hintEl = document.createElement("span");
       hintEl.id = "hud-arrange-hint";
@@ -189,7 +192,7 @@ const HudArrange = (() => {
         "white-space:normal;overflow-wrap:anywhere;flex:1 1 0;min-width:72px;";   // no inline display: [hidden] must still win
       picker = document.createElement("select");
       picker.id = "hud-arrange-element";
-      picker.setAttribute("aria-label", "HUD element; use arrow keys on Tools to position");
+      picker.setAttribute("aria-label", "HUD element; use arrow keys on Controls to position");
       picker.setAttribute("data-arrows", "own");
       picker.style.cssText = selectCss + "width:128px;";
       picker.onchange = () => { flush(); selected = picker.value; after(); };
@@ -208,7 +211,8 @@ const HudArrange = (() => {
         step.textContent = coarse ? "Coarse" : "Fine";
         step.setAttribute("aria-pressed", String(coarse));
       }, "hud-arrange-step");
-      moveControls.push(step, mk("Reset HUD", "Restore this HUD profile and camera group", () => {
+      step.setAttribute("aria-pressed", "false");
+      moveControls.push(step, mk("Reset HUD", "Reset HUD: restore this HUD profile and camera group", () => {
         flush();
         remember(); HudLayout.resetSet(context.set, context.profile, true);
         after("Restored " + context.profile + " · " + context.set);
@@ -232,7 +236,7 @@ const HudArrange = (() => {
       bar.appendChild(metricPicker);
       bar.appendChild(smaller);
       bar.appendChild(larger);
-      const recover = mk("BRING INTO VIEW", "Bring selected element into view without changing its size", bringIntoView, "hud-arrange-recover");
+      const recover = mk("BRING INTO VIEW", "Bring into view: move the selected element on screen without changing its size", bringIntoView, "hud-arrange-recover");
       recover.setAttribute("aria-describedby", "hud-arrange-hint");
       // The one long label wraps to two 11 px lines inside its 44 px box instead of widening the strip.
       recover.style.whiteSpace = "normal"; recover.style.width = "72px"; recover.style.fontSize = "11px"; recover.style.padding = "0 4px";
@@ -268,7 +272,7 @@ const HudArrange = (() => {
         colorInput.setAttribute("aria-label", "Selected HUD color");
         colorInput.style.cssText = "width:44px;height:44px";
         colorInput.onchange = () => { remember(); HudLayout.colors.save(colorPart.value, colorInput.value); paintColor(); };
-        colorReset = mk("DEFAULT COLOR", "Restore this color", () => {
+        colorReset = mk("DEFAULT COLOR", "Default color: restore this color", () => {
           remember();
           HudLayout.colors.save(colorPart.value, null);
           paintColor();
@@ -280,7 +284,7 @@ const HudArrange = (() => {
       }
       undo = mk("Undo", "Undo last HUD edit", undoEdit, "hud-arrange-undo");
       bar.appendChild(undo);
-      bar.appendChild(mk("Cancel", "Discard HUD edits", () => setEditing(false, true, false), "hud-arrange-cancel"));
+      bar.appendChild(mk("Cancel", "Cancel: discard HUD edits", () => setEditing(false, true, false), "hud-arrange-cancel"));
       bar.appendChild(mk("Apply", "Apply HUD edits", () => setEditing(false), "hud-arrange-done"));
       bar.hidden = true;
       document.body.appendChild(bar);
@@ -446,6 +450,7 @@ const HudArrange = (() => {
       const cur = dragOrig(selected);
       const next = { x: cur.x + x * amount, y: cur.y + y * amount };
       HudLayout.set(selected, next, context.set, context.profile, true);
+      dropIfUnchanged();
       after("X " + next.x.toFixed(1) + "% · Y " + next.y.toFixed(1) + "%");
     }
     function size(dir) {
@@ -467,6 +472,7 @@ const HudArrange = (() => {
         value = base + dir * (metric === "textSize" ? 5 : 1) * (coarse ? 5 : 1);
       }
       HudLayout.set(selected, { ...orig, [metric]: value }, context.set, context.profile, true);
+      dropIfUnchanged();
       after();
     }
 
@@ -800,6 +806,6 @@ const HudArrange = (() => {
     return Object.freeze({ setEditing, isEditing: () => editing, selected: () => selected });
   }
 
-  return Object.freeze({ STEP, MIN_CLASH, BAR_H, TOUCH_CARRIED, dragTo, placedOrig, pinchTo, stepSize, paintedSize, clashes, barSlot, create });
+  return Object.freeze({ STEP, MIN_CLASH, BAR_H, TOUCH_CARRIED, dragTo, pinchTo, stepSize, paintedSize, clashes, barSlot, create });
 })();
 Object.freeze(HudArrange);

@@ -5,6 +5,7 @@ import vm from "node:vm";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { gameSource } from "../helpers/game-source.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { loadUiShape } from "../helpers/ui-shape-load.mjs";
 
 const source = fs.readFileSync(new URL("../../js/ui/appearance-studio.js", import.meta.url), "utf8").replace(/^const AppearanceStudio/m, "var AppearanceStudio");
 const bodySource = fs.readFileSync(new URL("../../js/ui/appearance-studio-ui.js", import.meta.url), "utf8").replace(/^const AppearanceStudioBody/m, "var AppearanceStudioBody");
@@ -57,6 +58,7 @@ test("game's Studio integration refreshes touch button size after profile apply,
     G: {}, mirrorPass: { setMode() {} }, paintHudDetailsSummary() {}, syncMetricsOverlayCompact() {},
     uiExperience: { previewScene() {} }, scaleDeps: { $: id => id === "pm-btnscale" ? input : id === "pm-btnscale-v" ? output : null,
       els: {}, store, gfx: {} } });
+  loadUiShape(context);
   vm.runInContext(fs.readFileSync(new URL("../../js/ui/scale.js", import.meta.url), "utf8"), context);
   vm.runInContext("const uiScale = UiScale.create(scaleDeps);", context);
   vm.runInContext(bodySource, context, { filename: absSrc("js/ui/appearance-studio-ui.js") });

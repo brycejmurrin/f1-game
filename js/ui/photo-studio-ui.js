@@ -100,18 +100,28 @@ async function library(action, value, session) {
   const db = await openDb();
   try {
     return await new Promise((resolve, reject) => {
-      const tx = db.transaction("photos", action === "list" ? "readonly" : "readwrite"), store = tx.objectStore("photos");
+      const tx = db.transaction("photos", action === "list" || action === "get" ? "readonly" : "readwrite"), store = tx.objectStore("photos");
       let result = null, failure = null;
-      const req = action === "delete" ? store.delete(value) : store.getAll();
+      // A cursor projects each row WITHOUT its blob (up to 3 MB a photo); only DOWNLOAD ("get") reads one.
+      const rows = [];
+      const req = action === "delete" ? store.delete(value) : action === "get" ? store.get(value) : store.openCursor();
       req.onsuccess = () => {
         if (action === "delete") return;
-        const latest = orderVisitPhotos(req.result, session);
-        if (action === "list") { result = req.result; return; }
+        if (action === "get") { result = req.result ? req.result.blob || null : null; return; }
+        const cur = req.result;
+        if (cur) {
+          const { blob, ...fields } = cur.value;
+          rows.push(action === "list" ? fields : { id: fields.id, at: fields.at });
+          cur.continue();
+          return;
+        }
+        const latest = orderVisitPhotos(rows, session);
+        if (action === "list") { result = rows; return; }
         // Queue every mutation in this active request callback. Readwrite
         // transactions on the same store serialize across tabs; an await here
         // would let this transaction become inactive and lose that isolation.
         try {
-          const photos = req.result.filter((p) => p.id !== value.id).sort(newestPhotoFirst);
+          const photos = rows.filter((p) => p.id !== value.id).sort(newestPhotoFirst);
           // Commit order decides which photos to keep, even if the device clock moved backward.
           const at = Math.max(value.at, latest + 1);
           for (const old of photos.slice(LIMIT - 1)) store.delete(old.id);
@@ -852,6 +862,7 @@ function create(G, deps) {
     stopHold();
     if (!st.open && !st.closing) return;
     cancelStudioRead?.();
+    if (importFile) importFile.value = "";
     if (activePass) releasePass(activePass);
     if (releaseCaptureScale) releaseCaptureScale();
     if (!isGarage() && cond.tod != null) { resetCond(); cond.tod = null; }
@@ -1026,7 +1037,9 @@ function create(G, deps) {
     const thumb = mk("canvas"), scale = Math.min(1, maxWidth / canvas.width, maxHeight / canvas.height);
     thumb.width = Math.max(1, Math.round(canvas.width * scale)); thumb.height = Math.max(1, Math.round(canvas.height * scale));
     thumb.getContext("2d").drawImage(canvas, 0, 0, thumb.width, thumb.height);
-    return thumb.toDataURL("image/jpeg", quality);
+    const url = thumb.toDataURL("image/jpeg", quality);
+    thumb.width = 0; thumb.height = 0;   // release the backing store now (iOS counts canvas memory; homeImage loops)
+    return url;
   }
   function homeImage(canvas) {
     // One selected image lives in localStorage. Bound the encoded size as well as the dimensions.
@@ -1186,7 +1199,7 @@ function create(G, deps) {
           if (downloading) return;
           downloading = true;
           const gen = st.generation;
-          try { await download(p.blob, filename(p.title).replace(/\.png$/, ".jpg")); if (gen === st.generation) say("Photo download requested."); }
+          try { await download(p.blob || await library("get", p.id), filename(p.title).replace(/\.png$/, ".jpg")); if (gen === st.generation) say("Photo download requested."); }
           catch (e) { if (gen === st.generation) say(downloadError(e)); }
           finally { downloading = false; }
         }),
@@ -1207,8 +1220,8 @@ function create(G, deps) {
     }
   }
   async function importPhoto(file) {
-    if (!file || !st.open || st.busy) return;
-    if (!/^image\/(png|jpeg|webp)$/.test(file.type) || file.size > 12 * 1024 * 1024) { say("Choose a PNG, JPEG or WebP photo under 12 MB."); return; }
+    if (!file || !st.open || st.busy) { if (importFile) importFile.value = ""; return; }
+    if (!/^image\/(png|jpeg|webp)$/.test(file.type) || file.size > 12 * 1024 * 1024) { importFile.value = ""; say("Choose a PNG, JPEG or WebP photo under 12 MB."); return; }
     const gen = st.generation, opts = options(); busy(true);
     try {
       // Decode at native size; keepSource already downscales (never upscales). A forced

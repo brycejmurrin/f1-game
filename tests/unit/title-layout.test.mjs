@@ -14,6 +14,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { loadUiShape } from "../helpers/ui-shape-load.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
@@ -68,6 +69,7 @@ function boot(stored = {}, { shape = "wide", editor = false, fx = null, raf = fa
   if (raf) { sb.requestAnimationFrame = (fn) => frames.push(fn); sb.cancelAnimationFrame = (n) => { frames[n - 1] = null; }; }
   sb.window = sb;
   const ctx = vm.createContext(sb);
+  loadUiShape(ctx);
   for (const f of ["js/ui/setting-row.js", "js/ui/title-layout.js", "js/ui/screen-looks.js"]) vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: absSrc(f) });
   const M = vm.runInContext("TitleLayout", ctx);
   /** Flip body[data-shape] the way sheet-shape.js does, and run the observer. */
