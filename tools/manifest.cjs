@@ -285,8 +285,6 @@ const FULL = [
   // VisorOptics loads with LAZY_RACE_SESSION; title/garage consumers are guarded.
   "js/fx/droplets.js",         // Droplets: onboard lens/visor rain overlay (game.js ticks it at render)
   "js/lighting/atmosphere.js",
-  "js/career/regulations.js",
-  "js/career/ai-dev.js",
   "js/career/career-planning.js", // bounded projections and save protection
   "js/career/career.js",
   "js/career/season-cal.js",
@@ -314,7 +312,6 @@ const FULL = [
   "js/garage/setup-experiments.js", // reversible tune experiments and aero bench
   "js/garage/livery-design-editor.js",
   "js/garage/setup-sheet.js",
-  "js/career/experience.js",
   "js/career/career-ui-boot.js", // CareerUI stub; #career body is LAZY_CAREER_UI
   "js/career/season-ui.js",
   "js/ui/flags.js",
@@ -836,11 +833,8 @@ const HARD_EDGES = [
   ["js/race/pace-math.js", "js/game.js"],           // game.js calls PaceMath.create(deps) at eval
   ["js/physics/consts.js", "js/physics/body-attitude.js"], // LAT_MAX read at eval
   ["js/data/teams.js", "js/career/save-migrate.js"], // remapPoints reads Teams (call time; keep ordered)
-  ["js/car/parts.js", "js/career/regulations.js"],   // bannedIds() derives the ban from Parts.CATALOG (call time; keep ordered)
-  ["js/car/parts.js", "js/career/ai-dev.js"],       // AI winter develops catalog options through Parts
-  ["js/data/teams.js", "js/career/ai-dev.js"],
-  ["js/core/mat4.js", "js/career/ai-dev.js"],         // aliases M4.clamp at eval
-  ["js/career/ai-dev.js", "js/career/career.js"],     // rolloverTeams calls CareerAiDev.developWinter
+  // regulations / ai-dev / experience are LAZY_CAREER (after FULL): parts, teams and mat4 precede them by construction;
+  // career.js reads them only at call time, behind typeof guards (rollover runs after ensureCareerBody).
   ["js/career/save-migrate.js", "js/core/save-schema-registry.js"],
   ["js/core/save-schema-registry.js", "js/core/store.js"],
   ["js/career/save-migrate.js", "js/core/store.js"],
@@ -1374,6 +1368,16 @@ const LAZY_CAREER_UI = [
   "js/career/career-ui.js",   // CareerScreen
 ];
 const LAZY_CAREER_UI_EDGES = [["js/career/career-planning-ui.js", "js/career/career-ui.js"]];
+
+// Career-only bodies (15.6 KB stripped): AI winter development, era regulations, the experience ledger. No boot
+// stub (a stub would defeat the consumers' typeof guards): ensureCareerBody() loads them at idle, at the career
+// door, at career race entry and the career garage door, then re-runs Career.applyRegs().
+const LAZY_CAREER = [
+  "js/career/regulations.js",
+  "js/career/ai-dev.js",
+  "js/career/experience.js",
+];
+const LAZY_CAREER_EDGES = [];
 
 // LAYOUT PRESET row + APPEARANCE / PHOTO studio bodies (#4978 row 5). The FULL
 // stubs (appearance-studio.js, photo-studio.js) answer scene/homeCamera/background
@@ -1931,7 +1935,7 @@ const MOVED = {
 
 // Learn's modal loads only after the title door is used. The iframe requests
 // its standalone page and lesson assets without a ScriptLoader version query.
-const LAZY_LEARN = ["js/learn-drills/registry.js", "js/learn-drills/aero.js", "js/ui/learn-door.js", "js/ui/thumb-trainer.js", "js/learn-drills/thumb-drill.js"];
+const LAZY_LEARN = ["js/learn-drills/registry.js", "js/learn-drills/drill-card.js", "js/learn-drills/aero.js", "js/ui/learn-door.js", "js/ui/thumb-trainer.js", "js/learn-drills/thumb-drill.js"];
 const SW_LEARN = [
   "learn/appearance.js", "learn/replay.js", "learn/replay.css", "learn/sandbox.js", "learn/sandbox.css",
   ...["chassis", "suspension", "deployment", "hybrid", "brake-blend", "tyre-heat",
@@ -1976,6 +1980,7 @@ const GROUP_TIERS = {
   LAZY_XR: { tier: "menu", where: "page" },
   LAZY_CAM_EDITOR: { tier: "tool", where: "page" },
   LAZY_CAREER_UI: { tier: "career", where: "page" },
+  LAZY_CAREER: { tier: "career", where: "page" },
   LAZY_UI_PRESETS: { tier: "menu", where: "page" },
   LAZY_SAVES_DATA: { tier: "menu", where: "page" },
   LAZY_RESULTS_SHEET: { tier: "race", where: "page" },
@@ -2113,8 +2118,6 @@ const FULL_TIERS = {
     "js/fx/particles.js": "race",
     "js/fx/droplets.js": "race",
     "js/lighting/atmosphere.js": "home",
-    "js/career/regulations.js": "career",
-    "js/career/ai-dev.js": "career",
     "js/career/career-planning.js": "career",
     "js/career/career.js": "career",
     "js/career/season-cal.js": "menu",
@@ -2141,7 +2144,6 @@ const FULL_TIERS = {
     "js/garage/setup-experiments.js": "garage",
     "js/garage/livery-design-editor.js": "garage",
     "js/garage/setup-sheet.js": "garage",
-    "js/career/experience.js": "career",
     "js/career/career-ui-boot.js": "career",
     "js/career/season-ui.js": "menu",
     "js/ui/flags.js": "menu",
@@ -2295,7 +2297,7 @@ module.exports = {
   LAZY_AUDIO, LAZY_AUDIO_EDGES,
   LAZY_DATA, LAZY_DATA_EDGES, LAZY_NET, LAZY_NET_EDGES, LAZY_WORKER, TRACK_WORKER_EXTRA, LAZY_EDITOR, LAZY_EDITOR_EDGES,
   LAZY_XR, LAZY_XR_EDGES, LAZY_CAM_EDITOR, LAZY_CAM_EDITOR_EDGES,
-  LAZY_CAREER_UI, LAZY_CAREER_UI_EDGES,
+  LAZY_CAREER_UI, LAZY_CAREER_UI_EDGES, LAZY_CAREER, LAZY_CAREER_EDGES,
   LAZY_UI_PRESETS, LAZY_UI_PRESETS_EDGES, LAZY_SAVES_DATA, LAZY_SAVES_DATA_EDGES,
   LAZY_RESULTS_SHEET, LAZY_RESULTS_SHEET_EDGES,
   LAZY_GFX_HI, LAZY_GFX_HI_EDGES,

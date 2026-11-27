@@ -168,9 +168,10 @@ interface StoreApi {
   [key: string]: unknown;
 }
 
-/** The narrow port a LEARN drill's begin() gets from its host (js/learn-drills/registry.js, #6920 U4.1), never all
-    of G and no new G member. startRace/goRolling/announce/store are GameCtx's; retry is the coach's RETRY LAP, which
-    game.js hands the host (G.coach's type has no retry); physState is __apex's, null while LAZY_AGENT is absent. */
+/** The narrow port a LEARN drill's begin() and guide() get from its host (js/learn-drills/registry.js, #6920 U4.1),
+    never all of G and no new G member. startRace/goRolling/announce/store are GameCtx's; retry is the host's RETRY
+    (the result card down, a fresh run, then the coach's RETRY LAP that game.js hands the host: G.coach's type has no
+    retry); physState is __apex's, null while LAZY_AGENT is absent. */
 interface DrillPort extends Pick<GameCtx, "startRace" | "goRolling" | "store"> {
   retry(): boolean;
   physState(): Opaque | null;

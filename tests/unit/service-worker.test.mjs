@@ -2161,7 +2161,7 @@ for (const asset of ["js/career/career-ui.js", "js/career/career-planning-ui.js"
 
 test("the complete strict Career group is required and loads offline under its content-hash keys", async () => {
   const roster = createRequire(import.meta.url)("../../tools/manifest.cjs");
-  const files = roster.LAZY_CAREER_UI, edges = roster.LAZY_CAREER_UI_EDGES;
+  const files = [...roster.LAZY_CAREER_UI, ...roster.LAZY_CAREER], edges = [...roster.LAZY_CAREER_UI_EDGES, ...roster.LAZY_CAREER_EDGES];
   const map = Object.fromEntries(files.map((u) => [u, hash12("body of " + u)]));
   const h = createHarness({ fetchImpl: lazyShellFetch(map) });
   h.stores.set("apex26-321", new Map([
@@ -2197,7 +2197,8 @@ test("the complete strict Career group is required and loads offline under its c
   });
   vm.runInContext(await readFile(new URL("../../js/core/script-loader.js", import.meta.url), "utf8") + "\n;globalThis.loader = ScriptLoader.create();", ctx, { filename: absSrc("js/core/script-loader.js") });
   assert.equal(await ctx.loader.load(files, edges, { strict: true }), true);
-  assert.deepEqual(loaded, files, "strict predecessor loads before the screen from installed caches");
+  assert.deepEqual([...loaded].sort(), [...files].sort(), "the whole group loads from installed caches");
+  assert.ok(loaded.indexOf("js/career/career-planning-ui.js") < loaded.indexOf("js/career/career-ui.js"), "strict predecessor loads before the screen");
   await h.lifecycleEvent("activate").done();
   assert.deepEqual(h.deleted, [], "the settled prior generation stays while matchAll is absent");
 });

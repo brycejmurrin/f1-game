@@ -212,19 +212,19 @@ _Module index over 34 directories, in load order. `tag` = a `<script>` in index.
 | `team-identity.js` | `CareerTeamIdentity` | tag | Per-career MY TEAM appearance. |
 | `save-migrate.js` | `SaveMigrate` | tag | versioned save migration (SaveMigrate). |
 | `restore-points.js` | `CareerRestorePoints` | tag | CareerRestorePoints — bounded local history at explicit round/import boundaries. |
-| `regulations.js` | `Regulations` | tag | career regulation eras. |
-| `ai-dev.js` | `CareerAiDev` | tag | AI constructor part development over career winters. |
 | `career-planning.js` | `CareerPlanning` | tag | Career planning: pure projections and bounded choices; never changes Parts legality. |
 | `career.js` | `Career` | tag | CAREER core: the `apex26.career.<flavour>.0..2` saves (three DRIVER slots and three MY TEAM slots, one live at a time), the credits economy, driver an… |
 | `season-cal.js` | `SeasonCal` | tag | the SEASON CALENDAR and the WEEKEND FORMAT: which circuits a standalone championship visits and in what order, whether the weekend qualifies, whether … |
 | `badges.js` | `Badges` | tag | LICENCE BADGES: local achievements unlocked from facts the game already computes (a classified result, a pole, a daily streak), persisted at `apex26.badges`. |
-| `experience.js` | `CareerExperience` | tag | CareerExperience: race brief, real season story and management navigation. |
 | `career-ui-boot.js` | `CareerUI` | tag | CAREER screen boot stub (FULL). |
 | `season-ui.js` | `SeasonUI` | tag | the SEASON SETUP screen (#season-setup): the calendar the player races and the format they race it under. |
 | `custom-team.js` | `CustomTeam` | tag | MY TEAM: load/sync, customize dialog, emblem upload. |
 | `career-backup.js` | `CareerBackup` | LAZY_CAREER_UI | CAREER BACKUP: versioned export/import of all six career slots (plus optional standalone season / badges / daily and the MY TEAM identity). |
 | `career-planning-ui.js` | `CareerPlanningUI` | LAZY_CAREER_UI | Read-only Career planning cards and explicit local save recovery actions. |
 | `career-ui.js` | `CareerScreen` | LAZY_CAREER_UI | the CAREER screen (#career), LAZY_CAREER_UI. |
+| `regulations.js` | `Regulations` | LAZY_CAREER | career regulation eras. |
+| `ai-dev.js` | `CareerAiDev` | LAZY_CAREER | AI constructor part development over career winters. |
+| `experience.js` | `CareerExperience` | LAZY_CAREER | CareerExperience: race brief, real season story and management navigation. |
 
 **`js/ui/`**
 
@@ -809,6 +809,7 @@ _Module index over 34 directories, in load order. `tag` = a `<script>` in index.
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
 | `registry.js` | `DrillRegistry` | LAZY_LEARN | DrillRegistry: the one host for LEARN's on-track scenario drills (#6920 U4.1, #6559 step 0). |
+| `drill-card.js` | `DrillCard` | LAZY_LEARN | DrillCard: a LEARN drill's result card and its one medal store (#6559 §1b, step 2; #7039). medalOf(r, tiers) is pure. tiers = {bronze, silver, gold,… |
 | `aero.js` | `AeroDrill` | LAZY_LEARN | AeroDrill: LEARN's Aero Lab Scenario, moved out of js/ui/learn-door.js (#6920 U4.1b, move-only). |
 | `thumb-drill.js` | `ThumbDrill` | LAZY_LEARN | THUMB DRILL, LEARN's on-track sequel to the Vegas Thumb Trainer (#6927). |
 <!-- /@gen-arch:modules -->

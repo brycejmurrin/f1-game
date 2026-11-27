@@ -946,6 +946,12 @@ async function createGame(opts) {
       if (SKIP.has(f)) continue;
       runFile(ctx, f, record);
     }
+    // LAZY_CAREER: ai-dev / regulations / experience load behind ensureCareerBody() in the browser; career VM tests
+    // read them synchronously (Career.era, aiSetup), so evaluate the roster here, after FULL.
+    for (const f of (MANIFEST.LAZY_CAREER || [])) {
+      if (SKIP.has(f)) continue;
+      runFile(ctx, f, record);
+    }
     // LAZY_CIRCUIT: title boots meta-only TrackDefs; VM tests (and race()) build
     // centreline from Tracks.LIST synchronously, so hydrate every full def here
     // the way ensureCircuit() does in the browser after a pick.

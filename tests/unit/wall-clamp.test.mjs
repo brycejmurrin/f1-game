@@ -502,3 +502,21 @@ test("reverse tail-first into a wall: wallHits +1, speed loss, first-strike SFX"
   assert.equal(off.wallHits, 0);
   assert.equal(off.speed, 20);
 });
+
+// PACE-scaled scrubs (#7147): the same wall hit at OVERALL SPEED notch 8 and notch 14 must bleed the same
+// fraction of vStd. Ground speed scales by PACE, so the m/s^2 scrub does too; notch 14 (PACE 1) is unchanged.
+test("wall scrubs bleed the same fraction of vStd at any PACE", () => {
+  const { WallClamp } = load();
+  const frac = (pace, human) => {
+    const vStd = (v) => v / pace;   // vStd(v) = v*VMAX/vTop with VMAX 1
+    const c = { s: 10, x: 7.5, human, isPlayer: human, speed: 40 * pace, vLat: 0, head: 0, wasOnWall: false, wallT: 0, wallHits: 0, collideT: 0, px: 0, pz: 0 };
+    const v0 = vStd(c.speed);
+    WallClamp.apply(c, baseCtx({ vStd, steer: human ? 1 : 0 }));
+    return (v0 - vStd(c.speed)) / v0;
+  };
+  for (const human of [false, true]) {
+    const f14 = frac(1, human), f8 = frac(0.6, human);
+    assert.ok(f14 > 0, "scrub is non-zero");
+    assert.ok(Math.abs(f8 - f14) < 1e-12, `human=${human}: notch 8 ${f8} vs notch 14 ${f14}`);
+  }
+});

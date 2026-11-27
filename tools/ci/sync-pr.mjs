@@ -255,6 +255,16 @@ export function publishSync(localBranch, prBranch, expectedHead, runGit = git) {
   must(runGit(["push", `--force-with-lease=${target}:${expectedHead}`, REMOTE, `${verified}:${target}`]), `push to origin/${prBranch}`);
 }
 
+/** Commits on the local <branch> that origin/<branch> lacks. A sync merges from origin/<branch>, so these would be left
+ *  out of the pushed head (#7171: #7028, #7156 pushed without the worker's local fix). → { ahead, refusal } | null when
+ *  there is no local branch (or git could not compare). Pure over `readGit`. */
+export function localAheadRefusal(prBranch, readGit = git) {
+  if (readGit(["show-ref", "--verify", "--quiet", `refs/heads/${prBranch}`]).code !== 0) return null;
+  const n = readGit(["rev-list", "--count", `${REMOTE}/${prBranch}..refs/heads/${prBranch}`]);
+  if (n.code !== 0 || !(+n.out > 0)) return null;
+  return { ahead: +n.out, refusal: `local ${prBranch} is ${n.out} commit${+n.out === 1 ? "" : "s"} ahead of ${REMOTE}/${prBranch}; sync-pr would drop ${+n.out === 1 ? "it" : "them"} — push them first (git push -u ${REMOTE} ${prBranch}), then re-run (exit 6)` };
+}
+
 /** Put the working tree back on `startedOn` and SAY WHERE IT IS (2026-10-04).
  *  The failure path logged "tree left on <sync branch>" and then ran an
  *  unchecked `git checkout startedOn`: when that checkout worked the log was
@@ -306,6 +316,8 @@ export async function main() {
     if (v.ok) log(`${verdictLine(v)} (${v.why})`);
     else log(`needs-sync could not decide (${v.error}); continuing`);
     if (refusal) { log(`REFUSED: ${refusal.why}`); return refusal.code; }
+    const ahead = localAheadRefusal(branch);
+    if (ahead) { log(`REFUSED: ${ahead.refusal}`); return 6; }
     if (forceClean) {
       const warn = forceCleanBehindWarning(v);
       if (warn) for (const line of warn) log(line);

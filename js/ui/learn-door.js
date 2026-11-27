@@ -35,10 +35,30 @@ const LearnDoor = (function () {
   let dialog;
   let frame;
   const lessonDoors = new Map();
+  // A drill's last result, posted into its lesson once the reopened lab loads (#6555 A2): {lesson, id, result}.
+  let pendingResult = null;
+
+  const MEDAL_LABEL = { gold: "GOLD", silver: "SILVER", bronze: "BRONZE" };
+  /** Each drilled lesson's door shows its best medal (apex26.learnMedals.v1, js/learn-drills/drill-card.js). */
+  function paintMedals() {
+    const store = typeof GameStore !== "undefined" ? GameStore.store : null;
+    if (!store || typeof DrillCard === "undefined" || typeof DrillRegistry === "undefined") return;
+    for (const [id, button] of lessonDoors) {
+      const drillIds = DrillRegistry.forLesson(id).map(d => d.id);
+      if (!drillIds.length) continue;
+      const medal = DrillCard.bestMedal(store, drillIds);
+      let badge = button.querySelector("[data-medal]");
+      if (!medal) { if (badge) badge.remove(); continue; }
+      if (!badge) { badge = Dom.el("span", ""); button.appendChild(badge); }
+      badge.dataset.medal = medal;
+      badge.textContent = MEDAL_LABEL[medal];
+    }
+  }
 
   function open(door, openDataHub, launchDrill, openTrainer) {
     defineDrills();
     if (!dialog) build();
+    paintMedals();
     dialog.hidden = false;
     // A deep link (js/ui/deep-link.js) names the lesson on the door it clicks.
     const lesson = door.dataset.openLesson;
@@ -104,6 +124,13 @@ const LearnDoor = (function () {
       // Same-origin lab: a controller or paired phone walks its controls (js/input/pad-menu.js).
       frame.dataset.padScope = "lesson";
       frame.hidden = true;
+      frame.addEventListener("load", () => {
+        const p = pendingResult;
+        if (!p || p.lesson !== sheet.dataset.lesson) return;
+        pendingResult = null;
+        if (Date.now() > p.until) return;
+        frame.contentWindow?.postMessage({ type: "apex-learn-result", id: p.id, result: p.result }, location.origin);
+      });
       body.append(index, frame);
 
       const footer = Dom.el("div", "sheet-foot");
@@ -180,6 +207,23 @@ const LearnDoor = (function () {
     }
   }
 
+  /** BACK TO LESSON and every other drill end (DrillRegistry end()): the title's LEARN door reopens on the lesson,
+   *  and its lab gets the run's result once it loads. Waits for the title, as a deep link does. */
+  function reopen(lesson, payload) {
+    if (typeof document === "undefined") return false;
+    // A result the lab never loaded for (the title never came back) is dropped after 15 s, not posted later.
+    pendingResult = payload && payload.id ? { lesson, id: payload.id, result: payload.result, until: Date.now() + 15000 } : null;
+    let tries = 0;
+    const go = () => {
+      const door = document.getElementById("mb-learn");
+      if (!door || door.hidden || UiLayers.top()?.id !== "overlay") { if (++tries < 30) setTimeout(go, 100); return; }
+      door.dataset.openLesson = lesson;
+      door.click();
+    };
+    setTimeout(go, 0);
+    return true;
+  }
+
   // The Aero Lab's Scenario lives in js/learn-drills/aero.js (the registry hosts it). Defined lazily, never at eval:
   // LAZY_LEARN loads with no edges, so the registry and AeroDrill may evaluate after this file.
   function defineDrills() {
@@ -187,6 +231,9 @@ const LearnDoor = (function () {
     DrillRegistry.define(AeroDrill.descriptor());
   }
 
-  return { open, defineDrills };
+  /** Every lesson id in the curriculum, in index order (tests/unit/learn-curriculum.test.mjs's coverage pin). */
+  const lessonIds = () => curriculum.flatMap(([, , lessons]) => lessons.map(([id]) => id));
+
+  return { open, defineDrills, reopen, lessonIds };
 })();
 Object.freeze(LearnDoor);

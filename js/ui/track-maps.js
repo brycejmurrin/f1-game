@@ -865,8 +865,108 @@ const TrackMaps = (function () {
     return true;
   }
 
+  // The elevation profile chart, drawn identically in two places: the select
+  // screen's preview card and the TRACK DETAIL modal's sparkline. Both were
+  // hand-written canvas blocks that agreed line for line except for which element
+  // carries the hidden state and what the x variable was called — the shape where
+  // a fix lands in one copy and not the other (docs/notes/ARCHITECTURE-REVIEW.md §8).
+  // Lives in TrackMaps (#7052); Menus keeps forwarders.
+  //   cv      the <canvas> to paint
+  //   t       the circuit def
+  //   showEl  the element whose `hidden` gates visibility (defaults to cv itself)
+  // A circuit with no profile, a degenerate one, or under 2 m of range hides the
+  // target and paints nothing — a flat sparkline reads as missing data either way.
+  function drawElevProfile(cv, t, showEl) {
+    const target = showEl || cv;
+    if (!cv || !target) return false;
+    const py = TrackMaps.elevProfile(t);
+    if (!(py && py.length > 2 && TrackMaps.elevRange(t) > 2)) { target.hidden = true; return false; }
+    // The HTML attributes (280x36 / 240x48) were the backing store forever while
+    // CSS stretched the element to width: 100% — a 600px panel scaled the buffer
+    // 2.5x horizontally and 1.0x vertically, smearing the 8px labels wide. Size
+    // the buffer to the measured box times the effective zoom x dpr (the house
+    // minimap pattern, capped at 3), and keep drawing in CSS px via the
+    // transform. A hidden box (display:none: the compact picker, the modal before
+    // its reveal) is NOT drawn: falling back to the buffer multiplied it by dpr on
+    // every pick (280x36 -> 22680x2916, #5062). The next visible pass draws it.
+    let boxW = cv.clientWidth, boxH = cv.clientHeight;
+    if (!(boxW > 0 && boxH > 0)) {
+      target.hidden = false;   // a self-hidden canvas must be able to measure again
+      boxW = cv.clientWidth; boxH = cv.clientHeight;
+      if (!(boxW > 0 && boxH > 0)) return false;
+    }
+    const ratio = Math.min(3, 4096 / boxW, 4096 / boxH, Math.max(1, (cv.currentCSSZoom || 1) * (window.devicePixelRatio || 1)));
+    const bw = Math.max(1, Math.round(boxW * ratio)), bh = Math.max(1, Math.round(boxH * ratio));
+    if (cv.width !== bw || cv.height !== bh) { cv.width = bw; cv.height = bh; }
+    const ew = boxW, eh = boxH;
+    // A canvas keeps its first context type for life: getContext("2d") is null
+    // when another type is already bound, or when the browser will not allocate
+    // a 2D store. setTransform on that null is the race-select overlay (#4469,
+    // three forced to GL on SwiftShader). Hide the sparkline instead.
+    const eg = cv.getContext ? cv.getContext("2d") : null;
+    if (!eg) { target.hidden = true; return false; }
+    target.hidden = false;
+    eg.setTransform(ratio, 0, 0, ratio, 0, 0);
+    eg.clearRect(0, 0, ew, eh);
+    let mn = Infinity, mx = -Infinity;
+    for (let i = 0; i < py.length; i++) { if (py[i] < mn) mn = py[i]; if (py[i] > mx) mx = py[i]; }
+    const span = mx - mn || 1;
+    const pad = 3;
+    const lo = Math.round(mn), hi = Math.round(mx);
+    const fmtElev = (v) => (v > 0 ? "+" : "") + v + "m";
+    const topLbl = fmtElev(hi), botLbl = fmtElev(lo);
+    eg.font = "8px monospace";
+    const gutter = Math.min(ew * 0.42, Math.max(28, Math.ceil(Math.max(
+      eg.measureText(topLbl).width, eg.measureText(botLbl).width)) + 6));
+    const plotW = Math.max(1, ew - gutter);
+    const yNorm = (v) => eh - pad - ((v - mn) / span) * (eh - 2 * pad);
+    // The trace is walked TWICE on purpose: once closed down to the baseline for
+    // the fill, once open for the stroke, so the stroke does not draw the two
+    // vertical closing edges. `i <= py.length` closes the lap back onto py[0].
+    const trace = () => {
+      eg.beginPath();
+      for (let i = 0; i <= py.length; i++) {
+        const ex = (i / py.length) * plotW;
+        i === 0 ? eg.moveTo(ex, yNorm(py[0])) : eg.lineTo(ex, yNorm(py[i % py.length]));
+      }
+    };
+    trace();
+    eg.lineTo(plotW, eh); eg.lineTo(0, eh); eg.closePath();
+    eg.fillStyle = "rgba(57,183,240,0.18)"; eg.fill();
+    eg.strokeStyle = "rgba(57,183,240,0.7)"; eg.lineWidth = 1.5;
+    trace();
+    eg.stroke();
+    // Signed min/max in a reserved gutter — on a short preview the two 8px
+    // labels sat on the fill at the same x and the minus read as a plus
+    // (Imola "+16m/+14m" for a −14 m trough).
+    eg.fillStyle = "rgba(57,183,240,0.75)"; eg.textAlign = "right";
+    if (eh < 28) eg.fillText(topLbl + " / " + botLbl, ew - 2, Math.max(9, eh - 2));
+    else {
+      eg.fillText(topLbl, ew - 2, 9);
+      eg.fillText(botLbl, ew - 2, eh - 1);
+    }
+    return true;
+  }
+
+  // Track-detail DRS metre labels — shared so unit tests can pin wrap semantics.
+  function drsZoneWraps(z) {
+    return !!(z.wrap || z.b > 1 || z.b < z.a);
+  }
+  function drsZoneLapMetre(frac, trackLenM) {
+    const m = Math.round(frac * trackLenM);
+    return m > trackLenM ? m - trackLenM : m;
+  }
+  function drsZoneRangeHtml(z, trackLenM) {
+    const a = drsZoneLapMetre(z.a, trackLenM);
+    const b = drsZoneLapMetre(z.b, trackLenM);
+    if (drsZoneWraps(z)) {
+      return a + " m <span aria-label=\"crossing start/finish\">&rarr; S/F &rarr;</span> " + b + " m";
+    }
+    return a + " m &ndash; " + b + " m";
+  }
+
   return {
-    outline, aspect, fitCanvas, planPreview, corners, direction, drsZones, elevRange, elevProfile, themeColor, draw, detectCorners,
+    outline, aspect, fitCanvas, planPreview, corners, direction, drsZones, elevRange, elevProfile, drawElevProfile, drsZoneWraps, drsZoneLapMetre, drsZoneRangeHtml, themeColor, draw, detectCorners,
     SECTOR_COLORS, SECTOR_TOKENS, sectorColors, aeroColor, cornerSpeed, cornerSpeedColors, cornerSpeedColor, attachZoom, drawStartFinish, drawCarMarker,
     classColor, classifyCorner, measureApex, assignCornerClasses,
     invalidate, cachedIds: () => Object.keys(cache),

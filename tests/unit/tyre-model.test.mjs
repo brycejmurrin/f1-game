@@ -1251,6 +1251,23 @@ test("AQUAPLANING: the AI's lift speed sits just past onset, ordered by tread, a
   assert.equal(T.aquaInto({ tread: 0 }, 70, "rain", 1).mul, T.aquaplane(70, 1, 0), "a fitted set reads its own");
 });
 
+test("AQUAPLANING (#6611 RW6): an unfitted car's tread comes from the lap mean, as carGrip; the surface sets only the depth", () => {
+  // A local shower: the surface under the car is soaked (0.95), the lap mean is barely damp (0.2) — the slick tread.
+  const c = { tread: null }, v = 70, surf = 0.95, mean = 0.2, tr = T.treadFor("dry", mean);
+  assert.equal(tr, 0, "the mean calls for slicks");
+  assert.notEqual(T.aquaplane(v, surf, 0), T.aquaplane(v, surf, T.treadFor("dry", surf)), "the probe separates the two treads");
+  const aq = T.aquaInto(c, v, "dry", surf, mean);
+  assert.equal(aq.mul, T.aquaplane(v, surf, tr), "slick onset in deep water, not the full-wet onset the surface would pick");
+  assert.equal(aq.safeV, T.aquaplaneSafeV(surf, tr));
+  // The mirror case: a soaked lap mean over a dry patch keeps the wet tread (and the dry patch has no standing water).
+  assert.equal(T.aquaInto(c, v, "dry", 1, 0.9).mul, T.aquaplane(v, 1, T.treadFor("dry", 0.9)));
+  // A uniform road (mean === surface, every dry lap) is unchanged, and the 4-argument form still reads the surface.
+  for (const w of [0, 0.3, 0.8, 1]) {
+    assert.equal(T.aquaInto(c, v, "dry", w, w).mul, T.aquaInto(c, v, "dry", w).mul, "uniform " + w);
+    assert.equal(T.aquaInto(c, v, "dry", w).mul, T.aquaplane(v, w, T.treadFor("dry", w)));
+  }
+});
+
 
 test("red-flag scoring rewinds preserve physical set age and refits reset it", () => {
   const s = ctxFor(); s.setLevel("real");

@@ -33,10 +33,16 @@ const AeroDrill = (function () {
 
   // Rendering-only lesson cues. Use the driving-line shader so the cars and
   // cockpit occlude the lesson markings as they do any other road marking.
-  function createAeroGuide(G) {
+  function createAeroGuide(G, port) {
     const root = document.createElement("div");
     root.id = "learn-aero-guide";
     root.hidden = true;
+    // RETRY (#6555 A4): back to the drill's start from the card, without the pause menu (a 44 px chip).
+    const retry = document.createElement("button");
+    retry.type = "button";
+    retry.id = "learn-aero-retry";
+    retry.textContent = "RETRY";
+    retry.addEventListener("click", () => { if (port) port.retry(); });
     const task = document.createElement("strong");
     task.setAttribute("role", "status");
     const readout = document.createElement("span");
@@ -48,7 +54,7 @@ const AeroDrill = (function () {
     const ctx = scope.getContext("2d");
     const copy = document.createElement("div");
     copy.append(task, readout, demoLabel);
-    root.append(scope, copy);
+    root.append(scope, copy, retry);
     document.body.append(root);
     const sample = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0] };
     const stride = DrivingLine.STRIDE;
@@ -258,11 +264,53 @@ const AeroDrill = (function () {
     return { draw, hide, car: () => demo, remove: () => root.remove() };
   }
 
+  // The Aero Lab's medal tiers, in metres closed on the rival (the best approach from the 24 m start). Derived from
+  // 20 VM runs (tests/data/learn-drill-refs.json, pinned by tests/unit/drill-aero-medals-vm.test.mjs): bronze is their median,
+  // silver the furthest a run got before it dropped out of the wake, gold the shortest clean finish in the wake.
+  const AERO_MEDALS = Object.freeze({ bronze: 7.1, silver: 9.2, gold: 15.7, goldClean: true });
+
+  // Read-only on the cars (#6559 §1e rule 1): the gap to the rival, its nearest point and the tow actually felt.
+  function sampleAero(G, acc) {
+    const p = G.player, rival = G.cars.find(c => c !== p);
+    if (!p || !rival) return;
+    const gap = rival.prog - p.prog;
+    if (acc.gap0 == null) { acc.gap0 = gap; acc.gapMin = gap; acc.towS = 0; acc.t = G.raceT; }
+    acc.gapMin = Math.min(acc.gapMin, gap);
+    acc.towS += Math.max(0, G.raceT - acc.t) * (p.towing || 0);
+    acc.t = G.raceT;
+  }
+
+  /** Metres closed = the start gap less the nearest gap reached: a run that falls out of the tow keeps the ground it
+   *  made. last is RaceInsights' lastDrill (clean, reason, seconds). Every number is measured. */
+  function scoreAero(G, last, acc) {
+    const gap0 = Number.isFinite(acc.gap0) ? acc.gap0 : 24, nearest = Number.isFinite(acc.gapMin) ? acc.gapMin : gap0;
+    const value = Math.max(0, gap0 - nearest);
+    const verdict = last.clean
+      ? "You closed " + value.toFixed(1) + " m and finished in the wake: the tow did the work while the rival punched the air."
+      : "The run ended: " + last.reason + ". You got within " + Math.max(0, nearest).toFixed(1)
+        + " m. Stay in the cyan wake on full throttle to close the rest.";
+    return {
+      value, unit: "m", better: "high", clean: !!last.clean, reason: last.reason || "",
+      metrics: [
+        ["Closed", value.toFixed(1), "m"],
+        ["Nearest gap", Math.max(0, nearest).toFixed(1), "m"],
+        ["Tow felt", (acc.towS || 0).toFixed(1), "s"],
+        ["Run time", (last.seconds || 0).toFixed(1), "s"],
+        ["Run", last.clean ? "clean" : last.reason, ""],
+      ],
+      verdict,
+    };
+  }
+
   const descriptor = () => ({
-    id: "aero", lesson: "aero",
+    id: "aero", lesson: "aero", title: "Monza Aero Drill",
     setup: { flow: "gp", session: "race", track: "monza", weather: "dry", changeable: false, grid: "tier", duel: false, dirtyAir: "classic", wind: "real" },
     begin: beginAeroDrill,
     guide: createAeroGuide,
+    goal: "slipstream",
+    sample: sampleAero,
+    score: scoreAero,
+    medals: AERO_MEDALS,
   });
 
   return { descriptor, begin: beginAeroDrill, guide: createAeroGuide };

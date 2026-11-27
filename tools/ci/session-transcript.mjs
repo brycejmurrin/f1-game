@@ -11,7 +11,7 @@
 // three quarters of it `control_response` init blobs, the rest thinking signatures, usage blocks and every
 // tool input twice (`input` + `wire_tool_inputs`). Reading it raw spends a context window on one page. The
 // page only arrives through the claude-code-remote MCP tool, so a script cannot fetch it; it parses the file
-// the harness writes when the result is too big to inline. Procedure: save a list_events page, then digest it here.
+// the harness writes when the result is too big to inline (or a local Claude Code `.jsonl`, for --ctx and --summary). Procedure: save a list_events page, then digest it here.
 //
 // What a transcript does NOT carry: thinking text (the blocks arrive empty, signature only).
 //
@@ -20,7 +20,7 @@
 //   node tools/ci/session-transcript.mjs <page.txt> --grep 'ci.yml' --width 240
 //   node tools/ci/session-transcript.mjs <page.txt> --hooks       # also successful hooks (failures always show)
 //   node tools/ci/session-transcript.mjs <page.txt> --json        # the normalized rows, for another tool
-//   node tools/ci/session-transcript.mjs <page.txt>... --summary  # ONE line for the session: title, cost, last real turn, quota state, hook errors
+//   node tools/ci/session-transcript.mjs <page.txt>... --summary  # ONE line for the session: title, cost ($? on a local .jsonl: it has no result rows), last real turn, quota state, hook errors
 //   node tools/ci/session-transcript.mjs <page.txt>... --ctx      # per-turn live context (input + cache read + cache write) from usage blocks
 //   node tools/ci/session-transcript.mjs <session.jsonl> --ctx    # the same from a local Claude Code transcript (~/.claude/projects/…)
 //   node tools/ci/session-transcript.mjs <page.txt>... --digest   # ≤ 40 lines / 4 kB: summary, ctx, last prompts and replies, tool tally, errors; never a raw page

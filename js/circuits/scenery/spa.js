@@ -482,8 +482,7 @@
         for (const x of [-0.5, 0, 0.5]) for (const z of [-0.5, 0, 0.5]) {
           const wx = c[0] + b[0][0] * x * size[0] + b[2][0] * z * size[1];
           const wz = c[2] + b[0][2] * x * size[0] + b[2][2] * z * size[1];
-          let gy = terrainYAt(wx, wz);
-          if (gy == null) gy = Tracks.terrainY(api.track, wx, wz);
+          const gy = terrainYAt(wx, wz);
           if (gy != null) low = Math.min(low, gy);
         }
         const h = top - low + 0.6;

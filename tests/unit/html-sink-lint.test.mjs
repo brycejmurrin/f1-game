@@ -16,7 +16,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { lintSource, isConstantHtml, audit, readAllowlist, rhsHash, rehash } from "../../tools/check/html-sink-lint.mjs";
+import { lintSource, lintAll, isConstantHtml, audit, readAllowlist, rhsHash, rehash } from "../../tools/check/html-sink-lint.mjs";
 import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
 const TOOL = fileURLToPath(new URL("../../tools/check/html-sink-lint.mjs", import.meta.url));
@@ -139,4 +139,13 @@ test("an audited site whose right-hand side changes fails as CHANGED", () => {
     assert.deepEqual(after.changed, []);
     assert.deepEqual(after.unaudited.map((s) => s.key), [`${B}::x.innerHTML`], "rehash must not audit a new site");
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+// #7092 trace: Jolpica / OpenF1 rows (js/data), peer messages and share codes (js/net) are remote text.
+// Neither zone writes markup today (audited 2026-11-27, docs/notes/REMOTE-SINK-TRACE-2026-11-27.md): they build
+// nodes with Dom.el()/textContent. A sink there — constant or audited — is a new remote-data path to re-read.
+test("js/data and js/net hold no HTML sink at all (remote text only reaches textContent)", () => {
+  const rows = lintAll().filter((r) => /^js\/(data|net)\//.test(r.file));
+  assert.deepEqual(rows.map((r) => r.file), [], "remote-data zone gained an HTML sink — use Dom.el()/textContent");
+  for (const k of Object.keys(readAllowlist())) assert.ok(!/^js\/(data|net)\//.test(k), `${k}: remote-data zones take no allowlist row`);
 });
