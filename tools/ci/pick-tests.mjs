@@ -373,7 +373,7 @@ export function blanketOnly(manifest = createRequire(import.meta.url)("../manife
     ...(manifest.LAZY_CAREER_UI || []), ...(manifest.LAZY_UI_PRESETS || []), ...(manifest.LAZY_SAVES_DATA || []), ...(manifest.LAZY_RESULTS_SHEET || []), ...(manifest.LAZY_GFX_HI || []),
     ...(manifest.LAZY_PERF || []),
     ...(manifest.LAZY_REAL_RACE || []),
-    ...(manifest.LAZY_LEARN || []),
+    ...(manifest.LAZY_LEARN || []), ...(manifest.LAZY_DRILL_FORK || []),
   ];
   return files.filter((f) => !specific.some(([re]) => re.test(f)));
 }

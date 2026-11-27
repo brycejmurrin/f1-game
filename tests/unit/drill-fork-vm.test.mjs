@@ -1,0 +1,152 @@
+/* drill-fork-vm.test.mjs — DrillFork (js/race/drill-fork.js, #6559 step B2) on the REAL game in the Node VM.
+ *
+ * The strategy drills (epic #6559 steps 16-18) answer "what if I had boxed?" by running that race, so the three
+ * promises the epic's B2 row names are pinned here:
+ *   1. a branch re-run is BYTE-IDENTICAL at +3 laps (the card's numbers are reproducible, not one roll of the dice);
+ *   2. a CULLED field differs from the full field by less than noise() (the phone-speed shortcut changes nothing
+ *      the drill can measure);
+ *   3. the LIVE world is restored after a branch: every primitive of all 22 cars, the clock and the seeded stream
+ *      position, so the race that continues is the one that would have continued with no branch at all.
+ * Plus: the time slice decides only how many ticks run per call (a step(job, 0) loop equals one run()), and a
+ * decision goes through the production pit API (the boxed car makes its stop, the one told to stay does not).
+ *
+ * The player sits on SoakRun's autopilot law (decision 3: the car runs on an AI-style driver while you make the
+ * calls); SoakRun is LAZY_PERF, loaded here the way drive-to-box-vm.test.mjs loads it.
+ *
+ * Run: node --test tests/unit/drill-fork-vm.test.mjs   (~90 s, one boot)
+ */
+import { test, before, after } from "node:test";
+import assert from "node:assert/strict";
+import { createRequire } from "node:module";
+import { readFileSync } from "node:fs";
+import vm from "node:vm";
+import { absSrc } from "../helpers/abs-src.mjs";
+
+const require = createRequire(import.meta.url);
+const { createGame } = require("../../tools/lib/game-vm.cjs");
+const src = (p) => readFileSync(new URL("../../" + p, import.meta.url), "utf8");
+
+const TRACK = "redbull";   // the shortest lap on the calendar: a 3-lap horizon at the least CI time
+let g = null, DF = null, SR = null;
+before(async () => {
+  g = await createGame({ track: TRACK });
+  await g.race(TRACK, "day", "dry", { laps: 10 });
+  for (const p of ["js/perf/soak-run.js", "js/race/drill-fork.js"]) vm.runInContext(src(p), g.ctx, { filename: absSrc(p) });
+  SR = vm.runInContext("SoakRun", g.ctx);
+  SR.create(g.G);
+  DF = vm.runInContext("DrillFork", g.ctx).create(g.G);
+});
+after(() => { if (g) g.close(); });
+
+const autopilot = () => SR.policy("autopilot", {});
+const opts = (cull) => ({ cull, drive: autopilot });
+const TIGHT = { pitLossS: 0, marginS: 4 };   // a cull that really removes cars at a 40 s fork
+
+/** The race 40 s in: the field has spread, so a cull has cars to remove. */
+function forkAt40() {
+  const A = g.apex;
+  A.headless(true);
+  try { A.tyres({ level: "real" }); A.reset(0.02, 55, 0, 42); } finally { A.headless(false); }   // wear on: the lane opens
+  const r = A.rollout({ seconds: 40, policy: "autopilot" });
+  assert.ok(r && r.ran && r.ran.seconds > 39, "the lead-in drove: " + JSON.stringify(r).slice(0, 200));
+  return DF.fork();
+}
+/** Every primitive field of every car, unrounded (the determinism-replay-vm digest), plus clock and stream.
+ *  `anchors: false` drops the render-interpolation anchors (rPrev*, _prevS), which SimState's restore re-seats
+ *  to the restored pose ON PURPOSE (no streak across the jump); the continued race below compares them too. */
+const ANCHOR = /^(rPrev|_prevS$)/;
+function fullSnap(anchors = true) {
+  const cars = g.G.cars.map((c, id) => {
+    const o = { id };
+    for (const k of Object.keys(c)) {
+      const v = c[k];
+      if ((typeof v === "number" || typeof v === "boolean" || typeof v === "string") && (anchors || !ANCHOR.test(k))) o[k] = v;
+    }
+    return o;
+  });
+  return { raceT: g.G.raceT, rng: g.G.simSeed(undefined, true), seed: g.G.simSeed(), cars };
+}
+function firstDiff(a, b) {
+  if (!Object.is(a.raceT, b.raceT)) return "raceT " + a.raceT + " vs " + b.raceT;
+  if (!Object.is(a.rng, b.rng)) return "rng " + a.rng + " vs " + b.rng;
+  for (let c = 0; c < a.cars.length; c++) for (const k of new Set([...Object.keys(a.cars[c]), ...Object.keys(b.cars[c])])) {
+    if (!Object.is(a.cars[c][k], b.cars[c][k])) return `car ${a.cars[c].code || c} .${k}: ${a.cars[c][k]} vs ${b.cars[c][k]}`;
+  }
+  return null;
+}
+
+test("the coach exposes the rewind's own snapshot, and DrillFork reads through it", () => {
+  assert.equal(typeof g.G.coach.captureWorld, "function");
+  assert.equal(typeof g.G.coach.restoreWorld, "function");
+  const F = forkAt40();
+  assert.ok(F.world && F.world.parts && F.world.parts.cars && F.world.parts.rng, "a fork holds the SimState world, rng part included");
+  assert.equal(F.cars, 22);
+  assert.ok(Number.isFinite(F.rng) && Number.isFinite(F.seed), "the stream position is recorded");
+  assert.throws(() => DF.branch(F, [{ car: 1, action: "fly", lap: 0 }], { laps: 1 }), /decisions/);
+  assert.throws(() => DF.branch(F, [], {}), /until/);
+});
+
+test("the live world is restored after a branch: the race goes on exactly as if no branch had run", () => {
+  const A = g.apex;
+  forkAt40();
+  const before = fullSnap(false);
+  A.rollout({ seconds: 10, policy: "autopilot" });
+  const plain = fullSnap();
+
+  forkAt40();
+  const again = fullSnap(false);
+  assert.equal(firstDiff(before, again), null, "the 40 s lead-in itself must replay");
+  const F = DF.fork();
+  const job = DF.run(DF.branch(F, [{ car: 3, lap: 0, action: "box" }], { seconds: 20 }, opts(TIGHT)));
+  assert.equal(job.state, "done", "the branch ran: " + job.error);
+  assert.ok(job.result.culled.length > 0, "the cull removed cars inside the branch");
+  assert.equal(firstDiff(before, fullSnap(false)), null, "after the branch the live world differs from the fork");
+  assert.equal(g.G._testInput, null, "the branch hands the input seam back");
+  A.rollout({ seconds: 10, policy: "autopilot" });
+  assert.equal(firstDiff(plain, fullSnap()), null, "the live race after a branch diverged from the race with none");
+});
+
+test("a branch re-run is byte-identical at +3 laps, and a box decision goes through the pit API", () => {
+  const F = forkAt40();
+  const ai = g.G.cars.findIndex((c) => !c.isPlayer && !c.retired);
+  const boxA = [{ car: ai, lap: 0, action: "box" }];
+  const a = DF.run(DF.branch(F, boxA, { laps: 3 }, opts(TIGHT)));
+  const b = DF.run(DF.branch(F, boxA, { laps: 3 }, opts(TIGHT)));
+  assert.equal(a.state, "done", "branch A ran: " + a.error);
+  assert.equal(a.result.reason, "laps");
+  const p = a.result.cars.find((c) => c.isPlayer);
+  assert.equal(p.lapTimes.length, 3, "the player completed the 3-lap horizon");
+  assert.equal(JSON.stringify(b.result), JSON.stringify(a.result), "the re-run of branch A differs");
+  const stay = DF.run(DF.branch(F, [{ car: ai, lap: 0, action: "stay" }], { laps: 3 }, opts(TIGHT)));
+  const boxed = a.result.cars[ai], stayed = stay.result.cars[ai];
+  assert.ok(!a.result.culled.includes(ai), "the decided car is never culled");
+  assert.equal(boxed.stops, 1, "the boxed car made its stop");
+  assert.equal(stayed.stops, 0, "the car told to stay did not stop");
+  assert.notEqual(JSON.stringify(boxed.lapTimes), JSON.stringify(stayed.lapTimes), "boxing changed its laps");
+});
+
+test("time slicing changes only the ticks per call: step(job, 0) one tick at a time equals one run()", () => {
+  const F = forkAt40();
+  const whole = DF.run(DF.branch(F, [], { seconds: 3 }, opts(null)));
+  const sliced = DF.branch(F, [], { seconds: 3 }, opts(null));
+  let calls = 0;
+  while (!DF.step(sliced, 0)) calls++;
+  assert.ok(calls > 100, "a zero budget runs one tick per call (" + calls + " calls)");
+  assert.equal(sliced.state, "done", sliced.error);
+  assert.equal(JSON.stringify(sliced.result), JSON.stringify(whole.result), "slicing changed the branch");
+});
+
+test("a culled field differs from the full field by less than noise()", () => {
+  const F = forkAt40();
+  const until = { laps: 1 };
+  const full = DF.run(DF.branch(F, [], until, opts(null)));
+  const culled = DF.run(DF.branch(F, [], until, opts(TIGHT)));
+  assert.equal(full.state, "done", full.error);
+  assert.equal(culled.state, "done", culled.error);
+  assert.ok(culled.result.culled.length >= 5, "the cull removed cars (" + culled.result.culled.length + ")");
+  assert.equal(full.result.culled.length, 0);
+  const n = DF.noise(F, [], until, opts(null), 3);
+  assert.ok(n >= 1 / 60, "noise() is floored at one tick");
+  const d = Math.abs(culled.result.player.timeS - full.result.player.timeS);
+  assert.ok(d < n, `culled vs full: ${d.toFixed(3)} s, noise ${n.toFixed(3)} s`);
+});

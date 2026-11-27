@@ -863,6 +863,8 @@ async function precacheAssetLists() {
     "learn/telemetry/style.css",
     "learn/telemetry/model.js",
     "learn/telemetry/lab.js",
+    // LAZY_DRILL_FORK — the strategy drills' what-if service behind a kind:sim drill
+    "js/race/drill-fork.js",
     // LOCALES — manifest only until a non-English language ships
     "locales/manifest.json",
     // /@gen-shell:sw-optional

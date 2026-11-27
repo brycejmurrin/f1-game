@@ -1929,6 +1929,11 @@ const MOVED = {
 // Learn's modal loads only after the title door is used. The iframe requests
 // its standalone page and lesson assets without a ScriptLoader version query.
 const LAZY_LEARN = ["js/learn-drills/registry.js", "js/ui/learn-door.js", "js/ui/thumb-trainer.js", "js/learn-drills/thumb-drill.js"];
+// DrillFork (#6559 B2): the strategy drills' what-if service, its own bundle, loaded only by a kind:"sim" drill.
+// The drill host (LAZY_LEARN, itself lazy) loads it with ScriptLoader as title-menu.js loads LAZY_LEARN, after
+// LazyBundles.ensureRaceSession(): no loader in the eager shell, whose bytes are at budget. It reads the coach and
+// SimState (LAZY_RACE_SESSION) at call time, never at eval.
+const LAZY_DRILL_FORK = ["js/race/drill-fork.js"];
 const SW_LEARN = [
   "learn/appearance.js", "learn/replay.js", "learn/replay.css", "learn/sandbox.js", "learn/sandbox.css",
   ...["chassis", "suspension", "deployment", "hybrid", "brake-blend", "tyre-heat",
@@ -1956,6 +1961,7 @@ const GROUP_TIERS = {
   // tlx-chunked.js is also in TRACK_WORKER_EXTRA, so it runs on the page AND in the build worker.
   "DEFERRED.three": { tier: "boot", where: "page", files: { "js/render/three/tlx-chunked.js": "both" } },
   LAZY_LEARN: { tier: "menu", where: "page" },
+  LAZY_DRILL_FORK: { tier: "race", where: "page" },
   LAZY_CIRCUIT: { tier: "menu", where: "page" },     // hydrates on pick
   LAZY_SCENERY: { tier: "race", where: "page" },
   LAZY_AGENT: { tier: "tool", where: "page" },
@@ -2288,7 +2294,7 @@ const TIERS = { GROUP_TIERS, FULL_TIERS };
 
 module.exports = {
   MOVED, TIERS,
-  SW_LOCALES, SW_LEARN, LAZY_LEARN,
+  SW_LOCALES, SW_LEARN, LAZY_LEARN, LAZY_DRILL_FORK,
   CIRCUITS, CIRCUITS_DIR, CIRCUIT_META, LAZY_CIRCUIT, FULL, CSS, CSS_PRELOAD, CSS_DEFERRED, CSS_ROUTE, SHELL_NOTES, CARVIEW, CONTROLLER, TRACK_VM, HARD_EDGES,
   DEFERRED, DEFERRED_EDGES, LAZY_AGENT, LAZY_EDGES, LAZY_DEV, LAZY_PERF, LAZY_PERF_EDGES, LAZY_REAL_RACE, LAZY_REAL_RACE_EDGES, OVERLAY_PAGE, LAZY_RACE,
   LAZY_RACE_SESSION, LAZY_RACE_SESSION_EDGES, LAZY_GARAGE_EXTERIOR,

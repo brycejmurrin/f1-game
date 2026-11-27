@@ -410,11 +410,15 @@ const DrivingCoachBody = (function () {
     // so a rewind clears marbles and broken panels instead of putting them
     // back. The alternative is cars rewound into debris that was never there.
     function captureWorld() { return SimState.capture(G); }
-    function restoreWorld(w) {
-      SimState.restore(w, G, { keepForward: true });
+    // `exact` (DrillFork, #6559 B2): a what-if branch is a REPLAY, so the player's penalties go back too and the
+    // lap is not marked; a practice rewind (the default) keeps both forward.
+    function restoreWorld(w, o) {
+      const exact = !!(o && o.exact);
+      if (!SimState.restore(w, G, { keepForward: !exact })) return false;
       if (typeof LapRetry !== "undefined") LapRetry.invalidate();   // the RETRY LAP drop-in is from a world this rewind replaced
-      if (G.player) G.player.incidentInvalidLap = true;
+      if (G.player && !exact) G.player.incidentInvalidLap = true;
       G.records.invalidate(); trace = []; quiet = 2; clearCandidate();
+      return true;
     }
     // A CHECKPOINT IS A WORLD TOO. Same reasoning as rewind: saving a starting
     // point in a race and restoring only your own car would put you back on the
@@ -691,7 +695,7 @@ const DrivingCoachBody = (function () {
       practiceGoal: () => drillMode, setPracticeGoal,
       canPractice, rewindReady: () => canPractice() && rewindBuf.length > 0,
       practiceActive: () => practice, isEnabled: () => !!enabled, downloadTrace,
-      trace: () => trace.map(row => ({ ...row })), insights };
+      trace: () => trace.map(row => ({ ...row })), insights, captureWorld, restoreWorld };
   }
   return { create };
 })();
