@@ -13,7 +13,7 @@
 #datahub:not([open]) { display: none; }
 #datahub::backdrop { background: none; }
 .dh-overlay {
-  position: fixed; inset: 0; z-index: 50;
+  position: fixed; inset: 0; z-index: var(--z-hub);
   margin: 0; border: 0;
   width: 100%; max-width: none; max-height: none;
   color: inherit;
@@ -38,7 +38,7 @@
    Hub opens from renderer-picker. The hub's default scrim and --panel
    composites are translucent, so recovery buttons bleed through the card. */
 body:has(> #nogl:not([hidden])) #datahub:modal {
-  z-index: 100;
+  z-index: var(--z-nogl-hub);
   background: var(--scrim-heavy);
 }
 body:has(> #nogl:not([hidden])) #datahub:modal .dh-card {
@@ -169,11 +169,11 @@ body[data-width="wide"][data-density="normal"] .dh-card {
   color: var(--text);
   white-space: nowrap;
   text-align: center;
-  transition: background 0.12s, color 0.12s, border-color 0.12s;
+  transition: background var(--dur-1), color var(--dur-1), border-color var(--dur-1);
 }
 /* Press travel (css/components.css, no-preference) needs transform in the list; this layer outranks it. */
 @media (prefers-reduced-motion: no-preference) {
-  .dh-tab { transition: background 0.12s, color 0.12s, border-color 0.12s, transform 0.08s ease; }
+  .dh-tab { transition: background var(--dur-1), color var(--dur-1), border-color var(--dur-1), transform 0.08s ease; }
 }
 @media (hover: hover) and (pointer: fine) {
   .dh-tab:hover { color: var(--text); }
@@ -472,8 +472,8 @@ body[data-width="narrow"] [data-nextgp="countdown"] { grid-column: 1; grid-row: 
 /* Hide local time on very narrow phones to save vertical space */
 body[data-width="narrow"] .dh-race-time { display: none; }
 .dh-race-next { background: color-mix(in oklab, var(--red) 10%, transparent); border-radius: var(--r-md); }
-.dh-chip-next { font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-4); background: var(--red); color: #fff; padding: calc(var(--gap) / 6) calc(var(--gap) * 0.5); border-radius: var(--r-sm); }
-.dh-chip-sprint { font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-4); background: #4a4a9a; color: #fff; padding: calc(var(--gap) / 6) calc(var(--gap) * 0.5); border-radius: var(--r-sm); }
+.dh-chip-next { font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-4); background: var(--red); color: var(--ink-on-accent); padding: calc(var(--gap) / 6) calc(var(--gap) * 0.5); border-radius: var(--r-sm); }
+.dh-chip-sprint { font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-4); background: #4a4a9a; color: var(--ink-on-accent); padding: calc(var(--gap) / 6) calc(var(--gap) * 0.5); border-radius: var(--r-sm); }
 
 /* standings */
 .dh-standings { gap: calc(var(--gap) * 1.5); }
@@ -492,7 +492,7 @@ body[data-width="wide"] .dh-standings { flex-direction: row; align-items: flex-s
   display: flex; align-items: center; gap: calc(var(--gap) * 2 / 3);
   padding: 5px 4px 5px 0;
   position: relative;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid rgba(255,255,255,0.05);
   font-size: var(--fs-3);
   border-left: 3px solid var(--row-team, transparent);
   padding-left: 7px;
@@ -514,9 +514,9 @@ body[data-width="wide"] .dh-standings { flex-direction: row; align-items: flex-s
 .dh-cons-main { display: flex; align-items: center; gap: calc(var(--gap) * 2 / 3); flex: 1; min-width: 200px; }
 .dh-livecard .dh-cons-main { min-width: 150px; }
 .dh-h2h-wrap { display: flex; flex-direction: column; gap: calc(var(--gap) / 6); flex: 1; min-width: 140px; align-items: flex-end; }
-.dh-h2h-bar { display: flex; width: 100%; max-width: 160px; height: 6px; border-radius: var(--r-xs); background: rgba(255, 255, 255, 0.1); overflow: hidden; margin-top: calc(var(--gap) / 3); }
-.dh-h2h-fill { height: 100%; background: #fff; transition: width 0.3s; }
-.dh-h2h-alt { background: rgba(255, 255, 255, 0.3); }
+.dh-h2h-bar { display: flex; width: 100%; max-width: 160px; height: 6px; border-radius: var(--r-xs); background: rgba(255,255,255,0.1); overflow: hidden; margin-top: calc(var(--gap) / 3); }
+.dh-h2h-fill { height: 100%; background: var(--ink-on-accent); transition: width 0.3s; }
+.dh-h2h-alt { background: rgba(255,255,255,0.3); }
 .dh-h2h-labels { display: flex; width: 100%; max-width: 160px; justify-content: space-between; font-size: var(--fs-micro); color: var(--dim); font-weight: 700; letter-spacing: var(--ls-3); }
 
 .dh-pos { font-family: var(--font-hud); font-variant-numeric: tabular-nums; width: 24px; text-align: right; color: var(--dim); flex: 0 0 auto; }
@@ -524,7 +524,7 @@ body[data-width="wide"] .dh-standings { flex-direction: row; align-items: flex-s
   flex: 0 0 auto;
   font-size: var(--fs-2); font-weight: 800;
   padding: calc(var(--gap) / 6) calc(var(--gap) * 0.5); border-radius: var(--r-sm);
-  color: #fff; min-width: 38px; text-align: center;
+  color: var(--ink-on-accent); min-width: 38px; text-align: center;
   border-left: 3px solid var(--plate-line);
   background: rgba(255, 255, 255, 0.07);
 }
@@ -759,7 +759,9 @@ body[data-width="wide"] .dh-standings { flex-direction: row; align-items: flex-s
   border-left-width: 3px;
   color: var(--text);
 }
-.dh-dchip.active { background: var(--plate-on); border-color: var(--red); color: var(--text); }
+/* SELECTED CHIP, one rule for the six Data Hub chips (#7051). Placed at the first of them, so the
+   later .dh-onboard.dh-tplaying blue still wins on the onboard PLAY button: same (0,2,0), later. */
+:is(.dh-dchip.active, .dh-tplay.dh-tplaying, .dh-ratebtn.active, .dh-livebtn.active, .dh-sortbtn.active, .dh-pill.active) { background: var(--plate-on); border-color: var(--red); color: var(--text); }
 /* A phone: 22 "HUL · Hulkenberg" chips were nine rows, most of a screen
    between the session pickers and the lap they select. The three-letter code
    alone, in an even grid (the surname stays in each chip's aria-label). */
@@ -816,7 +818,7 @@ body[data-density="compact"] .dh-canvas.dh-map { max-width: 220px; }
   display: inline-flex; align-items: center; gap: 5px;
   background: transparent; border: none; border-radius: var(--r-sm);
   padding: calc(var(--gap) * 0.25) calc(var(--gap) * 0.5); margin: 0; color: inherit; font: inherit;
-  letter-spacing: var(--ls-2); cursor: pointer; transition: opacity 0.12s;
+  letter-spacing: var(--ls-2); cursor: pointer; transition: opacity var(--dur-1);
 }
 @media (hover: hover) and (pointer: fine) {
   button.dh-legend-item:hover { background: var(--plate); }
@@ -851,7 +853,6 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
   color: var(--text);
 }
 .dh-trestart { padding: 7px var(--gap); }
-.dh-tplay.dh-tplaying { background: var(--plate-on); border-color: var(--red); color: var(--text); }
 .dh-trates { display: flex; gap: calc(var(--gap) / 3); }
 .dh-ratebtn {
   font-size: var(--fs-2); font-weight: 800;
@@ -860,11 +861,10 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
   border: 1px solid var(--plate-line);
   color: var(--text);
 }
-.dh-ratebtn.active { background: var(--plate-on); border-color: var(--red); color: var(--text); }
 .dh-thint { font-size: var(--fs-2); color: var(--steel); font-style: italic; margin-left: auto; }
 /* On very narrow portrait, hide the scrub hint to keep transport on one row */
 body[data-width="narrow"] .dh-thint { display: none; }
-.dh-onboard.dh-tplaying { background: #2a6df0; border-color: #2a6df0; color: #fff; }
+.dh-onboard.dh-tplaying { background: #2a6df0; border-color: #2a6df0; color: var(--ink-on-accent); }
 .dh-delta { max-width: 600px; height: auto; margin-top: -2px; }
 
 .dh-dash {
@@ -907,7 +907,6 @@ body[data-width="narrow"] .dh-thint { display: none; }
   border: 1px solid var(--plate-line);
   color: var(--text);
 }
-.dh-livebtn.active { background: var(--plate-on); border-color: var(--red); color: var(--text); }
 /* full-width action under a lane tray / detail (LOAD LAP, CLEAR LANES, BACK) —
    was three inline style writes in js/data/telemetry.js. A data attribute, not
    a class: the cssClasses ratchet is at its ceiling and this is a layout
@@ -959,7 +958,6 @@ body[data-width="narrow"] .dh-thint { display: none; }
   border: 1px solid var(--plate-line);
   color: var(--text);
 }
-.dh-sortbtn.active { background: var(--plate-on); border-color: var(--red); color: var(--text); }
 
 /* ---------- session picker (LIVE + TELEMETRY) ---------- */
 .dh-picker {
@@ -996,7 +994,6 @@ body[data-width="narrow"] .dh-thint { display: none; }
   color: var(--text);
   flex: 0 0 auto;
 }
-.dh-pill.active { background: var(--plate-on); border-color: var(--red); color: var(--text); }
 .dh-pill:disabled { opacity: 0.4; cursor: default; }
 
 /* ---------- TAP TARGETS ----------
@@ -1244,7 +1241,7 @@ body[data-density="compact"][data-width="wide"] {
    guard — without it a closed-but-unhidden dialog lays out in the seam and
    Chromium drops boxes on top-layer re-attach (the round-10 #customize bug). */
 .dh-tpopup {
-  position: fixed; inset: 0; z-index: 60;
+  position: fixed; inset: 0; z-index: var(--z-popup);
   margin: 0; border: 0;
   width: 100%; height: 100%;
   max-width: none; max-height: none;

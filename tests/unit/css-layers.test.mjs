@@ -367,14 +367,17 @@ test("an element that ships the hidden attribute is not un-hidden by a display r
  * straight over the card. This pins the invariant rather than the number. */
 test("#loading stacks above every id-addressed menu screen", () => {
   const MENUS = ["overlay", "select", "season-setup", "career", "carsetup"];
+  // A rung of the tokens.css --z-* ladder (#7054) resolves to its number.
+  const ladder = Object.fromEntries([...fs.readFileSync(path.join(CSS_DIR, "tokens.css"), "utf8")
+    .matchAll(/(--z-[a-z-]+):\s*(\d+);/g)].map((m) => [m[1], +m[2]]));
   const z = {};
   for (const f of files) {
     const src = stripComments(fs.readFileSync(path.join(CSS_DIR, f), "utf8"));
     for (const id of [...MENUS, "loading"]) {
       const rule = new RegExp(`(^|[,{}])\\s*#${id}\\s*\\{([^{}]*)\\}`, "g");
       for (const m of src.matchAll(rule)) {
-        const d = /(?:^|;)\s*z-index\s*:\s*(-?\d+)/.exec(m[2]);
-        if (d) z[id] = Math.max(z[id] ?? -Infinity, +d[1]);
+        const d = /(?:^|;)\s*z-index\s*:\s*(?:(-?\d+)|var\((--z-[a-z-]+)\))/.exec(m[2]);
+        if (d) z[id] = Math.max(z[id] ?? -Infinity, d[1] != null ? +d[1] : ladder[d[2]]);
       }
     }
   }

@@ -21,7 +21,10 @@ const wcag = (fg, bg) => {
 };
 /** "#fff" | "#rrggbb" | "rgb(a)(r, g, b[, a])" -> { rgb: 0–1 triple, a }, else null. */
 function parseColor(v) {
-  const s = String(v || "").trim();
+  let s = String(v || "").trim();
+  // A constant ink token (#7054: --ink-*, never redefined by a theme) resolves to its :root value.
+  const tok = /^var\((--ink-[a-z-]+)\)$/.exec(s);
+  if (tok) s = (read("css/tokens.css").match(new RegExp(`${tok[1]}:\\s*([^;]+);`)) || [])[1] || s;
   let m = s.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
   if (m) {
     const h = m[1].length === 3 ? [...m[1]].map((c) => c + c).join("") : m[1];

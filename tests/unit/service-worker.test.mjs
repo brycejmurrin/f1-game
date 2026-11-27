@@ -36,7 +36,7 @@ function requestKey(value) {
   return value.url;
 }
 
-function createHarness({ fetchImpl, putImpl, matchImpl, immediateTimeout = false, immediateTimeoutMs = null, navigator, hostname = "apex.test", registration, posted, workerURL, globals, clientWindows } = {}) {
+function createHarness({ fetchImpl, putImpl, matchImpl, immediateTimeout = false, immediateTimeoutMs = null, navigator, hostname = "apex.test", registration, posted, workerURL, globals, clientWindows, source = SW_SOURCE } = {}) {
   const listeners = new Map();
   const stores = new Map();
   const deleted = [];
@@ -147,7 +147,7 @@ function createHarness({ fetchImpl, putImpl, matchImpl, immediateTimeout = false
     ...(navigator ? { navigator } : {}),
     ...(globals || {}),
   });
-  vm.runInContext(SW_SOURCE, context, { filename: absSrc("sw.js") });
+  vm.runInContext(source, context, { filename: absSrc("sw.js") });
 
   function lifecycleEvent(type) {
     const lifetimes = [];
@@ -1522,7 +1522,7 @@ function voiceHarness({ net, immediateTimeoutMs } = {}) {
   return h;
 }
 
-test("voice json and bin are network-first: fetch runs before a stale cache can be the only answer", async () => {
+test("voice json is network-first: fetch runs before a stale cache can be the only answer", async () => {
   const order = [];
   const h = voiceHarness({
     net: async (url) => {
@@ -1530,7 +1530,7 @@ test("voice json and bin are network-first: fetch runs before a stale cache can 
       return new Response(url.pathname.endsWith(".json") ? '{"newIndex":true}' : "new-bytes", { status: 200 });
     },
   });
-  for (const path of ["/assets/voice/george.json", "/assets/voice/george.bin"]) {
+  for (const path of ["/assets/voice/george.json"]) {
     order.length = 0;
     const ev = h.fetchEvent(new Request(`${ORIGIN}${path}`));
     const body = await (await ev.responsePromise).text();
@@ -1542,6 +1542,37 @@ test("voice json and bin are network-first: fetch runs before a stale cache can 
     assert.equal(h.stores.get("apex26-321")?.get(`${ORIGIN}${path}`), undefined,
       `${path} is not copied into the generation (audit4 B8)`);
   }
+});
+
+test("a cached voice .bin is cache-first (no fetch); cache:reload and a miss go to the network (#7075 17b)", async () => {
+  const order = [];
+  const h = voiceHarness({ net: async (url) => { order.push(url.pathname); return new Response("new-bytes", { status: 200 }); } });
+  h.stores.set("apex26-voice", new Map([[`${ORIGIN}/assets/voice/george.bin`, new Response("old-bytes")]]));
+  const hit = h.fetchEvent(new Request(`${ORIGIN}/assets/voice/george.bin`));
+  assert.equal(await (await hit.responsePromise).text(), "old-bytes");
+  await Promise.all(hit.lifetimes);
+  assert.deepEqual(order, [], "a cached .bin costs no network round trip");
+  const fresh = h.fetchEvent(new Request(`${ORIGIN}/assets/voice/george.bin`, { cache: "reload" }));
+  assert.equal(await (await fresh.responsePromise).text(), "new-bytes", "a digest-mismatch retry (cache:reload) reaches the network");
+  await Promise.all(fresh.lifetimes);
+  assert.equal(await h.stores.get("apex26-voice").get(`${ORIGIN}/assets/voice/george.bin`).text(), "new-bytes");
+  const miss = h.fetchEvent(new Request(`${ORIGIN}/assets/voice/other.bin`));
+  assert.equal(await (await miss.responsePromise).text(), "new-bytes", "a miss falls back to network-first");
+  await Promise.all(miss.lifetimes);
+});
+
+test("voice-pack re-asks past a cached .bin whose digest misses the fresh .json (#7075 17b)", async () => {
+  const good = "GOOD!", bad = "STALE";
+  const man = JSON.stringify({ clips: { a: [0, 5, 1] }, binary: { bytes: 5, sha256: createHash("sha256").update(good).digest("hex") } });
+  const calls = [];
+  const ctx = vm.createContext({ crypto: webcrypto, setTimeout, clearTimeout, setInterval: () => 1, clearInterval() {}, Log: { info() {} },
+    fetch: async (url, init) => {
+      calls.push(`${url.split("/").pop()}:${init && init.cache || ""}`);
+      return new Response(url.endsWith(".json") ? man : (init && init.cache === "reload" ? good : bad));
+    } });
+  vm.runInContext(await readFile(new URL("../../js/audio/voice-pack.js", import.meta.url), "utf8"), ctx, { filename: absSrc("js/audio/voice-pack.js") });
+  assert.equal(await ctx.VoicePack.create({}).load("george"), true);
+  assert.deepEqual(calls.filter((c) => c.endsWith(".bin:reload")), ["george.bin:reload"]);
 });
 
 test("offline, voice json and bin fall back to the cached pair", async () => {
@@ -1559,6 +1590,7 @@ test("a voice rebake during an active worker lifetime cannot play a mixed cached
   } });
   let deployed = 321, binaryFault = true, offline = false;
   const brokenBin = deferred();
+  const faults = []; brokenBin.promise.catch((e) => faults.push(e));   // the cached .bin answers first; the reload retry consumes it later
   const ordinary = installFetch();
   const h = createHarness({ fetchImpl: async (request) => {
     if (offline) throw new TypeError("offline");
@@ -1579,8 +1611,8 @@ test("a voice rebake during an active worker lifetime cannot play a mixed cached
   deployed = 322;  // old worker remains active while the replacement installs
   const ctx = vm.createContext({ crypto: webcrypto, setTimeout, clearTimeout,
     setInterval: () => 1, clearInterval() {}, Log: { info() {} },
-    fetch: async (url) => {
-      const event = h.fetchEvent(new Request(new URL(url, ORIGIN)));
+    fetch: async (url, init) => {
+      const event = h.fetchEvent(new Request(new URL(url, ORIGIN), init));
       const response = await event.responsePromise;
       if (url.endsWith(".json")) {
         // JSON arrived from the new deployment; the sibling binary fails.
@@ -2343,7 +2375,7 @@ test("install carries runtime entries into the new generation, revalidated, and 
     [`${ORIGIN}/assets/pack/x.ktx2?h=${H1}`]: ["pack-x", { ETag: '"px"' }],          // unchanged → 304
     [`${ORIGIN}/assets/pack/y.ktx2?h=${H2}`]: ["pack-y-old", { ETag: '"py1"' }],      // rebaked → 200 → dropped
     [`${ORIGIN}/${poisonedKey}`]: ["pack-z-new", { ETag: '"pz"' }],                          // wrong bytes under old hash
-    [`${ORIGIN}/assets/sfx/f1_engine.mp3`]: ["engine", { "Last-Modified": "Mon, 02 Nov 2026 00:00:00 GMT" }],
+    [`${ORIGIN}/assets/sfx/legacy.mp3`]: ["engine", { "Last-Modified": "Mon, 02 Nov 2026 00:00:00 GMT" }],   // not in ASSET_HASH
     [`${ORIGIN}/assets/sfx/changed.mp3`]: ["old-sfx", { ETag: '"c1"' }],             // changed → fresh body
     [`${ORIGIN}/assets/sfx/crowd.mp3`]: ["crowd", { ETag: '"cr"' }],                 // 200 with the same ETag → unchanged
     [`${ORIGIN}/assets/sfx/removed.mp3`]: ["gone", { ETag: '"r"' }],                // 404 → dropped
@@ -2369,7 +2401,7 @@ test("install carries runtime entries into the new generation, revalidated, and 
       assert.equal(init.cache, "no-store");
       return new Response(JSON.stringify({ stripHash: H1 }));
     }
-    if (url.pathname === "/assets/sfx/f1_engine.mp3") return new Response(null, { status: h["If-Modified-Since"] ? 304 : 500 });
+    if (url.pathname === "/assets/sfx/legacy.mp3") return new Response(null, { status: h["If-Modified-Since"] ? 304 : 500 });
     if (url.pathname === "/assets/sfx/changed.mp3") return new Response("new-sfx", { status: 200, headers: { ETag: '"c2"' } });
     if (url.pathname === "/assets/sfx/crowd.mp3") return new Response("crowd-again", { status: 200, headers: { ETag: '"cr"' } });
     if (url.pathname === "/assets/sfx/removed.mp3") return new Response("nope", { status: 404 });
@@ -2386,7 +2418,7 @@ test("install carries runtime entries into the new generation, revalidated, and 
   const now = harness.stores.get("apex26-321");
   const text = async (k) => (now.has(`${ORIGIN}/${k}`) ? now.get(`${ORIGIN}/${k}`).clone().text() : undefined);
   assert.equal(await text(`assets/pack/x.ktx2?h=${H1}`), "pack-x", "an unchanged pack file survives the deploy");
-  assert.equal(await text("assets/sfx/f1_engine.mp3"), "engine", "sfx survives the deploy");
+  assert.equal(await text("assets/sfx/legacy.mp3"), "engine", "sfx survives the deploy");
   assert.equal(await text("vendor/rapier-0.19.3/rapier.mjs"), "rapier", "an opt-in path-pinned vendor survives");
   assert.equal(await text("vendor/three-0.187.0/three.core.min.js"), "three-core", "the three.js island is reused");
   assert.equal(await text("assets/sfx/changed.mp3"), "new-sfx", "a changed bare file is stored fresh");
@@ -2831,4 +2863,177 @@ test("an optional body that stalls past the idle window is still abandoned (#682
   await h.lifecycleEvent("install").done();
   assert.equal(h.stores.get("apex26-322").has(url), false, "no chunk for 4 s gives up on the asset");
   assert.equal(h.skipped, 1, "a stalled optional body never blocks the install");
+});
+
+// #7076 17c: a runtime-only door (WGX here) first opened AFTER the new install ran was answered
+// from the retained predecessor and never copied forward, so the sweep that drops the
+// predecessor once its windows close took the only copy and the next offline launch missed it.
+test("a cache-first hit from an older generation is promoted into the current one and survives offline (#7076 17c)", async () => {
+  const wgx = `${ORIGIN}/js/render/webgpu/wgx.js?v=${hash12("wgx-body")}`;
+  const forged = `${ORIGIN}/js/editor/editor.js?v=${hash12("other-body")}`;   // bytes the key does not name
+  const buildKeyed = `${ORIGIN}/js/xr/xr.js?v=320`;                            // a build-keyed key stays with its build
+  const pinned = `${ORIGIN}/vendor/rapier-0.19.3/rapier.mjs`;                 // path-pinned: names its bytes too
+  const oldShellScript = `${ORIGIN}/js/ui/hud.js?v=${hash12("hud-old")}`;     // an old tab's ordinary script: install's, not promoted
+  const state = { offline: false };
+  const harness = createHarness({ fetchImpl: generationFetch(state), clientWindows: 1 });
+  harness.stores.set("apex26-320", new Map([
+    [`${ORIGIN}/__apex_install_settled__`, new Response("settled")],
+    [wgx, new Response("wgx-body")],
+    [forged, new Response("tampered")],
+    [buildKeyed, new Response("xr-320")],
+    [pinned, new Response("rapier")],
+    [oldShellScript, new Response("hud-old")],
+  ]));
+  harness.stores.set("apex26-321", new Map([[`${ORIGIN}/__apex_install_settled__`, new Response("settled")]]));
+  for (const u of [wgx, forged, buildKeyed, pinned, oldShellScript]) {
+    const ev = harness.fetchEvent(new Request(u));
+    await ev.responsePromise; await Promise.all(ev.lifetimes);
+  }
+  const now = harness.stores.get("apex26-321");
+  assert.equal(await now.get(wgx)?.clone().text(), "wgx-body", "the verified hit is promoted");
+  assert.equal(await now.get(pinned)?.clone().text(), "rapier", "a path-pinned hit is promoted");
+  assert.equal(now.has(forged), false, "bytes that miss their digest stay where they were");
+  assert.equal(now.has(buildKeyed), false, "a build-keyed entry is not promoted");
+  assert.equal(now.has(oldShellScript), false, "an old shell's ordinary ?v= script is not promoted");
+  assert.ok(harness.stores.has("apex26-320"), "the predecessor is kept while a window is open");
+  harness.setClientWindows(0);
+  const nav = harness.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/` });
+  await nav.responsePromise; await Promise.all(nav.lifetimes);
+  assert.equal(harness.stores.has("apex26-320"), false, "the predecessor is swept once its windows close");
+  state.offline = true;
+  const offline = harness.fetchEvent(new Request(wgx));
+  assert.equal(await (await offline.responsePromise).text(), "wgx-body", "the promoted door still opens offline");
+});
+
+test("a hit from the current generation is not rewritten (#7076 17c)", async () => {
+  const wgx = `${ORIGIN}/js/render/webgpu/wgx.js?v=${hash12("wgx-body")}`;
+  const puts = [];
+  const harness = createHarness({ fetchImpl: generationFetch({ offline: false }), putImpl: (name, req) => puts.push(name + " " + requestKey(req)) });
+  harness.stores.set("apex26-321", new Map([[`${ORIGIN}/__apex_install_settled__`, new Response("settled")], [wgx, new Response("wgx-body")]]));
+  const ev = harness.fetchEvent(new Request(wgx));
+  assert.equal(await (await ev.responsePromise).text(), "wgx-body");
+  await Promise.all(ev.lifetimes);
+  assert.deepEqual(puts, []);
+});
+
+// #7076 17e: stills and sfx are requested under bare paths and were cache-first under the bare
+// key, so a re-rendered still kept its first bytes for a whole generation. sw.js now files each
+// under `<path>?v=<digest>` from ASSET_HASH, which gen-shell writes from the files themselves.
+const ASSET_HASH_TABLE = (() => {
+  const m = /const ASSET_HASH = (\{[\s\S]*?\n\});/.exec(SW_SOURCE);
+  return m ? JSON.parse(m[1].replace(/,\n\}$/, "\n}")) : null;
+})();
+const STILL = ASSET_HASH_TABLE && Object.keys(ASSET_HASH_TABLE).find((k) => k.startsWith("assets/stills/"));
+const withAssetHash = (rel, hash) => SW_SOURCE.replace(`"${rel}": "${ASSET_HASH_TABLE[rel]}"`, `"${rel}": "${hash}"`);
+
+test("sw.js ASSET_HASH is the generated digest of every still and sfx file (#7076 17e)", async () => {
+  const { swAssetHashes } = await import("../../tools/gen/gen-shell.mjs");
+  assert.ok(ASSET_HASH_TABLE && STILL, "sw.js carries a stills table");
+  assert.ok(ASSET_HASH_TABLE["assets/sfx/f1_engine.mp3"], "and the engine sample");
+  assert.deepEqual(ASSET_HASH_TABLE, swAssetHashes(), "regenerate with npm run gen");
+  const bytes = await readFile(new URL(`../../${STILL}`, import.meta.url));
+  assert.equal(ASSET_HASH_TABLE[STILL], createHash("sha256").update(bytes).digest("hex").slice(0, 12));
+});
+
+test("a still is filed under its content key, and a changed still picks up a new one (#7076 17e)", async () => {
+  const bare = `${ORIGIN}/${STILL}`;
+  const v1 = "still-bytes-v1", v2 = "still-bytes-v2";
+  const state = { offline: false, body: v1 };
+  const fetched = [];
+  const fetchImpl = async (request) => {
+    if (state.offline) throw new TypeError("offline");
+    const url = new URL(typeof request === "string" ? request : request.url, `${ORIGIN}/`);
+    if (url.pathname.endsWith("/version.json")) return new Response('{"build":321}', { status: 200 });
+    fetched.push(url.pathname + url.search);
+    return new Response(state.body, { status: 200 });
+  };
+  // Build 321's sw.js names v1.
+  const h = createHarness({ fetchImpl, source: withAssetHash(STILL, hash12(v1)) });
+  h.stores.set("apex26-321", new Map([[`${ORIGIN}/__apex_install_settled__`, new Response("settled")]]));
+  const first = h.fetchEvent(new Request(bare));
+  assert.equal(await (await first.responsePromise).text(), v1);
+  await Promise.all(first.lifetimes);
+  const store = h.stores.get("apex26-321");
+  assert.equal(await store.get(`${bare}?v=${hash12(v1)}`)?.clone().text(), v1, "filed under its content key");
+  assert.equal(store.has(bare), false, "never under the bare path");
+  state.offline = true;
+  const again = h.fetchEvent(new Request(bare));
+  assert.equal(await (await again.responsePromise).text(), v1, "served from cache offline");
+  assert.deepEqual(fetched, [`/${STILL}`], "the page's bare URL is what reaches the network, once");
+
+  // The still is re-rendered: build 322's sw.js names v2. The v1 copy can no longer answer.
+  state.offline = false; state.body = v2;
+  const h2 = createHarness({ fetchImpl: async (r, i) => {
+    const u = new URL(typeof r === "string" ? r : r.url, `${ORIGIN}/`);
+    if (u.pathname.endsWith("/version.json")) return new Response('{"build":322}', { status: 200 });
+    return fetchImpl(r, i);
+  }, source: withAssetHash(STILL, hash12(v2)) });
+  h2.stores.set("apex26-321", store);
+  h2.stores.set("apex26-322", new Map([[`${ORIGIN}/__apex_install_settled__`, new Response("settled")]]));
+  const changed = h2.fetchEvent(new Request(bare));
+  assert.equal(await (await changed.responsePromise).text(), v2, "the changed still is fetched, not the cached v1");
+  await Promise.all(changed.lifetimes);
+  assert.equal(await h2.stores.get("apex26-322").get(`${bare}?v=${hash12(v2)}`)?.clone().text(), v2, "under its new key");
+});
+
+test("a still whose network bytes miss the table is shown but never filed (#7076 17e)", async () => {
+  const bare = `${ORIGIN}/${STILL}`;
+  const h = createHarness({ fetchImpl: generationFetch({ offline: false }), source: withAssetHash(STILL, hash12("expected")) });
+  h.stores.set("apex26-321", new Map([[`${ORIGIN}/__apex_install_settled__`, new Response("settled")]]));
+  const ev = h.fetchEvent(new Request(bare));
+  assert.equal(await (await ev.responsePromise).text(), "network", "a lagging CDN edge still shows its image");
+  await Promise.all(ev.lifetimes);
+  assert.deepEqual([...h.stores.get("apex26-321").keys()], [`${ORIGIN}/__apex_install_settled__`]);
+});
+
+test("install carries a still by its digest with no network, a bare pre-#7076 copy included, and drops a stale hash (#7076 17e)", async () => {
+  const sfx = "assets/sfx/f1_engine.mp3";
+  const still = `${ORIGIN}/${STILL}`, engine = `${ORIGIN}/${sfx}`;
+  const source = withAssetHash(STILL, hash12("still-now")).replace(`"${sfx}": "${ASSET_HASH_TABLE[sfx]}"`, `"${sfx}": "${hash12("engine-now")}"`);
+  const base = installFetch();
+  const asked = [];
+  const fetchImpl = async (request, init) => {
+    const url = new URL(typeof request === "string" ? request : request.url, `${ORIGIN}/`);
+    if (/^\/assets\/(stills|sfx)\//.test(url.pathname)) asked.push(url.pathname + url.search);
+    return base(request, init);
+  };
+  const harness = createHarness({ fetchImpl, clientWindows: 0, source });
+  harness.stores.set("apex26-320", new Map([
+    [`${ORIGIN}/__apex_install_settled__`, new Response("settled")],
+    [`${still}?v=${hash12("still-old")}`, new Response("still-old", { headers: { ETag: '"s1"' } })],   // re-rendered since
+    [still, new Response("still-now")],                                                             // bare, pre-#7076, current bytes
+    [`${engine}?v=${hash12("engine-now")}`, new Response("engine-now", { headers: { ETag: '"e"' } })],
+  ]));
+  await harness.lifecycleEvent("install").done();
+  await harness.lifecycleEvent("activate").done();
+  const now = harness.stores.get("apex26-321");
+  assert.equal(await now.get(`${still}?v=${hash12("still-now")}`)?.clone().text(), "still-now", "a bare copy whose bytes match moves to the content key");
+  assert.equal(await now.get(`${engine}?v=${hash12("engine-now")}`)?.clone().text(), "engine-now", "an unchanged sfx is carried");
+  assert.equal(now.has(`${still}?v=${hash12("still-old")}`), false, "a stale hash is dropped");
+  assert.equal(now.has(still), false, "the bare key is not carried");
+  assert.deepEqual(asked, [], "no network for any of them");
+});
+
+test("promotion waits for a settled current generation and hashes a mismatching key once (#7076 17c)", async () => {
+  const wgx = `${ORIGIN}/js/render/webgpu/wgx.js?v=${hash12("wgx-body")}`;
+  const forged = `${ORIGIN}/js/editor/editor.js?v=${hash12("other-body")}`;
+  let digests = 0;
+  const subtle = webcrypto.subtle;
+  const crypto = { subtle: { digest: (...a) => { digests += 1; return subtle.digest(...a); } } };
+  const harness = createHarness({ fetchImpl: generationFetch({ offline: false }), globals: { crypto } });
+  harness.stores.set("apex26-320", new Map([
+    [`${ORIGIN}/__apex_install_settled__`, new Response("settled")],
+    [wgx, new Response("wgx-body")],
+    [forged, new Response("tampered")],
+  ]));
+  harness.stores.set("apex26-321", new Map());   // installing: no SETTLED marker yet
+  const hit = async (u) => { const ev = harness.fetchEvent(new Request(u)); await ev.responsePromise; await Promise.all(ev.lifetimes); };
+  await hit(wgx);
+  assert.equal(harness.stores.get("apex26-321").has(wgx), false, "nothing is promoted into an unsettled generation");
+  harness.stores.get("apex26-321").set(`${ORIGIN}/__apex_install_settled__`, new Response("settled"));
+  await hit(wgx);
+  assert.equal(harness.stores.get("apex26-321").has(wgx), true, "promoted once the generation settles");
+  digests = 0;
+  for (let i = 0; i < 3; i++) await hit(forged);
+  assert.equal(digests, 1, "a key whose digest misses is hashed once per worker, not on every hit");
 });

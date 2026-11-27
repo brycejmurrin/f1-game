@@ -2,8 +2,6 @@
 const QualiSheet = (function () {
   "use strict";
 
-const PODIUM = ["", " p1", " p2", " p3"];   // indexed by position; 4+ is ""
-
 function span(cls, text) {
   const s = document.createElement("span");
   s.className = cls;
@@ -30,23 +28,20 @@ function create(G) {
     if (!rows) return;
     for (const r of rows) {
       const team = Teams.LIST.find((t) => t.id === r.team);
-      const row = document.createElement("div");
       // A rival's DRIVEN lap (r.human: a real time substituted for a simulated
       // one) is marked — on a sheet whose whole job is "who was quick", which
       // times are real is the one thing it must not leave out. `you` still
       // marks the local player.
       const driven = r.human && !r.isPlayer ? " q-real" : "";
-      row.className = `res-row${PODIUM[r.pos] || ""}${r.isPlayer ? " you" : ""}${driven}`;
-      row.setAttribute("role", "listitem");
-      if (r.isPlayer) row.setAttribute("aria-current", "true");
-      const sw = span("res-swatch");
-      sw.style.background = G.cssCol(team ? team.color : [0.5, 0.5, 0.5]);
       const nm = span("res-name", `${r.code}  ${r.name}`);
       if (driven) nm.appendChild(span("q-real-tag", " " + I18n.t("quali.driven", null, "DRIVEN")));
       // Text as well as colour (and weight): the YOU row must be nameable without seeing it.
       if (r.isPlayer) nm.appendChild(span("q-real-tag", " " + I18n.t("quali.you", null, "YOU")));
       const tm = span("res-pts q-time", r.noTime ? I18n.t("quali.noTime", null, "NO TIME") : r.pos === 1 ? poleClock(r.t) : `+${r.gap.toFixed(3)}`);
-      row.append(span("res-pos", r.pos), sw, nm, tm);
+      // The row shell is GameResultsSheet.row, shared with the race classification (#7052).
+      const row = GameResultsSheet.row({ pos: r.pos, color: G.cssCol(team ? team.color : [0.5, 0.5, 0.5]), name: nm, pts: tm,
+        podium: r.pos, cls: `${r.isPlayer ? " you" : ""}${driven}`, swatchHidden: true });
+      if (r.isPlayer) row.setAttribute("aria-current", "true");
       body.appendChild(row);
     }
     const title = $("q-title");

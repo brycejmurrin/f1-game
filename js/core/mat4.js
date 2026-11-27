@@ -1,4 +1,4 @@
-/* Apex 26 — column-major 4x4 matrix + vec3 helpers, plus the SCALAR helpers modules share (M4.clamp / lerp / wrapDelta / clamp01 / smoothstep / smoothEdge, the seeded PRNG M4.rng32, and the session predicates M4.isNight / isWet). ident() allocates; every *To variant writes into the caller's `out` and returns it. */
+/* Apex 26 — column-major 4x4 matrix + vec3 helpers, plus the SCALAR helpers modules share (M4.clamp / lerp / wrapDelta / wrapIndex / clamp01 / smoothstep / smoothEdge, the seeded PRNG M4.rng32, and the session predicates M4.isNight / isWet). ident() allocates; every *To variant writes into the caller's `out` and returns it. */
 "use strict";
 
 const M4 = (function () {
@@ -30,6 +30,8 @@ const M4 = (function () {
       return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
     };
   }
+  // Round, then wrap into [0, n): n-0.5 -> 0.
+  function wrapIndex(x, n) { return ((Math.round(x) % n) + n) % n; }
   function lerp(a, b, t) { return a + (b - a) * t; }
   function wrapDelta(d, period) {
     const half = period * 0.5;
@@ -136,7 +138,7 @@ const M4 = (function () {
     return out;
   }
   return { ident, mulTo, perspectiveTo, lookAtTo, orthoTo, invertTo,
-           clamp, lerp, wrapDelta, roadFrameAxes, clamp01, smoothstep, smoothEdge, rng32, isNight, isWet };
+           clamp, lerp, wrapDelta, wrapIndex, roadFrameAxes, clamp01, smoothstep, smoothEdge, rng32, isNight, isWet };
 })();
 
 const V3 = (function () {

@@ -23,7 +23,7 @@ A PR that ends `cancelled` twice with zero failures:
 When to sync is AGENTS.md §Git branch & deploy. `node tools/ci/needs-sync.mjs <branch>` answers it
 (`= sync needed: conflict | union-conflict | stale-red | retest-refused | gate-refused | tip-crossed | tip-red | no`) and `sync-pr` refuses `no` (exit 4) and `tip-red` (exit 5:
 the deploy tip is red on code, so a sync would import the red; the gate's `base` row holds merges until the fix lands,
-#5425). Only the `deploy:red` fixer's own branch syncs onto a red tip, with `--onto-red-tip`. A newest run that ended `cancelled`
+#5425). Only the `deploy:red` fixer's own branch syncs onto a red tip, with `--onto-red-tip`. It also refuses (exit 6) when your local branch has commits `origin/<branch>` lacks, since the merge is built from origin and would drop them (#7171): push them first, then re-run. A newest run that ended `cancelled`
 after at least one job concluded `failure`, or green only on `run_attempt` > 1 after an earlier attempt had a red job
 (merge-gate refuses that green), counts as red for `stale-red`; zero failed jobs (a cancel, a cancel-only re-run) stays `no` (rule 8). A red is stale
 when the tip gained a commit after the run started OR when the run's recorded merge base (the tooling A `apex-guards`

@@ -26,7 +26,7 @@ Single-slice hunts do not need a workflow: agent `prior-art-scout` builds the
 recipe), and `finding-verifier` re-checks the rows (the skeptic step) before
 anything is fixed (`.claude/agents/README.md`). A hunt's or a workflow run's
 output is a `tracking` issue with `source:hunt`, not a docs PR (skill steward
-`references/labels.md` §Hunt and survey output).
+`references/labels.md` §Hunt and survey output); it closes once every row is handed off (D-059).
 
 Ground rules baked into every script: agents are read-only (or worktree-
 isolated), NEVER run browser/Playwright tests (4-core box — suites run in the

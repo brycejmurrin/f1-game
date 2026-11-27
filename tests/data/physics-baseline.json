@@ -107,12 +107,12 @@
       1670.8733
     ],
     [
-      1681.072,
+      1681.0733,
       16.0156,
-      38.2217,
+      38.2798,
       0,
       -1.904,
-      1681.072
+      1681.0733
     ]
   ],
   "trail brake into rotation": [
@@ -658,9 +658,9 @@
     ]
   ],
   "_blessed": {
-    "sha": "b674c025a615e440651ce6e6d05bf4ba14eaf78e",
-    "reason": "#6705 works grip reserve (Bryce's pick B, 2026-11-25 ~21:51Z)",
-    "at": "2026-11-25T22:31:16.436Z",
-    "hash": "50d128cc8bdfefbb19ebe37b39a839565036753af1ac5f0979f6475da02db374"
+    "sha": "b9db73b9307a9bd6fbe387dfe3eb00cdff6c7f08",
+    "reason": "wall/rub scrubs scale with PACE (#7147), Bryce approved 2026-11-27 ~01:07Z",
+    "at": "2026-11-27T01:12:53.956Z",
+    "hash": "b7bdb90d5f95cb10a225da27cca4115b30029d89cc9b8ba8eea2ba6db2fcab4c"
   }
 }

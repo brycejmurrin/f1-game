@@ -554,6 +554,7 @@
       "files": [
         "tests/unit/announcer.test.mjs",
         "tests/unit/asset-credits.test.mjs",
+        "tests/unit/audio-low-tier.test.mjs",
         "tests/unit/audio-mix-improvements.test.mjs",
         "tests/unit/audio-panel-boot.test.mjs",
         "tests/unit/audio-recovery.test.mjs",
@@ -805,7 +806,9 @@
         "tests/unit/determinism-replay-vm.test.mjs",
         "tests/unit/dev-tools-vm.test.mjs",
         "tests/unit/drift-vm.test.mjs",
+        "tests/unit/drill-aero-medals-vm.test.mjs",
         "tests/unit/drill-aero-vm.test.mjs",
+        "tests/unit/drill-fork-vm.test.mjs",
         "tests/unit/drive-to-box-vm.test.mjs",
         "tests/unit/driving-line-pace.test.mjs",
         "tests/unit/elevation-tracks-vm.test.mjs",
@@ -818,6 +821,7 @@
         "tests/unit/game-vm-pool.test.mjs",
         "tests/unit/game-vm.test.mjs",
         "tests/unit/headless-api-vm.test.mjs",
+        "tests/unit/hot-path-memo-vm.test.mjs",
         "tests/unit/hunt-apex-aiplace-reset-vm.test.mjs",
         "tests/unit/hunt-tlx-create-undo.test.mjs",
         "tests/unit/input-ghost-replay-vm.test.mjs",
@@ -880,6 +884,7 @@
         "tests/unit/sim-state-vm.test.mjs",
         "tests/unit/speed-cap-vm.test.mjs",
         "tests/unit/spoken-lang-offer-vm.test.mjs",
+        "tests/unit/stall-banner-lapped-dnf-vm.test.mjs",
         "tests/unit/storm-vm.test.mjs",
         "tests/unit/track-from-projection-vm.test.mjs",
         "tests/unit/track-wetness-vm.test.mjs",
@@ -888,6 +893,8 @@
         "tests/unit/tt-pit-lane-vm.test.mjs",
         "tests/unit/tyre-strategy-vm.test.mjs",
         "tests/unit/wake-lock-vm.test.mjs",
+        "tests/unit/wet-audio-spray-strength-vm.test.mjs",
+        "tests/unit/wet-sector-spray-skid-vm.test.mjs",
         "tests/unit/wind-vm.test.mjs",
         "tests/unit/world-physics-vm.test.mjs"
       ],
@@ -927,6 +934,7 @@
         "tests/unit/apex-surface-pin-vm.test.mjs",
         "tests/unit/boost-hold-restart-vm.test.mjs",
         "tests/unit/cam-avoid-vm.test.mjs",
+        "tests/unit/cam-surge-hold.test.mjs",
         "tests/unit/camera-mode-scope.test.mjs",
         "tests/unit/car-field-writes.test.mjs",
         "tests/unit/car-fields-lifetimes-vm.test.mjs",
@@ -941,7 +949,9 @@
         "tests/unit/determinism-replay-vm.test.mjs",
         "tests/unit/dev-tools-vm.test.mjs",
         "tests/unit/drift-vm.test.mjs",
+        "tests/unit/drill-aero-medals-vm.test.mjs",
         "tests/unit/drill-aero-vm.test.mjs",
+        "tests/unit/drill-fork-vm.test.mjs",
         "tests/unit/drive-to-box-vm.test.mjs",
         "tests/unit/driving-line-pace.test.mjs",
         "tests/unit/episode-transients.test.mjs",
@@ -953,6 +963,7 @@
         "tests/unit/game-vm-pool.test.mjs",
         "tests/unit/game-vm.test.mjs",
         "tests/unit/headless-api-vm.test.mjs",
+        "tests/unit/hot-path-memo-vm.test.mjs",
         "tests/unit/hunt-apex-aiplace-reset-vm.test.mjs",
         "tests/unit/hunt-tlx-create-undo.test.mjs",
         "tests/unit/input-ghost-replay-vm.test.mjs",
@@ -1015,6 +1026,7 @@
         "tests/unit/sim-state-vm.test.mjs",
         "tests/unit/speed-cap-vm.test.mjs",
         "tests/unit/spoken-lang-offer-vm.test.mjs",
+        "tests/unit/stall-banner-lapped-dnf-vm.test.mjs",
         "tests/unit/storm-vm.test.mjs",
         "tests/unit/track-from-projection-vm.test.mjs",
         "tests/unit/track-wetness-vm.test.mjs",
@@ -1023,6 +1035,8 @@
         "tests/unit/tt-pit-lane-vm.test.mjs",
         "tests/unit/tyre-strategy-vm.test.mjs",
         "tests/unit/wake-lock-vm.test.mjs",
+        "tests/unit/wet-audio-spray-strength-vm.test.mjs",
+        "tests/unit/wet-sector-spray-skid-vm.test.mjs",
         "tests/unit/wind-vm.test.mjs",
         "tests/unit/world-physics-vm.test.mjs"
       ],
@@ -1082,6 +1096,8 @@
         "tests/unit/redbull-orbit-clear.test.mjs",
         "tests/unit/track-from-projection-vm.test.mjs",
         "tests/unit/track-wetness-vm.test.mjs",
+        "tests/unit/wet-audio-spray-strength-vm.test.mjs",
+        "tests/unit/wet-sector-spray-skid-vm.test.mjs",
         "tests/unit/world-physics-vm.test.mjs"
       ],
       "twinned": false
@@ -1101,6 +1117,7 @@
         "tests/unit/ai-racecraft-vm.test.mjs",
         "tests/unit/ai-wing-spread-vm.test.mjs",
         "tests/unit/boost-hold-restart-vm.test.mjs",
+        "tests/unit/cam-surge-hold.test.mjs",
         "tests/unit/camera-mode-scope.test.mjs",
         "tests/unit/car-field-writes.test.mjs",
         "tests/unit/car-fields-lifetimes-vm.test.mjs",
@@ -1112,9 +1129,12 @@
         "tests/unit/determinism-replay-vm.test.mjs",
         "tests/unit/dev-tools-vm.test.mjs",
         "tests/unit/drift-vm.test.mjs",
+        "tests/unit/drill-aero-medals-vm.test.mjs",
         "tests/unit/drill-aero-vm.test.mjs",
+        "tests/unit/drill-fork-vm.test.mjs",
         "tests/unit/drive-to-box-vm.test.mjs",
         "tests/unit/driving-line-pace.test.mjs",
+        "tests/unit/hot-path-memo-vm.test.mjs",
         "tests/unit/lap-retry-vm.test.mjs",
         "tests/unit/lockup-bench-vm.test.mjs",
         "tests/unit/lockup-smoke-vm.test.mjs",
@@ -1152,6 +1172,7 @@
         "tests/unit/sim-state-vm.test.mjs",
         "tests/unit/speed-cap-vm.test.mjs",
         "tests/unit/spoken-lang-offer-vm.test.mjs",
+        "tests/unit/stall-banner-lapped-dnf-vm.test.mjs",
         "tests/unit/storm-vm.test.mjs",
         "tests/unit/tt-garage-door-flow-vm.test.mjs",
         "tests/unit/tt-lap-validity-vm.test.mjs",
@@ -1207,6 +1228,7 @@
       "kind": "browser",
       "files": [
         "tests/specs/ctx-lost-retry.spec.js",
+        "tests/specs/glx-fallback.spec.js",
         "tests/specs/hud-mirror.spec.js",
         "tests/specs/image-grade-visual.spec.js",
         "tests/specs/instanced-draw.spec.js",
@@ -1374,6 +1396,7 @@
         "tests/unit/lsp-port-cleanroom.test.mjs",
         "tests/unit/lsp-reference-fixes.test.mjs",
         "tests/unit/lsp-stress-fixes.test.mjs",
+        "tests/unit/lsp-tool-correctness.test.mjs",
         "tests/unit/lsp-workflow-fixes.test.mjs",
         "tests/unit/mcp-listing-cost.test.mjs",
         "tests/unit/ui-explorer-core.test.mjs",
@@ -1445,6 +1468,7 @@
         "tests/unit/lobby-codes.test.mjs",
         "tests/unit/lobby-settings.test.mjs",
         "tests/unit/net-authority.test.mjs",
+        "tests/unit/net-core-dedupe.test.mjs",
         "tests/unit/net-grid-separation.test.mjs",
         "tests/unit/net-ice-fetch-checks.test.mjs",
         "tests/unit/net-lobby-friend-quali.test.mjs",
@@ -1654,6 +1678,7 @@
         "tests/unit/career-planning-ui-download.test.mjs",
         "tests/unit/career-planning.test.mjs",
         "tests/unit/career-readslot-quota.test.mjs",
+        "tests/unit/career-refused-calendar-7069.test.mjs",
         "tests/unit/career-regulations.test.mjs",
         "tests/unit/career-save-integrity-6744.test.mjs",
         "tests/unit/career-save-kept.test.mjs",
@@ -1737,6 +1762,7 @@
         "tests/unit/digital-steer.test.mjs",
         "tests/unit/dock-layout.test.mjs",
         "tests/unit/driving-cues.test.mjs",
+        "tests/unit/dualsense-polish.test.mjs",
         "tests/unit/editor-workspace.test.mjs",
         "tests/unit/garage-defaults.test.mjs",
         "tests/unit/grip-steer.test.mjs",
@@ -1754,6 +1780,7 @@
         "tests/unit/key-binds-ui.test.mjs",
         "tests/unit/key-binds.test.mjs",
         "tests/unit/liv-swatch-box-cache.test.mjs",
+        "tests/unit/livery-sanitiser-pin.test.mjs",
         "tests/unit/low-speed-lock.test.mjs",
         "tests/unit/onboard.test.mjs",
         "tests/unit/pad-haptics.test.mjs",
@@ -2459,6 +2486,11 @@
     {
       "path": "js/camera/extra-rigs.js",
       "global": "ExtraRigs",
+      "roster": "LAZY_RACE_SESSION"
+    },
+    {
+      "path": "js/camera/feel-fx.js",
+      "global": "CamFx",
       "roster": "LAZY_RACE_SESSION"
     },
     {
@@ -3877,6 +3909,11 @@
       "roster": "LAZY_RACE_SESSION"
     },
     {
+      "path": "js/learn-drills/drill-card.js",
+      "global": "DrillCard",
+      "roster": "LAZY_LEARN"
+    },
+    {
       "path": "js/learn-drills/registry.js",
       "global": "DrillRegistry",
       "roster": "LAZY_LEARN"
@@ -4320,6 +4357,11 @@
       "path": "js/race/damage.js",
       "global": "Damage",
       "roster": "LAZY_RACE_SESSION"
+    },
+    {
+      "path": "js/race/drill-fork.js",
+      "global": "DrillFork",
+      "roster": "LAZY_DRILL_FORK"
     },
     {
       "path": "js/race/driving-coach-boot.js",

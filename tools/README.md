@@ -155,6 +155,7 @@ The test runner and the release pipeline: what to run, how to run it in the back
 | **ci/geometry-paths.mjs** | Single source for "which sweeps does this diff need?": the fleet trigger (from TRACK_VM) and the targeted-suite table. | — |
 | **ci/guards-report.mjs** | Names EVERY failing guard in a `node --test` TAP log with its fix command (efficiency review 2026-10-30, finding 4). | — |
 | **ci/guards-verdict.mjs** | Commit-gate verdict cache for test:guards (#2889 slice 1). | check-changes |
+| **ci/lib/lease.mjs** | The Hand-off `owner:` lease: its parser, the seven lease states and the adopted-unleased check. | — |
 | **ci/live-run-check.mjs** | Prints WARN if this branch has in-progress ci.yml runs (3 s API lookup); exit 0 always. | check-changes |
 | **ci/nightly-group.mjs** | Pick the browser GROUP tonight's scheduled ci.yml run should cover. | — |
 | **ci/pages-rearm.mjs** | Re-arm the Pages train when its queue dropped the deploy tip's own run (#5530). | — |
@@ -362,7 +363,6 @@ Headless observation of the running game: framed screenshots, one-expression eva
 | **shot/shot.mjs** | One Chromium session for one or many framed shots (`--batch`); JPEG/raster modes for cheaper sweeps. | playwright-probe |
 | **shot/track-session.mjs** | Persistent track session (`--serve`): boot once, then JSON-line shot/eval/track/sheet/diff ops in seconds each. | survey-track |
 | **shot/visor-lab-export.mjs** | Copy the committed Visor Lab authoring files and the game's visor runtime into an existing Site checkout. | — |
-| **shot/webgpu-urban-gallery.mjs** | Produce a verified 4K urban WebGPU screenshot gallery through shot.mjs. | — |
 | **shot/wx-grid.mjs** | Weather×time 24-cell grid + luminance.json (6 weathers incl. storm × 4 TOD). One Chrome boot; --track --turn. | playwright-probe |
 
 ### `tools/perf/`
@@ -421,13 +421,10 @@ Renderer and GPU probes — GLX, WGX, TLX, and the adapter census.
 | **gfx/mem-cycles-lib.mjs** | gpu-game-check --mem-cycles helpers: an in-page live GPUBuffer/GPUTexture counter and the per-cycle plateau verdict. | mcp-probe |
 | **gfx/pass-census-lib.mjs** | Pure helpers for pass-census --park: the exact cell, its key, the baseline compare and --collect. | renderer-debug |
 | **gfx/pass-census.mjs** | Draw calls and triangles per render pass (main, mirror, sun/lamp shadow, post) per frame: the exact count behind #2657. | renderer-debug / playwright-probe |
-| **gfx/readback-garage-oracle.mjs** | Measures readPixels during menu→garage→close; optional race-entry path. | — |
-| **gfx/readback-quit-menu-oracle.mjs** | Garage close → UI Start Race (Bahrain) → grid + ~20s throttle → pause → 2-tap quit. | — |
 | **gfx/res-scale-census.mjs** | Counts TLX post-target reallocations, live textures and the step's own cost over a setRenderScale sweep. | renderer-debug |
 | **gfx/road-lut-census.mjs** | Census: can WGX's road LUT hand the shader a track frame rotated 90 degrees? | renderer-debug |
 | **gfx/sharpness-ab.mjs** | Headless A/B of the phone-sharpness arms on TLX WebGPU: captures, 400% crop sheets, edge metrics. | — |
 | **gfx/ssr-probe.mjs** | Captures the wet-road screen-space reflection and reports why it looks as it does — the SSR lighting probe. | renderer-debug |
-| **gfx/stall-reload-sw-oracle.mjs** | Matched deploy-tip vs fix-head stall watchdog stress (SwiftShader, three+GL). | — |
 | **gfx/tlx-pack-check.cjs** | Decodes packed TLX attributes and asserts no shader DECISION changed (material layer, flag branch, MAT id). No browser. | — |
 | **gfx/wgx-capture.mjs** | Thin alias → `gfx-probe.mjs --backend webgpu` (WGX soft-present + optional readback). | renderer-debug |
 | **gfx/wgx-lavapipe-probe.mjs** | Thin alias → `gfx-probe.mjs --backend three --tlx-webgpu --lavapipe`. | renderer-debug / mcp-probe |
@@ -500,7 +497,6 @@ The car and the garage: option sweeps, livery and crest rendering, career econom
 | **car/parts-sweep.mjs** | How much does each catalog option change the car? Builds all options offline via `node:vm` against the right baseline. | garage-parts-livery |
 | **car/render-car.mjs** | Headless batch renderer for `carview.html` — orbit presets, `--team=all` walks the grid, contact sheet; needs :3456. | playwright-probe |
 | **car/spine-station.mjs** | Measures + rasterises where every spine design lands on the cover flank, and the crown's own mark — offline, no browser. | garage-parts-livery |
-| **car/trace-car.mjs** | Trace the ISOLATED car into SVG: carview beauty + empty-stage plate -> exact matte -> contours + interior edges. | garage-parts-livery |
 | **car/trace-logo.mjs** | Author-time: regenerates `js/car/crest-paths.js` from a team logo bitmap in git history (k-means inks, contour walk). | playwright-probe |
 | **car/tri-census.mjs** | Car mesh census: tris/verts per body style × aero × draw tier (player, field, caster, far); --root = another checkout. | garage-parts-livery |
 
@@ -552,7 +548,6 @@ Menu geometry and the CSS edit loop, plus the axes (viewport, scale, circuit) th
 | **ui/menu-readiness.mjs** | Serializable menu readiness predicate, used with bounded Playwright polling. | — |
 | **ui/menu-screens.mjs** | Canonical `SCREENS` + `VIEWPORTS` + `OVERLAY_IDS` (library) for the layout tools. | survey-ui-matrix |
 | **ui/phone-shot-diff.mjs** | Compare a phone screenshot with the live page on the Bryce-phone preset: which elements are a different SIZE. | — |
-| **ui/probe-sheets-contract.mjs** | UI contract PR D (#5153) measurement probe: the five sheets (select, race settings, career hub, pause, results) in the | — |
 | **ui/profile-survey.mjs** | Owner-profile screen survey: all menu screens at contract windows A/C/D/As, seeded from the settings export. | — |
 | **ui/reach-score.mjs** | Offline two-thumb reach + dead-space score per menu screen from layout-audit DOM dumps or explorer inspections. | survey-ui-matrix |
 | **ui/review-captures.mjs** | Build a portable offline screenshot review from a bounded local evidence manifest. | css-play |
@@ -730,14 +725,16 @@ Per-agent PreToolUse hooks the agent cards wire (`hooks:` frontmatter): read-onl
 | **ci/file-verdict-reporter.mjs** | A `node --test` reporter writing per-file event counts, so a group runner can refuse an exit 0 that verified nothing. |
 | **ci/fixture-consumer-audit.mjs** | RATCHET on `tests/helpers/fixtures.js` adoption: `FLOOR` only rises, and fails when it lags adoption by > `FLOOR_SLACK`. |
 | **ci/flake-tally.mjs** | Nightly flake tally — first-try fails and pass-on-retry by spec+title across recent scheduled CI runs. |
+| **ci/fleet-cost.mjs** | Fleet cost: merged PRs joined to saved session pages: $ per merged PR, hand-back %, re-adoptions. |
 | **ci/github-api.mjs** | The one GitHub REST client: token on curl stdin, 5xx/429 backoff, ETag/304 GETs, JSON bodies; repo constants. |
 | **ci/github-token.mjs** | Resolve a GitHub token for read-only Actions tools: env first, then `gh auth token`. |
 | **ci/inputs-hash.mjs** | Per-job inputs hash for the CI verdict cache (#1712); sha256 of a declared path set + node version. |
 | **ci/issue-labels.mjs** | Issue label audit (reads only): open issues with no type, two types or no area:* label. |
 | **ci/junit-failed.mjs** | Spec files with a failed/errored testcase in `artifacts/test-results-*/junit.xml`, for `select-specs --failed-from`. |
 | **ci/lib/deploy-tip.mjs** | Is the deploy tip red on code? Newest completed pages.yml run + its jobs; a Pages-side publish failure is not. |
-| **ci/lib/gh-rows.mjs** | Shared GitHub row helpers: labelsOf, paginated getAll, closingIssues, batchMembers, ADOPT_RE. |
+| **ci/lib/gh-rows.mjs** | Shared GitHub row helpers: labelsOf, paginated getAll, closingIssues, batchMembers, ADOPT_RE, RELEASE_RE. |
 | **ci/lib/provenance.mjs** | Provenance of GitHub label events and comments: byOwner (owner, no app), byAgent, decision: comments, label events. |
+| **ci/lib/roles.mjs** | Fleet roles → env ids (tests/data/fleet-roles.json), env-literal scan, rotation-block parser, routine reaper. |
 | **ci/lib/tip-gate.mjs** | Tip gate: the composition-budget unit tests on the bare deploy tip when no completed pages.yml run covers its sha. |
 | **ci/merge-gate.mjs** | Landing gate (`gate` check): open, hold (Bryce lifts), Plan, CI, config-ok, gen + ratchets + re-test on the merge. |
 | **ci/merge-train.mjs** | Merge train: folds green `land` PRs onto the deploy tip as a `train/*` PR; the gate checks each car's own rows. |

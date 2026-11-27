@@ -35,9 +35,7 @@ var RivalAudio = (() => {
         if (n > 0) return Math.min(SLOTS, n);
       }
     } catch (e) { /* stub / mid-teardown */ }
-    try {
-      if (typeof GLX !== "undefined" && GLX && (GLX.isMobile || GLX.mobileTier)) return 2;
-    } catch (e) { /* absent in unit harness */ }
+    if (typeof GameAudioSignal !== "undefined" && GameAudioSignal && GameAudioSignal.lowTier && GameAudioSignal.lowTier()) return 2;
     return SLOTS;
   }
   // Never TIGHTER than engine.js's RIVAL_RANGE, or a car winks off at the

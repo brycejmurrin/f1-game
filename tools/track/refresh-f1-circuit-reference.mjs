@@ -3,7 +3,10 @@
 // @doc Explicit maintenance tool that refreshes the offline F1 circuit reference data; tests never call it or the network.
 // @skill new-track
 import fs from "node:fs/promises";
+import { exitIfHelp } from "../lib/cli-args.mjs";
 
+const USAGE = "Usage: node tools/track/refresh-f1-circuit-reference.mjs <bacinger-feature-id>...\nRe-fetches the pinned F1 circuit reference geojson (network); --help fetches nothing.";
+exitIfHelp(process.argv.slice(2), USAGE);
 const SOURCE = "https://raw.githubusercontent.com/bacinger/f1-circuits/master/f1-circuits.geojson";
 const OUTPUT = new URL("../../tests/data/f1-circuit-reference.geojson", import.meta.url);
 const ids = new Set(process.argv.slice(2));

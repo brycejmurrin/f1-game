@@ -377,6 +377,7 @@ function loadSheet({ dom = false, globals = {} } = {}) {
   seedLog(ctx);
   withI18n(ctx);
   if (dom) vm.runInContext(fs.readFileSync(path.join(ROOT, "js/ui/dom.js"), "utf8").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/ui/dom.js") });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/ui/results-sheet.js"), "utf8").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/ui/results-sheet.js") });   // GameResultsSheet.row (#7052)
   vm.runInContext(SHEET_SRC.replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/ui/quali-sheet.js") });
   return { sheet: ctx.QualiSheet.create(G), els, refreshed: () => refreshed };
 }
@@ -888,3 +889,24 @@ test("a one-off GP's simulated grid is the same whichever career is on the devic
   } finally { g.close(); }
 });
 
+
+// #7052: the row skeleton of the QUALIFYING sheet, recorded before the shared row builder
+// (GameResultsSheet.row) took over the assembly. The a11y gap against the results rows (the
+// swatch now carries aria-hidden, as the results rows do: #7198).
+test("quali rows keep their DOM skeleton (pin for the shared row builder)", () => {
+  const { sheet, els } = loadSheet();
+  const skel = (e) => `${e.tag}.${e.className}${e.attrs ? JSON.stringify(e.attrs) : ""}${e.style && e.style.background ? "{bg=" + e.style.background + "}" : ""}` +
+    (e.children.length ? "(" + e.children.map(skel).join(",") + ")" : `"${e._t}"`);
+  sheet.open([
+    { pos: 1, code: "VER", name: "Max", team: "me", isPlayer: true, human: true, t: 60, gap: 0 },
+    { pos: 2, code: "NOR", name: "Lando", team: "rb", human: true, t: 61, gap: 1 },
+    { pos: 3, code: "PIA", name: "Oscar", team: "rb", t: 62, gap: 2 },
+    { pos: 4, code: "RUS", name: "George", team: "zz", noTime: true, t: 0, gap: 0 },
+  ]);
+  assert.deepEqual(els.get("q-table").children.map(skel), [
+    'div.res-row p1 you{"role":"listitem","aria-current":"true"}(span.res-pos"1",span.res-swatch{"aria-hidden":"true"}{bg=rgb(0,0,1)}"",span.res-name(span.q-real-tag" YOU"),span.res-pts q-time"T60")',
+    'div.res-row p2 q-real{"role":"listitem"}(span.res-pos"2",span.res-swatch{"aria-hidden":"true"}{bg=rgb(1,0,0)}"",span.res-name(span.q-real-tag" DRIVEN"),span.res-pts q-time"+1.000")',
+    'div.res-row p3{"role":"listitem"}(span.res-pos"3",span.res-swatch{"aria-hidden":"true"}{bg=rgb(1,0,0)}"",span.res-name"PIA  Oscar",span.res-pts q-time"+2.000")',
+    'div.res-row{"role":"listitem"}(span.res-pos"4",span.res-swatch{"aria-hidden":"true"}{bg=rgb(0.5,0.5,0.5)}"",span.res-name"RUS  George",span.res-pts q-time"NO TIME")',
+  ]);
+});

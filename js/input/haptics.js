@@ -105,7 +105,9 @@ const InputHaptics = (function () {
     let mixDirty = false, frameEmitted = false, nextChange = 0, mixSeq = 0;
     let noTrigActuator = null;     // the actuator that refused trigger-rumble
     const clockMs = typeof now === "function" ? now : () => 0;
-    let lastActuator = null;
+    let lastActuator = null, kerbPhase = false;
+    // Trigger motors are felt weakly below ~0.2: lift the floor so the onset of a lock-up or wheelspin registers.
+    const trigFeel = (m) => (m > 0 ? Math.min(1, 0.2 + 0.8 * m) : 0);
     function stopActuator() {
       ++mixSeq; // an older effect resolving "preempted" cannot resurrect it
       const a = lastActuator;
@@ -121,6 +123,7 @@ const InputHaptics = (function () {
     // Best-effort rumble on the active pad. channel:
     //   "brake"    → left trigger (lock-up) when trigger-rumble is available
     //   "throttle" → right trigger (wheelspin / rear slide)
+    //   "kerb"     → grips, alternating heavy/light strikes (textured)
     //   "handles" / omitted → dual-rumble grip motors (kerbs, contact, wall)
     // Unsupported trigger-rumble, or TRIGGER HAPTICS off, falls back to the grips.
     // Silently no-ops where unsupported — note this is EVERY iOS browser:
@@ -136,7 +139,12 @@ const InputHaptics = (function () {
       const t = clockMs(), until = t + dur;
       if (channel === "brake") addPulse("left", mag, until);
       else if (channel === "throttle") addPulse("right", mag, until);
-      else { addPulse("strong", mag, until); addPulse("weak", mag * 0.7, until); }
+      else if (channel === "kerb") {
+        // KERB TEXTURE: the two grip motors trade the lead each strike (heavy, light, heavy...) so a
+        // run over a kerb reads as ribbed, not as the flat buzz of "handles".
+        kerbPhase = !kerbPhase;
+        addPulse("strong", mag * (kerbPhase ? 1 : 0.4), until); addPulse("weak", mag * (kerbPhase ? 0.35 : 1), until);
+      } else { addPulse("strong", mag, until); addPulse("weak", mag * 0.7, until); }
       if (frameEmitted) { mixDirty = true; return; }
       emit(t);
     }
@@ -189,7 +197,7 @@ const InputHaptics = (function () {
         try {
           const p = trig
             ? a.playEffect("trigger-rumble", { duration, strongMagnitude: m.strong, weakMagnitude: m.weak,
-              leftTrigger: m.left, rightTrigger: m.right })
+              leftTrigger: trigFeel(m.left), rightTrigger: trigFeel(m.right) })
             : a.playEffect("dual-rumble", { duration, strongMagnitude: m.strong, weakMagnitude: m.weak });
           if (p && typeof p.then === "function") {
             p.then((r) => { if (r === "preempted" && seq === mixSeq) mixDirty = true; },

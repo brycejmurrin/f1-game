@@ -436,6 +436,8 @@ const RaceControl = (function () {
         lowGripNoted = port.announce("LOW GRIP — OVERTAKE OFF", 3, "warning") !== false;
         if (lowGripNoted) Log.info("race", "Overtake disabled why=low-grip raceT=" + (+port.raceT || 0).toFixed(1));
       }
+      // Aged on a guest too (#7077 K6): apply() lands only on a change.
+      if (caution.level !== 0) { caution.sinceT += dt; flagAgeT += dt; }
       if (!port.ownsRaceControl()) return;
       // CAUTIONS off means no flag the local sim raises, the storm's included
       // (Bryce 2026-10-23: a storm SC flew with the row OFF). setEnabled(false)
@@ -452,7 +454,11 @@ const RaceControl = (function () {
         flag(prev, held);
         publish();
       }
-      if (caution.level !== 0) { caution.sinceT += dt; flagAgeT += dt; }
+      // The re-arm hold ages every tick (#7077 K5): the quiet returns below froze it.
+      if (capHoldT > 0) {
+        capHoldT = Math.max(0, capHoldT - dt);
+        if (capHoldT === 0) capHoldLevel = 0;
+      }
       // A RED FLAG RUNS ITS PROCEDURE WHATEVER THE SWITCH SAYS: apply() can land
       // one with CAUTIONS off, and a red that never ages never restarts.
       if (caution.level === 4) {
@@ -519,10 +525,6 @@ const RaceControl = (function () {
       const lifted = held > 0 && desired < held;
       if (lifted) { desired = held; dsector = -1; dfrac = 0; dcause = heldCause; }
       if (!(held && caution.level <= held) && capDropIfExpired()) return;
-      if (capHoldT > 0) {
-        capHoldT = Math.max(0, capHoldT - QUERY_EVERY);
-        if (capHoldT === 0) capHoldLevel = 0;
-      }
 
       if (desired > caution.level) {
         // The hold suppresses a re-raise from the SAME stale picture, but must
@@ -549,8 +551,10 @@ const RaceControl = (function () {
           stopOwned = fromStop && desired > 0;
           flag(prev, desired);
         }
-      } else if (desired === 1 && dsector >= 0) {
-        caution.sector = dsector; caution.frac = dfrac;   // track the worst sector
+      } else {
+        // Ownership follows the source at an equal level too (#7088 F2: a stale yellow).
+        stopOwned = fromStop && desired > 0;
+        if (desired === 1 && dsector >= 0) { caution.sector = dsector; caution.frac = dfrac; }   // track the worst sector
       }
       holdOwned = lifted && caution.level <= held;
       publish();
@@ -670,10 +674,19 @@ const RaceControl = (function () {
     // LOW GRIP (B7.1.2(b) / B7.2.2(d)): the conditions call for treaded tyres.
     // Overtake is off and active aero only partial (game.js aeroWetK). Read
     // live, so a weather arc that dries the track hands both back.
+    // ONE READ PER STEP (#7070, #6506 row 2): every paceVmax / xVmaxGain of every
+    // car asked this through aeroWetK. game.js brackets its per-car loop with
+    // stepGrip(true/false) AFTER wxArc.tick, and nothing in that loop moves the
+    // weather, so the first read inside the window answers all of it. Outside
+    // a window (HUD, agent hooks, tests) it stays live.
+    let gripWin = false, gripMemo = -1;
     function lowGrip() {
-      if (typeof TyreModel === "undefined" || port.raceWeather == null) return false;
-      return TyreModel.treadFor(port.raceWeather, port.wetness()) > 0;
+      if (gripWin && gripMemo >= 0) return gripMemo === 1;
+      const on = typeof TyreModel !== "undefined" && port.raceWeather != null && TyreModel.treadFor(port.raceWeather, port.wetness()) > 0;
+      if (gripWin) gripMemo = on ? 1 : 0;
+      return on;
     }
+    function stepGrip(on) { gripWin = on; gripMemo = -1; }
     // May a car EARN Overtake at the Detection Line now? Not under the Safety
     // Car or red flag (a bunched queue would all earn it for the restart lap),
     // nor in low grip. The lap-1 / after-SC line hold is otEnabled's, at use;
@@ -699,7 +712,7 @@ const RaceControl = (function () {
     }
 
     return {
-      update, apply, reset, setEnabled, otEnabled, otDetectOpen, lowGrip, info, hold,
+      update, apply, reset, setEnabled, otEnabled, otDetectOpen, lowGrip, stepGrip, info, hold,
       get level() { return caution.level; },
       takeRestart, clearHold, rewound,
       get enabled() { return enabled; },

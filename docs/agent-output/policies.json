@@ -181,11 +181,6 @@
       "presentation": "shared-levels",
       "preserve": "Coordinate orientation, per-team JSON records and distinction between band and mark geometry."
     },
-    "tools/car/trace-car.mjs": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "Exact vector coordinates and native saved trace data; an empty contour must not look successful."
-    },
     "tools/car/trace-logo.mjs": {
       "action": "protocol-only",
       "presentation": "native",
@@ -661,6 +656,11 @@
       "presentation": "shared-levels",
       "preserve": "Download/parse notes; issue errors even in JSON; no failures inferred from absence"
     },
+    "tools/ci/fleet-cost.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "The `= fleet-cost` line ($/merged PR, sessions with pages, hand-back %, re-adoptions), one row per merged PR and the no-page sessions; read-only"
+    },
     "tools/ci/geometry-paths.mjs": {
       "action": "protocol-only",
       "presentation": "native",
@@ -701,6 +701,11 @@
       "presentation": "native",
       "preserve": "Library: labelsOf / getAll / closingIssues / batchMembers / ADOPT_RE over GitHub REST rows; no CLI output"
     },
+    "tools/ci/lib/lease.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Library: handoffLease / leaseState / ownerEvents / adoptedUnleased over a PR body and its comments; no CLI output"
+    },
     "tools/ci/lib/deploy-tip.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -710,6 +715,11 @@
       "action": "keep-native",
       "presentation": "native",
       "preserve": "Library: byOwner / isDecisionComment / ownerSet verdicts and the paginated event and comment readers; no CLI output"
+    },
+    "tools/ci/lib/roles.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Library: resolveRole / findEnvLiterals / parseOrchestratorBlocks problems / reapActs disable lines for brief.mjs role and reap; no CLI output"
     },
     "tools/ci/lib/tip-gate.mjs": {
       "action": "keep-native",
@@ -1446,16 +1456,6 @@
       "presentation": "native",
       "preserve": "Real/stubbed link qualification, frame denominator and native JSON mode."
     },
-    "tools/gfx/readback-garage-oracle.mjs": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "readPixels hook phases, stall watchdog state and before/after JSON report paths."
-    },
-    "tools/gfx/readback-quit-menu-oracle.mjs": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "SwiftShader quit TTI, LoopHealth sync/stall metrics and JSON report path."
-    },
     "tools/gfx/res-scale-census.mjs": {
       "action": "targeted-summary",
       "presentation": "shared-levels",
@@ -1475,11 +1475,6 @@
       "action": "artifact-first",
       "presentation": "shared-levels",
       "preserve": "Wet-road sample configuration, images and debug interpretation; no unmeasured reflection success."
-    },
-    "tools/gfx/stall-reload-sw-oracle.mjs": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "Matched deploy-tip vs fix-head stall stress pair JSON and native exit status."
     },
     "tools/gfx/tlx-pack-check.cjs": {
       "action": "keep-native",
@@ -2551,11 +2546,6 @@
       "presentation": "shared-levels",
       "preserve": "@c4"
     },
-    "tools/shot/webgpu-urban-gallery.mjs": {
-      "action": "artifact-first",
-      "presentation": "shared-levels",
-      "preserve": "Hardware verification receipts, screenshot/gallery/evidence paths, failed-scene status and child exit code; no software render presented as hardware evidence."
-    },
     "tools/shot/wx-grid.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -2975,11 +2965,6 @@
       "action": "keep-native",
       "presentation": "native",
       "preserve": "The screen factor, every DIFFERENT SIZE row with its score, the unmatched list and the = phone-shot-diff line."
-    },
-    "tools/ui/probe-sheets-contract.mjs": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "@c5"
     },
     "tools/ui/profile-survey.mjs": {
       "action": "keep-native",

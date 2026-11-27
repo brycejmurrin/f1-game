@@ -288,9 +288,13 @@
   ],
     LAZY_LEARN: [
     "js/learn-drills/registry.js",
+    "js/learn-drills/drill-card.js",
     "js/ui/learn-door.js",
     "js/ui/thumb-trainer.js",
     "js/learn-drills/thumb-drill.js"
+  ],
+    LAZY_DRILL_FORK: [
+    "js/race/drill-fork.js"
   ],
     LAZY_RACE: [
     "js/data/garage-entrance-motion.js",
@@ -327,6 +331,7 @@
     "js/camera/extra-rigs.js",
     "js/camera/trackside.js",
     "js/camera/cam-avoid.js",
+    "js/camera/feel-fx.js",
     "js/ui/podium-beat.js",
     "js/race/podium-beat.js",
     "js/race/parc-ferme.js",
