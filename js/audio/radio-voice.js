@@ -266,8 +266,7 @@ var RadioVoice = (function () {
     return out;
   }
   function isMobile() {
-    try { return !!(typeof GLX !== "undefined" && GLX && (GLX.isMobile || GLX.mobileTier)); }
-    catch (e) { return false; }
+    return typeof GameAudioSignal !== "undefined" && GameAudioSignal && GameAudioSignal.lowTier ? GameAudioSignal.lowTier() : false;
   }
 
   /** The language the voices are filtered by: the SPOKEN-LANGUAGE setting ("auto" follows the

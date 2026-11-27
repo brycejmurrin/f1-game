@@ -32,6 +32,15 @@ import { absSrc } from "../helpers/abs-src.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const src = (p) => fs.readFileSync(path.join(ROOT, p), "utf8").replace(/^const\b/gm, "var");
 
+// The DRS label helpers and drawElevProfile live in the real TrackMaps (#7052); the rest of the stub stays.
+const realMaps = (dpr = 1) => {
+  const sb = { devicePixelRatio: dpr, Math, Array, Object, JSON, Number, String, Map, Set, isFinite, isNaN, console };
+  sb.window = sb;
+  vm.runInNewContext(src("js/ui/track-maps.js"), sb, { filename: absSrc("js/ui/track-maps.js") });
+  const { drsZoneWraps, drsZoneLapMetre, drsZoneRangeHtml } = sb.TrackMaps;
+  return { drsZoneWraps, drsZoneLapMetre, drsZoneRangeHtml };
+};
+
 function boot(disk = {}, o = {}) {
   const dom = makeDom();
   let appearanceApplied = 0;
@@ -63,6 +72,7 @@ function boot(disk = {}, o = {}) {
     AppearanceOpts: { applyAll() { appearanceApplied++; } },
     SeasonCal: { canRace: () => true, rounds: () => 0 },
     TrackMaps: Object.assign({
+      ...realMaps(o.dpr || 1),
       corners: () => [], direction: () => "CW", elevRange: () => 0,
       drsZones: o.trackMapsDrs || (() => []),
       cornerSpeed: () => null,
@@ -72,6 +82,11 @@ function boot(disk = {}, o = {}) {
     }, o.trackMaps),
   };
   sb.window = sb;
+  // drawElevProfile reads the elevation through TrackMaps.elevProfile/elevRange, so it runs
+  // here against THIS sandbox's stub: lift its source out of track-maps.js (#7052).
+  const drawSrc = src("js/ui/track-maps.js").match(/function drawElevProfile\([\s\S]*?\n  }\n/)[0];
+  vm.runInNewContext(drawSrc + "\nthis.drawElevProfile = drawElevProfile;", sb, { filename: absSrc("js/ui/track-maps.js") });
+  sb.TrackMaps.drawElevProfile = sb.drawElevProfile;
   const installTrackDetail = () => vm.runInNewContext(src("js/ui/circuit-details-panel.js"), sb, { filename: absSrc("js/ui/circuit-details-panel.js") });
   if (o.loadTrackDetail) {
     sb.ScriptLoader = { create: () => ({ load: o.loadTrackDetail.bind(null, installTrackDetail) }) };
