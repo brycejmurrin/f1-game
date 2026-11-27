@@ -34,9 +34,9 @@ body:not(.desktop) { --tap-floor44: calc(44.2px / var(--ui-scale)); }
 @media (max-height: 500px) {
   #learn-aero-guide, #learn-grip-guide, #learn-taper-guide, #learn-torque-guide, #learn-charge-guide { top: max(calc(var(--sat) + 2rem), 13%); padding: .25rem .45rem; }
 }
-#learn-aero-guide strong, #learn-aero-guide span, #learn-grip-guide strong, #learn-grip-guide span, #learn-taper-guide strong, #learn-taper-guide span, #learn-torque-guide strong, #learn-charge-guide strong, #learn-torque-guide span, #learn-charge-guide span { display: block; }
-#learn-aero-guide strong, #learn-grip-guide strong, #learn-taper-guide strong, #learn-torque-guide strong, #learn-charge-guide strong { font-size: var(--fs-3); }
-#learn-aero-guide span, #learn-grip-guide span, #learn-taper-guide span, #learn-torque-guide span, #learn-charge-guide span { font-size: var(--fs-2); color: var(--dim); }
+:is(#learn-aero-guide, #learn-grip-guide, #learn-taper-guide, #learn-torque-guide, #learn-charge-guide) :is(strong, span) { display: block; }
+:is(#learn-aero-guide, #learn-grip-guide, #learn-taper-guide, #learn-torque-guide, #learn-charge-guide) strong { font-size: var(--fs-3); }
+:is(#learn-aero-guide, #learn-grip-guide, #learn-taper-guide, #learn-torque-guide, #learn-charge-guide) span { font-size: var(--fs-2); color: var(--dim); }
 /* The guide card's RETRY chip (#6555 A4) is its one tap target; the rest of the card still leaves input to the HUD. */
 #learn-aero-retry { pointer-events: auto; flex: none; min-height: var(--tap); min-width: var(--tap); padding: 0 var(--pad); font: inherit; font-weight: 700; }
 #learn-grip-guide button { pointer-events: auto; min-height: var(--tap); min-width: var(--tap); padding: 0 var(--pad); font: inherit; font-weight: 700; }
