@@ -108,11 +108,11 @@ test("#4 BOOST pressed on a flat battery does not latch on", async () => {
 test("#6 aquaplaning reads the surface under the car at its x, as grip does", () => {
   const src = gameSource();
   const calls = [...src.matchAll(/wxArc\.wetnessAt\(([^()]*)\)/g)].map((m) => m[1].replace(/\s+/g, ""));
-  assert.ok(calls.length >= 2, `found ${calls.length} wetnessAt reads — the pattern looks broken`);
+  assert.ok(calls.length >= 1, `found ${calls.length} wetnessAt reads — the pattern looks broken`);
   assert.deepEqual([...new Set(calls)], ["c.s,c.x"], "a per-car wetnessAt read without the car's x: " + calls.join(" | "));
-  // Both tyre calculations use the same car-local sample. Tread selection still uses the lap mean.
-  assert.match(src, /surfaceWet = wxArc \? wxArc\.wetnessAt\(c\.s, c\.x\) : meanWet/);
-  assert.match(src, /TyreModel\.aquaInto\(c, [^;]+, surfaceWet\)/);
+  // One car-local sample, carWet(c) (#7068), feeds grip, aquaplaning, spray and the squeal (its body: wet-grip-ladder). Tread: the lap mean.
+  assert.match(src, /surfaceWet = carWet\(c\)/);
+  assert.match(src, /TyreModel\.aquaInto\(c, [^;]+, surfaceWet, meanWet\)/);   // depth: surface; tread: the mean (#6611 RW6)
   assert.match(src, /TyreModel\.carGrip\(c, raceWeather, meanWet, surfaceWet\)/);
 });
 
