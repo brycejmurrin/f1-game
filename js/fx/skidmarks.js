@@ -95,13 +95,20 @@ const SkidMarks = (function () {
     function stampFor(timer, mat, laying, dt) {
       if (!timer || !due(timer, laying, dt)) return false;
       if (otherLive >= AI_CAP) {
-        let oldest = -1;
-        for (let i = 0; i < active; i++) {
-          if (other[i] && (oldest < 0 || ages[i] < ages[oldest])) oldest = i;
-        }
+        // Drop the oldest rival (first in ring order); the new mark goes to the head (#7348).
+        const full = active >= MAX_SKID, cnt = full ? MAX_SKID : active;
+        const at = (k) => full ? (idx + k) % MAX_SKID : k;
+        let j = 0;
+        while (j < cnt && !other[at(j)]) j++;
         // A full player trail has priority over a new rival mark.
-        if (oldest < 0) return false;
-        marks[oldest].set(mat); ages[oldest] = ++age; dirty = true;
+        if (j >= cnt) return false;
+        const slot = marks[at(j)];
+        for (; j < cnt - 1; j++) {
+          const a = at(j), b = at(j + 1);
+          marks[a] = marks[b]; other[a] = other[b]; ages[a] = ages[b];
+        }
+        const h = at(cnt - 1);
+        marks[h] = slot; slot.set(mat); other[h] = 1; ages[h] = ++age; dirty = true;
         return true;
       }
       lay(mat, true);
