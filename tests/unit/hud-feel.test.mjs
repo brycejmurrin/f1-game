@@ -1833,3 +1833,24 @@ test("instruments HUD ELEMENTS hides are not computed per tick: plan, brake bias
   assert.notEqual(els.ot.textContent, otWas);
   assert.equal(els.aero.textContent, "AERO AUTO");
 });
+
+// #7406 (#7403 rows 7+8): ENERGY hidden by HUD ELEMENTS builds no per-tick strings, and turning it back on
+// mid-race paints the current value on the next tick (no stale memo).
+test("a hidden ENERGY readout is not painted per tick, and paints the current value once shown again (#7406)", () => {
+  const { sb, els, dom, player, tick } = boot();
+  const off = new Set();
+  sb.HudElements = { isOn: (id) => !off.has(id) };
+  const n = dom.byId("hud-energy-n");
+  player.energy = 0.5; tick();
+  const shownText = n.textContent, shownWidth = els.energy.style.width;
+  assert.equal(shownWidth, "50%");
+  off.add("energy");
+  player.energy = 0.3; tick();
+  player.energy = 0.2; tick();
+  assert.equal(n.textContent, shownText, "hidden: the MJ text is not rebuilt");
+  assert.equal(els.energy.style.width, shownWidth, "hidden: the bar is not written");
+  off.delete("energy");
+  tick();
+  assert.equal(els.energy.style.width, "20%", "shown again: the next tick paints the current pack");
+  assert.notEqual(n.textContent, shownText);
+});

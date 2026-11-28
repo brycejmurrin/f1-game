@@ -44,14 +44,18 @@ const OverlayPublisher = (function () {
     const field = src.field && Array.isArray(src.field.positions) ? src.field : null;
     const info = src.info || {};
     const sec = src.sectors || null;
-    const ranked = field ? field.positions.map((r) => ({
+    // A tower only in a session: quitToMenu leaves the finished race's cars in
+    // __apex.field(), so the menus would keep the last race's tower (#7406).
+    const state = info.state || (field && field.raceState) || "idle";
+    const inSession = state === "race" || state === "count" || state === "results";
+    const ranked = field && inSession ? field.positions.map((r) => ({
       pos: r.pos, code: r.code, team: teamColour(r.team, src.teams),
       intervalS: r.pos === 1 ? null : r.intervalS, gapToLeaderS: r.pos === 1 ? null : r.gapToLeaderS,
       isPlayer: r.isPlayer, pit: !!r.inPit, out: !!r.retired,
     })) : [];
     return {
       seq: src.seq | 0, t: field ? field.t : 0,
-      state: info.state || (field && field.raceState) || "idle",
+      state,
       track: info.track || null,
       lap: field && field.player ? field.player.lap : 0,
       laps: (field && field.lapsTarget) || info.lapsTarget || 0,

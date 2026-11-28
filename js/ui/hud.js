@@ -1615,8 +1615,8 @@ function ledEls() {   // the shift-light strip, built into #hud-tach on first pa
   const b = els.tach.appendChild(document.createElement("b")); b.setAttribute("aria-hidden", "true");
   return (_leds = Object.assign(Array.from({ length: LED_N }, () => b.appendChild(document.createElement("i"))), { strip: b }));
 }
-function paintDash(p) { paintInstruments(p); const l = _tachOn && ledEls(), s = shiftLeds(p.rpm, _redline);   // LEDs outside paintInstruments: its VM test
-  if (l) { for (let i = 0; i < LED_N; i++) hToggle(l[i], "on", i < s.lit); hData(l.strip, "flash", s.flash ? "" : null); } }
+function paintDash(p) { paintInstruments(p); const l = _tachOn && ledEls(), s = l && shiftLeds(p.rpm, _redline);   // LEDs outside paintInstruments: its VM test
+  if (s) { for (let i = 0; i < LED_N; i++) hToggle(l[i], "on", i < s.lit); hData(l.strip, "flash", s.flash ? "" : null); } }
 function paintInstruments(player) {
   // HYSTERESIS: a single 0.92 threshold flickered the class (and restarted its
   // pulse animation) every tick the needle hovered on the line, which is
@@ -1901,16 +1901,20 @@ function updateHud(force, dtMs) {
   hText(els.time, G.fmtTime(_holdOn ? player.lastLap : sess === "race" && lapN < 1 ? 0 : player.lapTime));
   hData(els.time, "hold", _holdOn ? (player.lastLap <= player.best ? "pb" : "lap") : null);
   hText(els.best, isFinite(player.best) ? G.fmtTime(player.best) : "-");
-  hStyle(els.energy, "width", (player.energy * 100).toFixed(0) + "%");
   // ENERGY as a number and a state, not only a bar length: MJ (the 2026 rule's
   // unit, the OVERTAKE chip's too) and deploy/harvest (js/ui/hud-readouts.js).
+  // Hidden by HUD ELEMENTS: no per-tick strings (#7406); _ePrev still follows the pack.
+  const eOn = hudShown("energy");
+  if (eOn) hStyle(els.energy, "width", (player.energy * 100).toFixed(0) + "%");
   if (_ro) {
-    const st = _ro.ersState(!!player.deploying, player.energy, _ePrev);
+    if (eOn) {
+      const st = _ro.ersState(!!player.deploying, player.energy, _ePrev);
+      const en = _ro.energy(player.energy, st);
+      hText(_rx.energyN, en.text);
+      hData(_rx.energyBox, "ers", st === "idle" ? null : st);
+      hAttr(_rx.energyBox, "aria-label", en.label);
+    }
     _ePrev = player.energy;
-    const en = _ro.energy(player.energy, st);
-    hText(_rx.energyN, en.text);
-    hData(_rx.energyBox, "ers", st === "idle" ? null : st);
-    hAttr(_rx.energyBox, "aria-label", en.label);
     // BRAKE BIAS — the set-up sheet's split, fixed for the race (game.js applySetup).
     if (_rx.bb && hudShown("bb")) {
       const bb = _ro.bbText(player.brakeBias, typeof SetupTune !== "undefined" ? SetupTune.BB_REF : 0.56);
