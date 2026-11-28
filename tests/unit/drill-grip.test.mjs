@@ -48,3 +48,14 @@ test("the drill registers on the braking lesson with three variants and the grip
   assert.equal(d.setup.session, "tt", "solo: a Time Trial grid is the player alone");
   assert.equal(vm.runInContext("GripDrill.define() === DrillRegistry.get('grip')", ctx), true, "define is idempotent");
 });
+
+test("score() on an empty accumulator (a run the sampler never saw) is defined and finite, never a throw (#7342)", () => {
+  const ctx = load();
+  ctx.AppearanceOpts = { speed: (k) => Math.round(k), units: () => "kmh" };
+  ctx.PhysicsConsts = { LONG_GRIP: 50 };
+  const r = vm.runInContext("GripDrill", ctx).score({}, { clean: true, seconds: 8.4 }, {}, "vline");
+  assert.equal(r.value, 0);
+  assert.equal(r.gateS, 8.4);
+  assert.ok(r.metrics.every(([, v]) => !/NaN|undefined|Infinity/.test(String(v))), JSON.stringify(r.metrics));
+  assert.match(r.verdict, /No firm brake/);
+});
