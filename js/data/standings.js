@@ -8,8 +8,7 @@ const DataStandings = (function () {
     function rowTeam(row, teamName) {
       const t = findTeam(teamName);
       if (!t || !t.color) return;
-      const lum = 0.2126 * t.color[0] + 0.7152 * t.color[1] + 0.0722 * t.color[2];
-      row.style.setProperty("--row-team", cssColor(lum < 0.10 && t.color2 ? t.color2 : t.color));
+      row.style.setProperty("--row-team", cssColor(DataTabUtils.teamShade(t.color, t)));
     }
 
     // `name` can be null independently of `code` (api.js maps both from

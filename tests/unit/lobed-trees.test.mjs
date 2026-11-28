@@ -94,13 +94,17 @@ test("lobed crowns preserve canonical/fused normals, sway and finite recipe budg
     const height = 17.6;
     assert.equal(f.nature.tree(variant, 1, 24, height, [.2,.35,.18], { crown:"lobed",variant }), true);
     const batches = f.graph.batches().batches;
-    assert.equal(batches.length, 1);
+    // #7385 S4: the brown trunk is its own untinted batch, the crown keeps the tint.
+    assert.equal(batches.length, 2);
+    const trunk = batches.find((b) => b.model.startsWith("tree-lobed|fixed|")), crown = batches.find((b) => b !== trunk);
+    assert.ok(trunk && trunk.colors === null && crown.colors, "trunk untinted, crown tinted");
     assert.equal(f.graph.stats().nodes, 1);
-    const geo = batches[0].geo;
-    assert.equal(geo.idx.length / 3, mobile ? 39 : 51);
-    assert.equal(f.out.nrm.length, geo.nrm.length);
-    for (let i = 0; i < geo.nrm.length; i++)
-      assert.ok(Math.abs(f.out.nrm[i] - geo.nrm[i]) < 1e-9, `normal ${i}`);
+    assert.equal((trunk.geo.idx.length + crown.geo.idx.length) / 3, mobile ? 39 : 51);
+    // fused order is trunk then crown, the recipe's op order
+    const nrm = [...trunk.geo.nrm, ...crown.geo.nrm];
+    assert.equal(f.out.nrm.length, nrm.length);
+    for (let i = 0; i < nrm.length; i++)
+      assert.ok(Math.abs(f.out.nrm[i] - nrm[i]) < 1e-9, `normal ${i}`);
     assert.ok(f.out.pos.every(Number.isFinite));
     assert.ok(f.out.mat.some(m => m > 6 && m < 6.5), "foliage retains per-vertex wind weight");
     for (let i = 0; i < f.out.nrm.length; i += 3)
@@ -176,4 +180,27 @@ test("a tree whose trunk the guard refuses leaves no registry note (H26b)", () =
   const g = makeFixture();
   g.nature.tree(0, 1, 24, 12, col);
   assert.equal(g.notes.filter((n) => n[0] === "tree").length, 1, "a landed trunk is noted once");
+});
+
+test("pines on both sides of the road share one handedness and one batch (#7385 S5)", () => {
+  const f = makeFixture();
+  f.nature.pine(2, 1, 24, 12, [.2, .35, .18]);
+  f.nature.pine(10, -1, 24, 12, [.2, .35, .18]);
+  assert.equal(f.graph.stats().nodes, 2);
+  const batches = f.graph.batches().batches;
+  const crowns = batches.filter((b) => b.model.startsWith("pine|") && !b.model.includes("|fixed|"));
+  const trunks = batches.filter((b) => b.model.startsWith("pine|fixed|"));
+  assert.equal(crowns.length, 1, `one crown batch, not a mirrored pair: ${batches.map((b) => `${b.model}@${b.variant}`)}`);
+  assert.equal(crowns[0].count, 2);
+  assert.equal(trunks.length, 1);
+  assert.equal(trunks[0].count, 2);
+  assert.equal(crowns[0].variant, trunks[0].variant);
+  // the side -1 pine's frame is a half-turn of the track frame, never a mirror
+  for (let i = 0; i < 2; i++) {
+    const m = crowns[0].matrices, b = i * 16;
+    const det = m[b] * (m[b + 5] * m[b + 10] - m[b + 6] * m[b + 9]) - m[b + 1] * (m[b + 4] * m[b + 10] - m[b + 6] * m[b + 8])
+      + m[b + 2] * (m[b + 4] * m[b + 9] - m[b + 5] * m[b + 8]);
+    assert.ok(Math.abs(det) > 1e-6);
+    if (i) assert.equal(Math.sign(det), Math.sign(m[0] * (m[5] * m[10] - m[6] * m[9]) - m[1] * (m[4] * m[10] - m[6] * m[8]) + m[2] * (m[4] * m[9] - m[5] * m[8])));
+  }
 });

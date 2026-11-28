@@ -418,7 +418,7 @@ const DataLive = (function () {
           const mainInfo = el("div", "dh-cons-main");
           mainInfo.appendChild(el("span", "dh-pos", p.pos != null ? p.pos : "—"));
           const chip = el("span", "dh-codechip", d.code || (p.num != null ? "#" + p.num : "—"));
-          const col = DataTabUtils.driverColor(d, findTeam, null);
+          const col = DataTabUtils.teamShade(DataTabUtils.driverColor(d, findTeam, null), findTeam(d.team));
           chip.style.background = cssColor(col);
           chip.style.color = textColorOn(col);
           mainInfo.appendChild(chip);
