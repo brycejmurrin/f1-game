@@ -695,7 +695,7 @@ const api = {
     if (o.pace != null && fl(o.pace, 0.05) != null) G.PACE = fl(o.pace, 0.05);
     if (o.speedRef != null && fl(o.speedRef, 1) != null) { G.STEER_SPEED_REF = fl(o.speedRef, 1); Input.setSteerSpeedRef(G.STEER_SPEED_REF); }
     if (o.wheelbase != null && fl(o.wheelbase, 0.5) != null) G.WHEELBASE = fl(o.wheelbase, 0.5);
-    if (o.expo != null && fl(o.expo, 0.2) != null) G.STEER_EXPO = fl(o.expo, 0.2);
+    if (o.expo != null && fl(o.expo, 0.2) != null) { G.STEER_EXPO = fl(o.expo, 0.2); Input.setSteerExpo(G.STEER_EXPO); }
     if (o.maxSlip != null) G.STEER_MAX_SLIP = o.maxSlip;
     if (o.roadFollow != null) G.ROAD_FOLLOW = o.roadFollow;
     // core dynamic-model feel levers (swept by the emulation/tuning harness)
