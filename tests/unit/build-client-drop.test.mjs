@@ -414,3 +414,33 @@ test("previewMap and a build share one worker and one readiness wait", async () 
   assert.equal(await p, false);
   assert.equal(await built, null);
 });
+
+// ---- the version gate (#7492 phase 5) ----------------------------------------
+// ScriptLoader refuses lazy scripts under a mismatched build (UpdateCheck.blocksLazyLoad);
+// the build worker's importScripts would fetch them anyway, so spawn() declines and the
+// caller builds in steps, the same path as a missing Worker.
+test("spawn() under the version gate builds no Worker and the caller builds in steps", async () => {
+  let blocked = true;
+  const { client, workers } = page({ UpdateCheck: { blocksLazyLoad: () => blocked } });
+  assert.equal(client.spawn(), null, "no readiness promise");
+  assert.equal(workers.length, 0, "no Worker constructed");
+  assert.equal(await client.build(0, def, opts, gfx, null), null, "null = build in steps");
+  assert.equal(workers.length, 0);
+  assert.equal(client.busy(), false);
+  // The same build with the gate open is the base path: it reaches a worker.
+  blocked = false;
+  const nogate = page();
+  const pending = nogate.client.build(0, def, opts, gfx, null);
+  const open = client.build(0, def, opts, gfx, null);
+  await settle();
+  assert.equal(workers.length, 1, "gate lifted: the worker is spawned as on base");
+  assert.equal(nogate.workers.length, 1);
+  client.set(false); nogate.client.set(false);
+  assert.equal(await open, null); assert.equal(await pending, null);
+});
+
+test("an UpdateCheck without blocksLazyLoad leaves the worker path as it was", () => {
+  const { client, workers } = page({ UpdateCheck: {} });
+  assert.ok(client.spawn());
+  assert.equal(workers.length, 1);
+});
