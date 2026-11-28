@@ -1657,32 +1657,11 @@ export function perGroupSpecs(scripts = pkgScripts(), db = timings()) {
   return perGroupPlan(scripts, db).specs;
 }
 
-// ROUTES pick-tests' RULES do not name (audit W31 row 2). A vendored library or
-// a standalone page matched no rule, so on its own it failed closed and beside
-// any matched path it silently selected nothing. They belong to real groups.
-// (pick-tests.mjs is the RULES' home; these live here until they can move.)
-export const EXTRA_ROUTES = [
-  [/^vendor\/(three-[^/]+|three-patches)\//, ["tiny", "gfx"], "three.js: the shipped default renderer (TLX) boots on it"],
-  [/^vendor\/rapier-[^/]+\//, ["physics-core", "collisions"], "Rapier: the debris world and the incident takeover"],
-  [/^vendor\/(trystero-[^/]+|jsqr-[^/]+)\//, ["net"], "multiplayer signalling and the QR room-code scan"],
-  [/^vendor\/gpu-capture\//, ["hooks"], "the GPU capture toggle (gpu-capture.spec.js)"],
-  [/^vendor\//, ["tiny"], "a vendored script the page may load"],
-  [/^controller\.html$/, ["tiny", "input"], "the phone-as-controller page"],
-  [/^overlay\.html$/, ["modes"], "the stream overlay page (overlay-live.spec.js)"],
-  [/^cockpit-view\.html$/, ["tiny", "ui"], "the cockpit-view page"],
-  [/^bench\.html$/, ["perf-frametime"], "the benchmark page (perf-frametime.spec.js)"],
-  // Executable agent config (change-kind: not prose): its suites are node
-  // guards, so no browser group; claimed, so the diff is not "unmatched".
-  [/^\.(claude|cursor|codex)\/|^\.githooks\//, ["guards"], "agent hooks and config: the guard suites exec them"],
-];
-export function pickAll(files) {
-  const g = pick(files);
-  for (const f of files) for (const [re, gs, why] of EXTRA_ROUTES) {
-    if (!re.test(f)) continue;
-    for (const n of gs) { if (!g.has(n)) g.set(n, new Set()); g.get(n).add(why); }
-  }
-  return g;
-}
+// EXTRA_ROUTES (vendor/, the standalone pages, agent config) moved into
+// pick-tests' RULES (#7253 P3a): pick() is the one path→group router, so the
+// local CLI, node-plan, select-recall and this selector cannot disagree.
+// pickAll stays as an alias for any out-of-tree caller.
+export const pickAll = pick;
 
 /** Stylesheet -> the browser specs that measure what it lays out, at phone shapes. tokens/responsive/components
  *  feed every surface, so they take all of them. A sheet not listed keeps the smoke only (its row says so in
@@ -1708,7 +1687,7 @@ function routesFor({ files: changed, before, after }, { scripts, impactPins, rea
   // file does NOT route as its js owner: CSS_LAYOUT_SPECS keeps a css diff
   // narrow (Bryce, decision on #5304, 2026-11-10: "option 1, tip wins").
   const routing = changed;
-  const g = pickAll(routing);   // Map: group -> reasons (pick-tests' native shape + EXTRA_ROUTES)
+  const g = pick(routing);   // Map: group -> reasons (pick-tests' native shape)
   // An edited spec already runs first, alone (changedSpecs, rank 0); its
   // group-mates are not this diff's business (pick-tests SPEC_OWNER_REASON).
   stripSpecOwner(g);
@@ -1745,7 +1724,7 @@ function routesFor({ files: changed, before, after }, { scripts, impactPins, rea
   const standalone = extraRows.filter((r) => r.kind === "loads-module-standalone").map((r) => r.spec);
   // Paths no rule claims. All of them: fail closed ("unmatched"). Some of them:
   // "partial" — the floor runs and the paths are named (W31 row 2).
-  const unmatched = changed.filter((f) => !pickAll([f]).size && !TRACKED.some((re) => re.test(f))
+  const unmatched = changed.filter((f) => !pick([f]).size && !TRACKED.some((re) => re.test(f))
     && !DOCS_ONLY.some((re) => re.test(f)));
   const runner = changed.some((f) => RUNNER_PATHS.some((re) => re.test(f)));
   const runnerPlan = runner ? perGroupPlan() : { specs: [], unrepresented: [] };
