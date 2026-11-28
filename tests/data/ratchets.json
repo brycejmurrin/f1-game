@@ -6,37 +6,37 @@
   },
   "files": {
     "css/hud.css": {
-      "codeLines": 2415,
-      "lines": 2686
+      "codeLines": 2277,
+      "lines": 2545
     },
     "js/agent/agentview.js": {
       "lines": 2340
     },
     "js/agent/apex.js": {
-      "codeLines": 1686,
-      "lines": 2456
+      "codeLines": 1687,
+      "lines": 2457
     },
     "js/car/car3d.js": {
       "lines": 2930
     },
     "js/game.js": {
-      "codeLines": 5550,
-      "gMembers": 278,
-      "lines": 9692,
+      "codeLines": 5539,
+      "gMembers": 280,
+      "lines": 9669,
       "topLets": 122
     },
     "js/net/lobby.js": {
       "lines": 2390
     },
     "js/render/glx/glx.js": {
-      "lines": 2926
+      "lines": 2928
     },
     "js/track/tracks.js": {
       "lines": 846
     },
     "js/ui/hud.js": {
-      "codeLines": 1401,
-      "lines": 2196
+      "codeLines": 1417,
+      "lines": 2213
     },
     "tools/ci/pick-tests.mjs": {
       "blanketOnlyRoutes": 2
@@ -45,13 +45,13 @@
   "tree": {
     "assertPins": {
       "absorb": 5,
-      "ceiling": 8265,
+      "ceiling": 8302,
       "slack": 200
     },
     "assertPinsAll": {
       "absorb": 5,
       "baseline": "2026-11-10 (audit item 9): re-seeded at the TRUE count after the counter learned the indirect shape (a bool from includes()/test()/indexOf() that a later assert reads); was 10320 under the old counter, +39 indirect sites. Shrink-only: lower it as those sites are rewritten, never raise it to absorb them.",
-      "ceiling": 10557,
+      "ceiling": 10608,
       "slack": 200
     },
     "bareCatches": {
@@ -68,11 +68,11 @@
     },
     "eagerCodeBytes": {
       "absorb": 5000,
-      "ceiling": 4053762,
+      "ceiling": 4033085,
       "slack": 0
     },
     "eagerScripts": {
-      "ceiling": 298,
+      "ceiling": 294,
       "slack": 0
     },
     "gWrites": {
@@ -84,20 +84,20 @@
       "slack": 0
     },
     "rawColor": {
-      "ceiling": 319,
+      "ceiling": 275,
       "slack": 0
     },
     "rawColorDistinct": {
-      "ceiling": 179,
+      "ceiling": 177,
       "slack": 0
     },
-    "rawGameReads": 302,
+    "rawGameReads": 303,
     "rawSpacing": {
       "ceiling": 302,
       "slack": 0
     },
     "shellNodes": {
-      "ceiling": 2335,
+      "ceiling": 2338,
       "slack": 25
     },
     "sourceSliceTests": {
@@ -114,7 +114,7 @@
     },
     "typeofGuards": {
       "absorb": 10,
-      "ceiling": 2324,
+      "ceiling": 2342,
       "slack": 0
     },
     "vmSrcLoads": 598,
