@@ -206,7 +206,9 @@ function create() {
 const BACKEND_EDGES = ApexRoster.DEFERRED_EDGES;
 function loadBackendScripts(files, edges, opts) {
   const strict = !!(opts && opts.strict);
-  const generationScope = {};   // legacy-worker timeout fallback belongs only to this load
+  // The legacy-worker timeout fallback belongs only to this load; a serial loader passes ONE
+  // scope for its whole run (#7415), else an unresponsive worker cost 1500 ms per file.
+  const generationScope = opts && opts.generationScope || {};
   const loaded = opts && opts.loaded;
   const pending = new Set(files.filter((f) => !loaded || !loaded.has(f)));
   const done = new Set(loaded || []), inflight = new Set();

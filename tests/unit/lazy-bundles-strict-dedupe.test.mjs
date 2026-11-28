@@ -97,5 +97,6 @@ test("serial audio path passes strict (retry never re-injects an evaluated file)
   const serial = s.slice(s.indexOf("async function loadAudioSerial"), s.indexOf("async function loadBackendScripts"));
   const calls = serial.match(/loadScripts\([^;]*\);/g) || [];
   assert.equal(calls.length, 2, "two loadScripts calls in the serial path");
-  for (const c of calls) assert.ok(c.includes("strict: true"), c);
+  // #7415: both share one opts object (one generation scope per run); strictness is pinned by lazy-serial-scope.
+  for (const c of calls) assert.ok(/, o\);$/.test(c), c);
 });
