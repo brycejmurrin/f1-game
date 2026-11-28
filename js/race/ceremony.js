@@ -8,8 +8,17 @@ var RaceCeremony = (function () {
   const PHASES = Object.freeze(["classified", "cooldown", "parcFerme", "podium", "results"]);
   const SEEKABLE = Object.freeze(["cooldown", "parcFerme", "podium", "results"]);
   // Wall-clock auto-advance (seconds). Cooldown length is a feel default from
-  // the plan (45 s / one lap); parc fermé and podium are short beats.
-  const DUR = Object.freeze({ cooldown: 45, parcFerme: 8, podium: 6 });
+  // the plan (45 s / one lap); parc fermé is a short beat. The podium beat owns
+  // its exit (RacePodium.PODIUM_S, "timer"); this clock is only a backstop
+  // PODIUM_GUARD_S past it, read at call time (podium-beat.js may load later, #7321).
+  const PODIUM_GUARD_S = 0.5, PODIUM_BARE_S = 6;   // BARE: no RacePodium loaded, a timer-only phase
+  const DUR = Object.freeze({
+    cooldown: 45, parcFerme: 8,
+    get podium() {
+      const s = typeof RacePodium !== "undefined" ? Number(RacePodium.PODIUM_S) : NaN;
+      return s > 0 ? s + PODIUM_GUARD_S : PODIUM_BARE_S;
+    },
+  });
 
   let _api = null;
   let _want = false;   // armed by finishRace({ceremony:true}) before endRace

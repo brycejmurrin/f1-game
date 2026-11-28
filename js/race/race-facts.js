@@ -179,6 +179,14 @@ var RaceFacts = (function () {
           // pre-flag ones logged at the same checkpoints read as "6.5 quicker".
           if (c === p) hist.clear();
         }
+        // Jumped FORWARD past more than one line (a jump-in place(), a forward re-grid or
+        // rescue): the same rule as first sight. One stamp `t` on every skipped line made
+        // each moved car's gap 0.0 s and every pair a battle (#7321); a new baseline as above.
+        else if (i - s.cp > 1) {
+          s.cp = i;
+          regrid = true; _shoved.add(s.id);
+          if (c === p) hist.clear();
+        }
         while (s.cp < i) {
           s.cp++;
           if (s.cp >= 0) { const k = s.cp % RING; s.times[k] = t; s.idx[k] = s.cp; }

@@ -262,5 +262,5 @@ var DrillFork = (function () {
     return Object.freeze({ fork, branch, step, cancel, run, noise, score, cullSet });
   }
 
-  return Object.freeze({ create, DT, HOLD_INPUT });
+  return Object.freeze({ create });
 })();

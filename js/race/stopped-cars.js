@@ -75,6 +75,6 @@ var StoppedCars = (function () {
     }
     return { picture, reset: () => { stopT.clear(); from.clear(); moved.clear(); } };
   }
-  return { scan, create, STOP_V, STOP_DWELL, STOP_VSC, STOP_RECOVER };
+  return { create, STOP_RECOVER };
 })();
 Object.freeze(StoppedCars);
