@@ -530,6 +530,9 @@ function start(opts) {
   career.amb = ambIdx(o.amb);
   applyRegs();
   career.deal = newDeal(team, 1);
+  // The opening brief is stored HERE, at a write point: objective() is a pure read
+  // since #7366, so nothing else stores it before the first pick (#7485).
+  career.obj = objective();
   Log.info("game", `Career.start flavour=${flavour} team=${teamId}`);
   // Quota plays on session-only (persistence-dom.spec); a refusal puts the old career back (#5657).
   save();
