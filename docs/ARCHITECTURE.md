@@ -826,6 +826,7 @@ _Module index over 34 directories, in load order. `tag` = a `<script>` in index.
 | `harvest.js` | `HarvestDrill` | LAZY_LEARN | HARVEST STOP: LEARN's brake-blend drill on track (#6559 step 11, #6550 D3a). |
 | `charge.js` | `ChargeDrill` | LAZY_LEARN | CHARGE-SUSTAINING LAP: LEARN's hybrid lesson on track (#6559 step 13, #6550 D2). |
 | `rain-groove.js` | `RainDrill` | LAZY_LEARN | WET WEATHER LINES: find the groove (#6559 step 15, #6551 §5 variant A). |
+| `dive.js` | `DiveDrill` | LAZY_LEARN | DIVE TEST: the Suspension & Anti-Dive lesson on track (#6559 step 9, #6555 §2; Bryce's decision D2, #6559). |
 <!-- /@gen-arch:modules -->
 
 ---
