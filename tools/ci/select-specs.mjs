@@ -1404,6 +1404,9 @@ export const SOURCE_AFFECTED = [
   // sw.js is TRACKED (reason `infra`) and its pick-tests rule names a node group only, so a sw.js-only diff had an
   // EMPTY browser plan: the spec that boots the real worker and checks its precache did not run on #5187 / #5188.
   [/^sw\.js$/, "tests/specs/perf-sw-cache-hit.spec.js"],
+  // THE SAVE ROUND TRIP (#7505 R1, #7507): persistence-dom (group `hooks`) waits on `__apex.career()?.obj`, but these
+  // sources route only modes / state-unit / ui, so #7485 turned the tip red with the one spec that reads them unrun.
+  [/^js\/(career\/(career|save-migrate|career-planning)|ui\/(save-health|select-screen))\.js$/, "tests/specs/persistence-dom.spec.js"],
 ];
 
 /** Specs that prove nothing about a particular module: they boot the page or

@@ -2672,15 +2672,19 @@
           // M9: fetch the real surroundings from the probe cube along the
           // reflection vector and cross-fade the analytic mirror toward it by
           // the probe strength (uEnvStr, 0 off). envCC is already
-          // .toVar()-anchored, so this unconditional reassign never strands
+          // .toVar()-anchored, so the branched reassign below never strands
           // (STANDING RULE). .sample() shares the swappable base node.
           if (envCubeNode) {
             // textureLod(uEnvCube, Rg, rough*2.5) — js/render/glx/shaders/glsl-lit.js.
             // Official TSL: cubeTexture(CubeTextureNode, uvNode, levelNode)
             // clones with referenceNode = this base (mrdoob/three.js
             // CubeTextureNode.js). Do not call .uv() on a cube node.
-            const cubeRefl = cubeTexture(envCubeNode, probeDirection(Rg), rough.mul(2.5)).rgb;
-            envCC.assign(mix(envCC, cubeRefl, probeLive));
+            // Only while the probe is live: mix(…, 0) threw the fetch away (hunt #5777 R17a). An explicit
+            // LOD, so the branch needs no uniform control flow; envCC is a var, so the assign does not strand.
+            If(probeLive.greaterThan(0.0), () => {
+              const cubeRefl = cubeTexture(envCubeNode, probeDirection(Rg), rough.mul(2.5)).rgb;
+              envCC.assign(mix(envCC, cubeRefl, probeLive));
+            });
           }
           // sun disc in the mirror: pow-400 lobe widened by the AA variance. A finite
           // term times carSunGlint 0 (the mirror pass, MIRROR_TUNE) adds exactly 0: skip it.

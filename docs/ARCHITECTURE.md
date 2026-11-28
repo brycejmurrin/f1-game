@@ -2233,6 +2233,18 @@ object-literal scan in `tests/unit/backend-surface-parity.test.mjs` on 2026-11-2
 Adding or closing a row is a docs edit; closing a GLX gap needs a correctness or
 phone-safety reason (`.claude/rules/render-glx.md`).
 
+#### Cross-backend divergence table
+
+Same contract, different numbers or maths: by design, not drift (hunt #5777 R13, #7435). A row changes with
+its source, named in the row.
+
+| what | TLX | GLX | WGX | source |
+|---|---|---|---|---|
+| Point-lamp slots per fragment | 48 desktop / 24 phone; 16 on the WebGL2 lite path (`_liteGpu`) | 48 / 24 | 48 / 24 | `js/render/shared/light-budget.js` (`MAX`, `MOBILE`, `LITE`) |
+| Rear-mirror lamp cap (8, `apex26.tlxMirLampCap`) | the shortened list, and also per chunk (`U.lampCap`) | the shortened list | the shortened list | `js/render/shared/mirror-pass.js` (`_lampCap`); `js/render/three/tsl-lit.js` (`frame.mirrorLampCap`) |
+| Road micro-normal / asphalt bump | analytic octave gradient (ROAD NORMAL V2, `apex26.tlxRoadNormalV2=0` restores the finite difference) | 3-tap finite difference | 3-tap finite difference | `js/render/three/tsl-lit.js`, `js/render/three/tsl-chunks.js` |
+| Bloom on a software rasteriser | no compensation | bright-pass threshold up and bloom amount down (`swSoft`) | no compensation | `js/render/glx/post.js` (`PerfGov.softwareRaster()`) |
+
 
 **GLX's job — safe mode.** GLX is the renderer every backend failure lands on
 (`Gfx.create()` → null), the no-adapter device path, the explicit `webgl2` pick,

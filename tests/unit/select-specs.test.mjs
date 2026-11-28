@@ -1456,8 +1456,8 @@ test("SOURCE_AFFECTED elevates career.spec.js when career-ui or career-backup ch
     re.test("js/career/career-ui.js") && re.test("js/career/career-backup.js") && spec === career[0]));
   assert.deepEqual(specsAffectedBySource(["js/career/career-ui.js"]).sort(), [...career].sort());
   assert.deepEqual(specsAffectedBySource(["js/career/career-backup.js"]).sort(), [...career].sort());
-  assert.deepEqual(specsAffectedBySource(["js/career/career.js"]), [],
-    "other career modules stay merely routed");
+  assert.deepEqual(specsAffectedBySource(["js/career/career.js"]), ["tests/specs/persistence-dom.spec.js"],
+    "career.js pins only the save round trip (#7507), never the career-ui specs");
   const over = career[0];
   // Rank 2 (import / foundation / SOURCE_AFFECTED) must put it in oversize.
   const pinned = fit([over], 30, { rank: (f) => (f === over ? 2 : 3), db: EMPTY });
@@ -2556,4 +2556,16 @@ test("never more --shard pieces than tests: an empty shard runs zero tests and f
   assert.equal(legs(fx("career"), 1, 60).length, 1, "a 1-test fat spec is one piece, not FAT_UI_MIN_PIECES");
   assert.equal(legs(fx("perf-three-test"), 3, 40 * 60 * 60).length, 3,
     "a 3-test spec that wants many pieces gets one per test");
+});
+
+test("#7507 member 1: each save / career source alone selects persistence-dom (the spec #7485 went red on unseen)", () => {
+  const spec = "tests/specs/persistence-dom.spec.js";
+  for (const f of ["js/career/career.js", "js/career/save-migrate.js", "js/career/career-planning.js",
+    "js/ui/save-health.js", "js/ui/select-screen.js"]) {
+    assert.ok(specsAffectedBySource([f]).includes(spec), `${f} pins ${spec}`);
+    const plan = select("HEAD", DEFAULT_BUDGET_MIN, { files: [f] });
+    const legs = shards(plan).flatMap((j) => j.specs.split(" ")).map((x) => x.replace(/^\.\//, ""));
+    assert.ok(legs.includes(spec), `${f} alone runs ${spec} (shards: ${legs.length})`);
+  }
+  assert.ok(!specsAffectedBySource(["js/career/career-ui.js"]).includes(spec), "the pin is these five files, not all of js/career/");
 });

@@ -86,3 +86,18 @@ test("child-health reads both words: a released owner is skipped, a landing one 
   ];
   assert.deepEqual(deadOwnedPrs([dead], prs).map((r) => [r.pr, r.act, r.lease]), [[2, "NONE", "landing"], [3, "PARK", "lapsed"]]);
 });
+
+test("#7507 member 3: CRLF bodies, trailing notes after the until-time, and whole-token session ids", () => {
+  const crlf = handoff("claude:session_a until 2026-11-28T10:00Z").replace(/\n/g, "\r\n");
+  assert.deepEqual(handoffLease(crlf), { owner: "claude:session_a", until: "2026-11-28T10:00Z" });
+  const noted = handoffLease(handoff("claude:session_a until 2026-11-28T10:00Z (renewed)"));
+  assert.deepEqual(noted, { owner: "claude:session_a", until: "2026-11-28T10:00Z" });
+  assert.equal(leaseState(noted, Date.parse("2026-11-28T09:00Z")), "live");
+  const adopt = (s) => [at("2026-11-28T08:00Z", `adopts PR #9 — claude:${s}`)];
+  const body = handoff("claude:session_12 until 2026-11-28T10:00Z");
+  assert.deepEqual(adoptedUnleased(body, adopt("session_1"), 9), { session: "claude:session_1", at: "2026-11-28T08:00Z" },
+    "session_1 is not named by an owner line that says session_12");
+  assert.equal(adoptedUnleased(body, adopt("session_12"), 9), null);
+  assert.equal(adoptedUnleased(handoff("landing claude:session_1"), adopt("session_1"), 9), null);
+  assert.equal(adoptedUnleased(crlf, adopt("session_a"), 9), null, "a CRLF lease names its adopter");
+});
