@@ -293,3 +293,21 @@ test("an overlay that connects while the game boots gets its feed once the agent
   fireAll();
   assert.ok(got.length > 0 && got.at(-1).rows && got.at(-1).rows.length > 0, "the overlay receives the race once __apex is up");
 });
+
+// #7503: the team colour is memoised per id, so a 4 Hz tick does not scan the team table per car.
+test("team colours are memoised per team id and follow a livery edit or a new table", () => {
+  const { Pub } = load();
+  const ids = Array.from({ length: 20 }, (_, i) => "t" + i);
+  let scans = 0;
+  const teams = ids.map((id, i) => ({ id, color: [i / 20, 0.5, 1] }));
+  for (const name of ["find", "findIndex"]) { const real = teams[name]; teams[name] = function (...a) { scans++; return real.apply(this, a); }; }
+  const field = { ...FIELD, positions: ids.map((team, i) => ({ pos: i + 1, code: "C" + i, team, lap: 1, intervalS: i ? 2 : 0, gapToLeaderS: 0 })) };
+  const want = ids.map((_, i) => "rgb(" + Math.round(i / 20 * 255) + ",128,255)");
+  for (let k = 0; k < 10; k++) assert.deepEqual(j(Pub.input({ field, teams }).ranked.map((r) => r.team)), want);
+  assert.ok(scans <= 20, "10 ticks of 20 cars scan the table at most once per team: " + scans);
+  teams[3].color[0] = 1;   // a livery edit in place
+  assert.equal(Pub.input({ field, teams }).ranked[3].team, "rgb(255,128,255)");
+  const swapped = [{ id: "t0", color: [0, 0, 0] }];
+  assert.equal(Pub.input({ field, teams: swapped }).ranked[0].team, "rgb(0,0,0)", "a new table clears the memo");
+  assert.equal(Pub.input({ field, teams: swapped }).ranked[1].team, "");
+});

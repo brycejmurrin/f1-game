@@ -1146,3 +1146,17 @@ test("css/dialogs.css: the dock centres by margins and a thumb gets a full-width
   const scrub = decls(mq[1].match(/#pm-replay-scrub \{([^}]*)\}/)[1]);
   assert.deepEqual([scrub.order, scrub.flex, scrub.height], ["-1", "1 0 100%", "max(32px, var(--tap))"]);
 });
+
+// #7503: windowInfo() refills one scratch result; every caller reads it before the next call.
+test("window() hands out one scratch result, refilled with the live window on each call", () => {
+  const R = boot();
+  const field = cars(2);
+  const api = R.create({ cars: field, netPlay: { active: () => false }, paused: true });
+  api.reset(field);
+  const empty = api.window();
+  assert.deepEqual({ ...empty }, { t0: 0, t1: 0, frames: 0, cars: 2, bytes: 0, allocatedBytes: empty.allocatedBytes, fixedBytes: empty.fixedBytes });
+  api.sample(1, field); api.sample(1 + 1 / R.HZ, field);
+  const w = api.window();
+  assert.equal(w, empty, "the same reference across calls");
+  assert.deepEqual([w.t0, w.t1, w.frames, w.cars, w.bytes], [1, 1 + 1 / R.HZ, 2, 2, R.frameBytes(2) * 2]);
+});

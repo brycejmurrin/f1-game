@@ -200,14 +200,13 @@ const ReplayBuf = (function () {
       const fixedBytes = _a.byteLength + _b.byteLength + _o.byteLength + (prevStatus ? prevStatus.byteLength : 0);
       // bytes = populated ring lanes; allocatedBytes = reserved ring capacity.
       // Dynamic JS objects (tags/live snapshots) are outside this typed-array budget.
-      if (!count) return { t0: 0, t1: 0, frames: 0, bytes: 0, cars: nCars, allocatedBytes, fixedBytes };
-      const oldest = times[head];
-      const newest = times[(head + count - 1) % cap];
-      return {
-        t0: oldest, t1: newest, frames: count, cars: nCars,
-        bytes: frameBytes(nCars) * count, allocatedBytes, fixedBytes,
-      };
+      // One scratch result, refilled per call (several per scrub frame): a caller that keeps it across calls copies it.
+      const w = winInfo;
+      w.t0 = count ? times[head] : 0; w.t1 = count ? times[(head + count - 1) % cap] : 0; w.frames = count;
+      w.cars = nCars; w.bytes = count ? frameBytes(nCars) * count : 0; w.allocatedBytes = allocatedBytes; w.fixedBytes = fixedBytes;
+      return w;
     }
+    const winInfo = { t0: 0, t1: 0, frames: 0, cars: 0, bytes: 0, allocatedBytes: 0, fixedBytes: 0 };
     // Chronological ring order, so the last sample at or before t is a binary search (ties keep the later one).
     function frameIndexAt(t) {
       let lo = 0, hi = count - 1, k = -1;

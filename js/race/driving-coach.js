@@ -49,7 +49,9 @@ const DrivingCoachBody = (function () {
   function create(G) {
     const insights = RaceInsights.create(G);
     let enabled = G.store.get("drivingCoach", false), elapsed = 0, quiet = 0;
-    let trace = [], checkpoint = null, practice = false, drillMode = "free";
+    // trace: a fixed TRACE_N-slot ring of reused sample rows (traceHead = oldest once full); traceRows() reads it in time order.
+    const TRACE_N = 600, ring = [];
+    let traceHead = 0, checkpoint = null, practice = false, drillMode = "free";
     // REWIND: a rolling window of the same capture a checkpoint takes.
     // 2 Hz, not 60: a rewind lands you on a corner approach, and the half
     // second of granularity that buys is invisible against the 10 s jump —
@@ -187,17 +189,24 @@ const DrivingCoachBody = (function () {
     // race, promoted to the old GC generation, for a trace only the DRIVING
     // TRACE button ever reads. Those are session totals; the
     // download adds them once.
-    function sample(c) {
+    function sample(c, o = {}) {
       const ghostSpeed = Ghost.speedAt ? Ghost.speedAt(c.lapTime) : null;
-      return { time: G.raceT, speed: c.speed, steer: c.steerAngle || 0, brake: c.brakeDemand || 0,
-        throttle: c.throttleDemand || 0, command: c.steerCommand || 0,
-        slipFront: c.slipFront || 0, slipRear: c.slipRear || 0, frontUtil: c.frontUtil || 0, rearUtil: c.rearUtil || 0,
-        forceFront: c.forceFront || 0, forceRear: c.forceRear || 0, lateralAccel: c.lateralAccel || 0,
-        longitudinalUse: c.axFrac || 0, brakeUse: brakeUse(c), yawRate: c.yawRateCur || 0, energy: c.energy,
-        wetness: (G.trackWetness ? G.trackWetness() : 0), practice, enabled,
-        wake: c.wake || 0, dirtyAirMul: Number.isFinite(c._dirtyAirMul) ? c._dirtyAirMul : null, assisted: !!c._coachAssisted,
-        ghostSpeedDelta: ghostSpeed == null ? null : c.speed - ghostSpeed };
+      o.time = G.raceT; o.speed = c.speed; o.steer = c.steerAngle || 0; o.brake = c.brakeDemand || 0;
+      o.throttle = c.throttleDemand || 0; o.command = c.steerCommand || 0;
+      o.slipFront = c.slipFront || 0; o.slipRear = c.slipRear || 0; o.frontUtil = c.frontUtil || 0; o.rearUtil = c.rearUtil || 0;
+      o.forceFront = c.forceFront || 0; o.forceRear = c.forceRear || 0; o.lateralAccel = c.lateralAccel || 0;
+      o.longitudinalUse = c.axFrac || 0; o.brakeUse = brakeUse(c); o.yawRate = c.yawRateCur || 0; o.energy = c.energy;
+      o.wetness = G.trackWetness ? G.trackWetness() : 0; o.practice = practice; o.enabled = enabled;
+      o.wake = c.wake || 0; o.dirtyAirMul = Number.isFinite(c._dirtyAirMul) ? c._dirtyAirMul : null; o.assisted = !!c._coachAssisted;
+      o.ghostSpeedDelta = ghostSpeed == null ? null : c.speed - ghostSpeed;
+      return o;
     }
+    function pushTrace(c) {
+      if (ring.length < TRACE_N) { ring.push(sample(c)); return; }
+      sample(c, ring[traceHead]); traceHead = (traceHead + 1) % TRACE_N;
+    }
+    function clearTrace() { ring.length = 0; traceHead = 0; }
+    const traceRows = () => traceHead ? ring.slice(traceHead).concat(ring.slice(0, traceHead)) : ring.slice();
     function status() {
       const c = G.player;
       if (!c) return null;
@@ -336,7 +345,7 @@ const DrivingCoachBody = (function () {
         }
         if (enabled && G.state === "race" && G.player && !G.timeTrial && G.tyres && G.tyres.on()) tyreWatch(G.player);
         if (enabled || practice) {
-          if (G.player) { trace.push(sample(G.player)); if (trace.length > 600) trace.shift(); }
+          if (G.player) { pushTrace(G.player); }
         }
       }
       // Track limits is an EVENT, not a sustained state: the game only announces
@@ -421,7 +430,7 @@ const DrivingCoachBody = (function () {
         if (typeof LapRetry !== "undefined") LapRetry.invalidate();   // the RETRY LAP drop-in is from a world this rewind replaced
         if (G.player) G.player.incidentInvalidLap = true;
       }
-      G.records.invalidate(); trace = []; quiet = 2; clearCandidate();
+      G.records.invalidate(); clearTrace(); quiet = 2; clearCandidate();
       return true;
     }
     // A CHECKPOINT IS A WORLD TOO. Same reasoning as rewind: saving a starting
@@ -485,7 +494,7 @@ const DrivingCoachBody = (function () {
     function reset() {
       for (const mode of pathwayModes) { const check = $("pm-pathway-check-" + mode); if (check) check.checked = false; }
       if (typeof SetupTrials !== "undefined") SetupTrials.invalidate("Session reset before attempt completed");
-      releasePracticeWorlds(); practice = false; trace = []; elapsed = 0; quiet = 0; warnSeen = null; edge = null;
+      releasePracticeWorlds(); practice = false; clearTrace(); elapsed = 0; quiet = 0; warnSeen = null; edge = null;
       reminded.clear(); reminderAt = 0; reminders = 0; pendingReport = null; tyreAcc = null; tyreSaid.clear();
       clock = 0; latest = null; log = []; clearCandidate(); lastTip.clear(); tipCounts.clear(); insights.reset();
       prevS = null; lastMark = null; segs = []; lapReport = null;
@@ -495,7 +504,7 @@ const DrivingCoachBody = (function () {
       if (traceExporting) return;
       traceExporting = true;
       try {
-        const blob = new Blob([JSON.stringify({ physics: PhysicsConsts.REVISION, configuration: G.records.config(), rows: trace,
+        const blob = new Blob([JSON.stringify({ physics: PhysicsConsts.REVISION, configuration: G.records.config(), rows: traceRows(),
           coach: feedback(), lapReport,
           aiDecisions: (G.cars || []).filter(c => !c.human && c.passPlan).map(c => ({ driver: c.code, ...c.passPlan })),
           journal: insights.journal(), forecast: insights.forecast(), practice: insights.summary() }, null, 2)], { type: "application/json" });
@@ -547,7 +556,7 @@ const DrivingCoachBody = (function () {
           + " times. The " + coaching.suggest.goalLabel + " practice goal drills it." : "")
         + " These are reminders, not a driving score."
         : "No tips recorded this session. This is a reminder count, not a driving score.";
-      const download = $("pm-driving-trace"); if (download) download.disabled = trace.length === 0 && insights.journal().length === 0;
+      const download = $("pm-driving-trace"); if (download) download.disabled = ring.length === 0 && insights.journal().length === 0;
       const markBtn = $("pm-practice-set"), retryBtn = $("pm-practice-retry");
       if (markBtn) markBtn.disabled = !canPractice();
       if (retryBtn) retryBtn.disabled = !canPractice() || !checkpoint;
@@ -707,7 +716,7 @@ const DrivingCoachBody = (function () {
       practiceGoal: () => drillMode, setPracticeGoal,
       canPractice, rewindReady: () => canPractice() && rewindBuf.length > 0,
       practiceActive: () => practice, isEnabled: () => !!enabled, downloadTrace,
-      trace: () => trace.map(row => ({ ...row })), insights, captureWorld, restoreWorld };
+      trace: () => traceRows().map(row => ({ ...row })), insights, captureWorld, restoreWorld };
   }
   return { create };
 })();
