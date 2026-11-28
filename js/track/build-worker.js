@@ -77,6 +77,13 @@ function pageRelativeFetch(base) {
   self.fetch = (u, o) => f.call(self, typeof u === "string" ? new URL(u, base).href : u, o);
 }
 
+// The page's build number as this worker's __APEX_BUILD (assets.js _manifestUrl reads it at
+// fetch time): the manifest is then the page's `manifest.json?b=<n>`, not the bare URL (#7388).
+function adoptBuild(build) {
+  const b = Number(build);
+  if (Number.isSafeInteger(b) && b > 0) self.__APEX_BUILD = b;
+}
+
 // The page's MY TEAM entry in place of this worker's default (or none).
 function adoptTeam(team) {
   if (!team || typeof Teams === "undefined" || !Array.isArray(Teams.LIST)) return;
@@ -216,6 +223,7 @@ self.onmessage = async (e) => {
     if (m.type === "init") {
       if (!_loaded) {
         pageRelativeFetch(m.base);
+        adoptBuild(m.build);
         const timing = await importScriptsRetry(m.files);
         _loaded = true;   // no model prefetch: each build fetches its own circuit's set
         self.postMessage({ type: "ready", warmMs: timing.warmMs, importMs: timing.importMs, files: timing.files });

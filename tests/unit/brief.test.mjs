@@ -23,7 +23,7 @@ test("render: every required line, the predicted config-ok, the tip state and th
   assert.equal(lineOf(b, "HUMAN STEPS:"), "HUMAN STEPS: config-ok (routine: tools/ci/tip-alarm.mjs, .github/workflows/tip-alarm.yml): the orchestrator adds it after reading the diff; send the head sha once pushed");
   assert.equal(lineOf(b, "TIP:"), "TIP: paused at c1e4f959 — commit locally; open the PR after my tip-green: message");
   assert.equal(lineOf(b, "STOP AT:"), "STOP AT: start+150k");
-  assert.equal(lineOf(b, "ENV:"), 'ENV: worker ("I") · permission_mode auto · tags ["apex:issue-6400"]', "the role and its name, never the id");
+  assert.equal(lineOf(b, "ENV:"), 'ENV: worker ("Full Access") · permission_mode auto · tags ["apex:issue-6400"]', "the role and its name, never the id");
   assert.equal(lineOf(b, "ASK"), `ASK (Bryce's words, 2026-11-25 02:47Z): "fix all of those"`);
   assert.deepEqual(lintBrief(b), []);
 });
@@ -122,8 +122,8 @@ test("roles: every role has a name and an env id; lookup by role or by display n
     assert.ok(roles[k].name);
   }
   assert.notEqual(roles.worker.id, roles.orchestrator.id, "the orchestrator environment never hosts workers");
-  assert.equal(resolveRole("worker", roles).name, "I");
-  assert.equal(resolveRole("I", roles).role, "worker");
+  assert.equal(resolveRole("worker", roles).name, "Full Access");
+  assert.equal(resolveRole("Full Access", roles).role, "worker");
   assert.equal(resolveRole(roles.worker.id, roles), null);
   assert.equal(resolveRole("nobody", roles), null);
 });
@@ -139,7 +139,7 @@ test("brief.mjs: a spec or a brief holding a literal id is refused (exit 1); `ro
     owned: ["tests/unit/brief.test.mjs"], stopAt: "start+150k", tip: { state: "green" } };
   assert.deepEqual(specProblems(RSPEC), []);
   const envLine = renderBrief({ ...RSPEC, env: "orchestrator" }).split("\n").find((l) => l.startsWith("ENV:"));
-  assert.equal(envLine, 'ENV: orchestrator ("f1-game orchestrator") · permission_mode auto · tags ["apex:issue-7049"]');
+  assert.equal(envLine, 'ENV: orchestrator ("H") · permission_mode auto · tags ["apex:issue-7049"]');
   const literal = `a literal environment id (${FAKE_ID}): name the role (env: "worker"); brief.mjs role <role> prints the id`;
   assert.deepEqual(specProblems({ ...RSPEC, env: FAKE_ID }), [literal]);
   assert.deepEqual(specProblems({ ...RSPEC, task: `launch into ${FAKE_ID}` }), [literal]);

@@ -1,9 +1,15 @@
 /* tlx-debug.test.mjs — TLXDebug (js/render/three/tlx-debug.js, carved from tlx.js in #6821): pins the __tlx surface
- * (Object.keys, in order) and that it reads the TLX.create closure LIVE through the scope bag tlx.js builds. */
+ * (Object.keys, in order), that it reads the TLX.create closure LIVE through the scope bag tlx.js builds, and that
+ * every *State() read is JSON data (#7451). */
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { createRequire } from "node:module";
+import path from "node:path";
+import vm from "node:vm";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { installThreeGlobals } from "../helpers/fake-webgl2.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const rd = (p) => fs.readFileSync(new URL("../../" + p, import.meta.url), "utf8");
 const DBG = "js/render/three/tlx-debug.js";
@@ -69,4 +75,59 @@ test("load order: lazy (not eager) and before tlx.js", () => {
   const three = m.DEFERRED.three;
   assert.ok(three.indexOf(DBG) >= 0 && three.indexOf(DBG) < three.indexOf("js/render/three/tlx.js"));
   assert.ok(!m.FULL.includes(DBG));
+});
+
+// #7451: every __tlx.*State() read is plain JSON data. The census harness (tools/gfx/gpu-game-check.mjs) stringifies
+// them; a live THREE object in one (cacheState().tex, #7299) is circular and killed both TLX census legs.
+installThreeGlobals();
+globalThis.Log = globalThis.Log || { info() {}, warn() {}, error() {}, debug() {} };
+const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const THREE = await import(pathToFileURL(path.join(ROOT, "vendor/three-0.187.0/three.webgpu.min.js")).href);
+const TSL = THREE.TSL;
+
+/** Plain data only: no cycles, nothing but Object/Array/primitives, and JSON round-trips it unchanged. */
+function assertPlain(v, where, seen = new Set()) {
+  if (v === null || typeof v !== "object") {
+    assert.notEqual(typeof v, "function", `${where} is a function`);
+    return;
+  }
+  assert.ok(!seen.has(v), `${where} is circular`);
+  seen.add(v);
+  const proto = Object.getPrototypeOf(v);
+  assert.ok(proto === Object.prototype || proto === Array.prototype || proto === null,
+    `${where} is a ${v.constructor && v.constructor.name} — debug reads return scalars, not live objects`);
+  for (const [k, x] of Object.entries(v)) assertPlain(x, `${where}.${k}`, seen);
+  seen.delete(v);
+  assert.doesNotThrow(() => JSON.stringify(v), `${where} stringifies`);
+}
+
+function bareScope(vals) {
+  const names = [...new Set(rd(DBG).match(/\bS\.([A-Za-z_$][\w$]*)/g).map((s) => s.slice(2)))];
+  const S = {};
+  for (const n of names) Object.defineProperty(S, n, { get: () => vals[n], enumerable: true });
+  return S;
+}
+
+test("skyState() with the real tsl-sky cache is JSON data, live and after retire", () => {
+  for (const f of ["js/render/three/tsl-chunks.js", "js/render/three/tsl-sky.js"]) vm.runInThisContext(rd(f), { filename: absSrc(f) });
+  const sky = globalThis.TLXShaders.sky(THREE, TSL, { chunks: globalThis.TLXShaders.chunks(THREE, TSL), cache: true, cacheSize: 0 });
+  const t = TD.create(bareScope({ sky, skyMesh: { visible: true, material: 1 }, skyMatFull: 1, skyMatFallback: 1 }));
+  const live = t.skyState();
+  assert.ok(live.cache, "the cache exists");
+  assertPlain(live, "skyState()");
+  sky.dispose();
+  const retired = t.skyState();
+  assert.equal(retired.cache.texIsPlaceholder, true);
+  assertPlain(retired, "skyState() after retire");
+});
+
+test("every __tlx.*State() that answers on a bare scope answers with JSON data", () => {
+  const t = TD.create(bareScope({}));
+  const reads = Object.keys(t).filter((k) => /State$/.test(k) && typeof t[k] === "function" && k !== "clearFxState");
+  assert.ok(reads.length >= 8, `found the State reads: ${reads}`);
+  for (const k of reads) {
+    let v;
+    try { v = t[k](); } catch (_) { continue; }   // needs a live renderer; the sky read above covers the real objects
+    assertPlain(v, `${k}()`);
+  }
 });

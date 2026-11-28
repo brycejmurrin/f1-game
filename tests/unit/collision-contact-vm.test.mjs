@@ -433,7 +433,7 @@ function replayContactFixture(count = 2) {
       sample: (_track, s, out) => { out.p = [0, 0, s]; out.t = [0, 0, 1]; out.r = [1, 0, 0]; out.hw = 3; return out; },
     },
   });
-  for (const file of ["js/core/mat4.js", "js/physics/ai-start.js", "js/physics/ai-drive.js", "js/physics/contact-geometry.js", "js/physics/collide.js", "js/race/real-replay.js"]) {
+  for (const file of ["js/core/mat4.js", "js/race/pace-math.js", "js/physics/ai-start.js", "js/physics/ai-drive.js", "js/physics/contact-geometry.js", "js/physics/collide.js", "js/race/real-replay.js"]) {
     vm.runInContext(readFileSync(join(ROOT_C, file), "utf8"), ctx, { filename: absSrc(file) });
   }
   const cars = Array.from({ length: count }, (_, i) => ({ code: "C" + i, human: false }));

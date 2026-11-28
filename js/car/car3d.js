@@ -2860,7 +2860,7 @@ const Car3D = (function () {
     });
     // Half the vertices are exact repeats; measure/refinish read vertex ranges (CarGeometry.weld).
     else if (!(opts && (opts.refinish || opts.noWeld))) {
-      CarGeometry.weld(out);
+      CarGeometry.weld(out, !!(sil && opts && opts.caster));   // a caster (car-draw.js) welds on position (#7436)
       // The instanced far-field body only. Near rivals (field, no silhouette)
       // and shadow casters (silhouette, no field) stay on the full mesh.
       if (opts && opts.field && opts.silhouette && opts.noDriver && !opts.noSharedLod)

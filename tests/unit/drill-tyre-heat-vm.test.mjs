@@ -35,6 +35,7 @@ test("the drill stages its race: Monza, 2 cars, real tyre wear, a fresh medium o
   assert.equal(ev("Tracks.LIST[" + G.trackIdx + "].id"), "monza");
   assert.equal(G.cars.length, 2);
   assert.equal(G.raceTyreWear, "real");
+  assert.equal(G.store.get("tyreWear", null), "light", "REAL is live only: a tab closed mid-drill keeps the saved option (#7346 row 7)");
   assert.equal(G.tyres.on(), true);
   assert.equal(G.player.tyre.id, "medium");
   assert.ok(G.player.tyreTs < 80 && G.player.tyreTb < 80, "a set out of the blankets: " + G.player.tyreTs + "/" + G.player.tyreTb);
@@ -82,4 +83,5 @@ test("quitting ends the drill, restores the player's tyre wear level", () => {
   assert.equal(G.state, "menu");
   assert.equal(G.drills().active(), null);
   assert.equal(G.raceTyreWear, "light", "stage()'s undo put the player's level back");
+  assert.equal(G.store.get("tyreWear", null), "light", "the saved option never moved");
 });

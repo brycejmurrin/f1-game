@@ -214,7 +214,7 @@ test("JUMP IN samples published trace time when a timing gap separates it from t
 });
 
 test("WATCH snaps after posing on mid-race entry and seek, and releases camera ownership on restart", () => {
-  const ctx = vm.createContext({ M4: { clamp: (v, a, b) => Math.max(a, Math.min(b, v)) },
+  const ctx = vm.createContext({ M4: { clamp: (v, a, b) => Math.max(a, Math.min(b, v)) }, PaceMath: { V_FALLBACK: 80 },   // PaceMath.V_FALLBACK: the vTop() a G without one reads
     Log: { info() {}, warn() {} },
     CamModes: { CAM_MODES: [{ id: "cockpit" }, { id: "heli" }] },
     Tracks: { sample: (_track, s, out) => { out.p = [s, 0, 0]; out.t = [1, 0, 0]; out.r = [0, 0, 1]; out.hw = 7; } } });

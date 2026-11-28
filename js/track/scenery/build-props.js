@@ -117,16 +117,17 @@ const TrackBuildProps = (function () {
     const glassBuf = TrackModels.scratch();
     const waterBuf = TrackModels.scratch();
     const region = buildOptions && buildOptions.region ? TrackSceneryRegion.create(buildOptions.region, [out, glassBuf, waterBuf], RAW) : null;
-    const lightBoxes = out._lightBoxRecords = [], rawBase = region ? region.raw : RAW;
-    const recordLightBox = (o,c,size,col,basis) => { if(o!==glassBuf && o!==waterBuf)TrackGeom.lightBox(o._lightBoxRecords || (o._lightBoxRecords=[]),o,c,size,basis); };
+    const lightBoxes = out._lightBoxRecords = TrackModels.lightRecords(4096), rawBase = region ? region.raw : RAW;
+    const recordLightBox = (o,c,size,col,basis) => { if(o!==glassBuf && o!==waterBuf)TrackGeom.lightBox(o._lightBoxRecords || (o._lightBoxRecords=TrackModels.lightRecords()),o,c,size,basis); };
     const raw = Object.assign({},rawBase,{addBox(o,c,size,col,basis){const result=rawBase.addBox(o,c,size,col,basis);if(result!==false)recordLightBox(o,c,size,col,basis);return result;}});
-    const recordLightTree = (o, kind, args) => {
-      if (o !== glassBuf && o !== waterBuf) TrackGeom.lightPrimitive(o._lightBoxRecords || (o._lightBoxRecords = []), o, kind, args);
+    const recordLightTree = (o, kind, args, from) => {
+      if (o !== glassBuf && o !== waterBuf) TrackModels.lightPrimitive(o._lightBoxRecords || (o._lightBoxRecords = TrackModels.lightRecords()), o, kind, args, from);
     };
     for (const [name, kind] of [["addCone", "cone"], ["addCyl", "cyl"], ["addFrustum", "frustum"]]) {
       raw[name] = (o, ...args) => {
+        const from = o && o.idx ? o.idx.length : -1;   // the triangles the emitter writes next are the record (#7388)
         const result = rawBase[name](o, ...args);
-        if (result !== false) recordLightTree(o, kind, args);
+        if (result !== false) recordLightTree(o, kind, args, from);
         return result;
       };
     }
@@ -180,6 +181,9 @@ const TrackBuildProps = (function () {
       emitted: [], suppressed: [], invalid: [], unsafe: [],
       suppressedCounts: _suppressed,   // per-kind guard drops (tests/unit/scenery-guards)
       supersededByPit: _superseded,    // per-kind drops the pit complex caused (js/track/core/pit.js)
+      // groundAt() calls whose every sample fell off the ribbon (#7333): a foot
+      // that took its fallback, OR a caller that skips on null (its test missed).
+      groundFallback: 0,
     };
 
     // Everything buildProps places goes straight into vertex buffers and is then
@@ -654,6 +658,47 @@ const TrackBuildProps = (function () {
       frustum: (o, foot, r0, r1, h, col, seg, b) => addFrustum(o, foot, r0, r1, h, col, seg, b),
     };
 
+    // groundAt(): THE height a foot stands at (#7333). One sample at (x, z) by
+    // default; with `size` [w, d] (+ `basis`, as foundation) the 3x3 footprint
+    // corners, edge midpoints and centre, reduced by `pick` (read only with `size`): "lo" (lowest, for
+    // a fill that must reach the ground), "hi" (highest, for a lift that must
+    // clear it) or "mid" (the centre sample; the mean of the finite samples when
+    // the centre is off the ribbon). When EVERY sample is off the rendered
+    // ribbon it returns `fallback` and counts the miss on
+    // diagnostics.groundFallback: the explicit, audited form of the 106
+    // hand-written `gy != null ? gy : a.c[1]` fallbacks (#7332).
+    const FOOT9 = [-0.5, 0, 0.5];
+    const sampleFootprint = (cx, cz, size, basis, fn) => {
+      const b = basis || [[1, 0, 0], UPV, [0, 0, 1]];
+      const r = b[0], f = b[2];
+      for (const sx of FOOT9) for (const sf of FOOT9) {
+        const x = cx + r[0] * sx * size[0] + f[0] * sf * size[1];
+        const z = cz + r[2] * sx * size[0] + f[2] * sf * size[1];
+        const y = terrainYAt(x, z);
+        if (y != null && Number.isFinite(y)) fn(y, sx === 0 && sf === 0);
+      }
+    };
+    const groundAt = (x, z, opts) => {
+      const o = opts || {};
+      const fallback = o.fallback !== undefined ? o.fallback : null;
+      if (!o.size) {
+        const y = terrainYAt(x, z);
+        if (y != null && Number.isFinite(y)) return y;
+        diagnostics.groundFallback++;
+        return fallback;
+      }
+      const pick = o.pick || "mid";
+      let lo = Infinity, hi = -Infinity, sum = 0, cnt = 0, mid = null;
+      sampleFootprint(x, z, o.size, o.basis, (y, centre) => {
+        if (y < lo) lo = y;
+        if (y > hi) hi = y;
+        sum += y; cnt++;
+        if (centre) mid = y;
+      });
+      if (!cnt) { diagnostics.groundFallback++; return fallback; }
+      return pick === "lo" ? lo : pick === "hi" ? hi : mid != null ? mid : sum / cnt;
+    };
+
     // foundation(): fill from `top` down to the LOWEST ground under the
     // footprint. Samples corners AND centre, because a single groundYAt() reuse
     // across a wide model assumes flat ground (Imola's village stood 47 m clear
@@ -668,14 +713,8 @@ const TrackBuildProps = (function () {
         return false;
       }
       const b = spec.basis || [[1, 0, 0], UPV, [0, 0, 1]];
-      const r = b[0], f = b[2];
       let lo = Infinity;
-      for (const sx of [-0.5, 0, 0.5]) for (const sf of [-0.5, 0, 0.5]) {
-        const x = c[0] + r[0] * sx * size[0] + f[0] * sf * size[1];
-        const z = c[2] + r[2] * sx * size[0] + f[2] * sf * size[1];
-        const y = terrainYAt(x, z);
-        if (y != null && y < lo) lo = y;
-      }
+      sampleFootprint(c[0], c[2], size, b, (y) => { if (y < lo) lo = y; });
       if (!Number.isFinite(lo)) lo = Number.isFinite(spec.ground) ? spec.ground : NaN;
       if (!Number.isFinite(lo)) return false;
       const embed = spec.embed != null ? spec.embed : 0.6;
@@ -1329,7 +1368,7 @@ const TrackBuildProps = (function () {
       // guard / grounding / boundary core
       markBarrier, blockAt, post, recordBarrier, indexBarrier, clearTreeDist,
       indexSolid, indexSolidAt, barrierClear, massBlocked, massAdd, reserveEmittedSolid, bankOffsetAt,
-      seat, foundation, cantilever, groundYAt, terrainYAt, onTrack,
+      seat, foundation, cantilever, groundYAt, terrainYAt, groundAt, onTrack,
       frameAt, overheadSpan, models, bakedModel,
       // placement primitives + math helpers
       place, prop, backdrop, groundPlane, every,
@@ -1404,9 +1443,9 @@ const TrackBuildProps = (function () {
             { kind: "streetBarrier", k: kA, side });
           return [cx, cz];
         }
-        instance(`street-barrier|${col.join(",")}`,
-          { o: [cx, cy + (WH - drop) / 2, cz], r: rr, u: [0, 1, 0], t: f, s: [1, (WH + drop) / WH, len] },
-          (rec) => rec.box([0, 0, 0], [WT, WH, 1], col),
+        instance("street-barrier",
+          { o: [cx, cy + (WH - drop) / 2, cz], r: rr, u: [0, 1, 0], t: f, s: [1, (WH + drop) / WH, len], col },
+          (rec) => rec.box([0, 0, 0], [WT, WH, 1], TrackGraph.NODE_COLOR),
           { kind: "streetBarrier", k: kA, side });
         return [cx, cz];
       };
@@ -1877,7 +1916,7 @@ const TrackBuildProps = (function () {
       if (tn) rec.anyTint = true;
       // treesHi uses a baked silhouette instead of procedural crown primitives.
       if (!region && Math.floor((out._mat || 0) + 0.5) === MAT.FOLIAGE)
-        TrackGeom.lightMesh(lightBoxes, mesh, { x: a.c[0], y, z: a.c[2], rotY: yaw, scale: sc });
+        TrackModels.lightMesh(lightBoxes, mesh, { x: a.c[0], y, z: a.c[2], rotY: yaw, scale: sc });
       if (INST_MODELS) return true;
       return addMesh(out, mesh, { x: a.c[0], y, z: a.c[2], rotY: yaw, scale: sc, tint: tn, mat: o.mat });
     }
@@ -2067,6 +2106,9 @@ const TrackBuildProps = (function () {
         // across tens of metres of slope. Returns null off the rendered
         // ribbon; callers fall back to whatever they were using before.
         terrainYAt,
+        // groundAt is the FOOT query: footprint sampling, lo/hi/mid, an explicit
+        // counted fallback. A raw terrainYAt is for a test, never a foot (#7333).
+        groundAt,
         groundUnder, frameAt,
         addBox, every, onTrack,
         modelGroup, overheadSpan, lampPost, waterSurface, waterField, waterBand, groundPatch, groundedSegments,

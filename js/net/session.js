@@ -35,6 +35,12 @@ const NetSession = (function () {
     clockStepRun: 3,
   };
 
+  // One decoder for every binary event frame (QLIVE, STRATEGY, LAP): built on
+  // first use, so a page without TextDecoder still throws inside the caller's
+  // try and counts the frame as malformed.
+  let _utf8 = null;
+  const utf8 = () => _utf8 || (_utf8 = new TextDecoder());
+
   function encodePing(id, t0) {
     const dv = new DataView(new ArrayBuffer(PING_BYTES));
     dv.setUint8(0, PING); dv.setUint32(1, id >>> 0); dv.setFloat64(5, t0);
@@ -125,7 +131,7 @@ const NetSession = (function () {
         // (lowest-RTT wins) and the step-run gate never mattered.
       } else {
         stepRun = [];
-        if (!samples.includes(sample)) samples.push(sample);
+        samples.push(sample);
       }
       if (samples.length > cfg.clockSamples) samples.shift();
       if (Number.isFinite(now)) samples = samples.filter((x) => !(now - x.at > cfg.clockMaxAgeMs));
@@ -214,7 +220,7 @@ const NetSession = (function () {
           const view = NetSnapshot.toView(data);
           bytes = view.byteLength;
           // Never decode a frame no row could hold.
-          raw = bytes <= NetWire.MAX_FRAME_BYTES ? new TextDecoder().decode(view) : "";
+          raw = bytes <= NetWire.MAX_FRAME_BYTES ? utf8().decode(view) : "";
         }
       } catch (e) { drops.malformed = (drops.malformed || 0) + 1; return false; }
       const got = NetWire.accept(raw, bytes, wireRole);

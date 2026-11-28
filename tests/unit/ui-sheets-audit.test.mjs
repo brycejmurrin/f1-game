@@ -287,6 +287,22 @@ test("a GUEST's RESULTS labels DNF from the host's verdict, not from its own rel
   assert.equal(nameOf(rowsOf(solo.els.resultsTable)[1]), "BBB  Bravo  (gearbox)");
 });
 
+test("a GUEST's RESULTS read NC, not DNF, for a running car the host marked not classified (#7416)", () => {
+  const { season, cars } = tiedSeason();
+  // The adopt path (game.js) copies the host's classified flag onto the guest's car.
+  Object.assign(cars[1], { classified: true, finished: true, lap: 11 });
+  Object.assign(cars[0], { classified: false, finished: false, lap: 8 });
+  const verdict = [{ d: "b", t: 95.2, p: 0, lap: 11, classified: true, r: 0 }, { d: "a", t: 0, p: 0, lap: 8, classified: false, r: 0 }];
+  const netPlay = { active: () => true, ownsClassification: () => false, peerResult: () => verdict };
+  const h = bootResults({ season, cars, netPlay });
+  h.api.buildResults([cars[1], cars[0]]);
+  const rows = rowsOf(h.els.resultsTable).slice(0, 2);
+  const pts = (row) => row.children.find((c) => c.classList.contains("res-pts")).textContent;
+  assert.equal(rows[1].children[0].textContent, "NC", "the host's verdict, as YOUR RACE reads it");
+  assert.equal(pts(rows[1]), "0 pts", "not classified is not a retirement");
+  assert.equal(pts(rows[0]), "25 pts");
+});
+
 test("race RESULTS shows host-corrected elapsed and same-lap gaps only when fields are present", () => {
   const team = (id, color) => ({ id, name: id.toUpperCase(), color });
   const cars = [

@@ -189,7 +189,7 @@ function buildPosts(ks) {
     hash: (k) => ((k * 0.137) % 1),
     cross: TG.cross, norm: TG.norm, vadd: TG.vadd,
     anchor: (k, side, gap) => ({ c: [side * (6 + gap), 0, k * 4], r: [1, 0, 0], u: [0, 1, 0], t: [0, 0, 1] }),
-    kitOf: (key, def) => def, noteSuppressed() {}, instance() {},
+    kitOf: (key, def) => def, noteSuppressed() {}, instance: () => 1,   // the real one returns the landed count
     note: (kind, c, size, extra) => notes.push(Object.assign({ kind, x: c[0], y: c[1], z: c[2], w: size[0], h: size[1], d: size[2] }, extra)),
   });
   for (const k of ks) S.marshalPost(k, 1, 4);

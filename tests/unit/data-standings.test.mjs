@@ -24,6 +24,7 @@ import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = fs.readFileSync(path.join(ROOT, "js/data/standings.js"), "utf8").replace(/^const\b/m, "var");
+const UTILS = fs.readFileSync(path.join(ROOT, "js/data/tab-utils.js"), "utf8").replace(/^const\b/m, "var");
 
 // Two teams the way js/data/hub.js's findTeam resolves them: by a substring of
 // the API's constructor name. BLACK is near-black with a light second colour.
@@ -39,6 +40,7 @@ function boot(drivers, cons, api = null) {
   sb.window = sb;
   const ctx = vm.createContext(sb);
   seedDom(ctx);
+  vm.runInContext(UTILS, ctx, { filename: absSrc("js/data/tab-utils.js") });
   vm.runInContext(SRC, ctx, { filename: absSrc("js/data/standings.js") });
   const el = vm.runInContext("Dom.el", ctx);
   const findTeam = (name) => {
@@ -179,4 +181,20 @@ test("a rival tied on points with the leader shows no gap, not \"−0\"", async 
   const [dcol, ccol] = cols(wrap);
   assert.deepEqual(rowsIn(dcol).map((r) => textOf(r, "dh-gap")), [null, null, "−2"]);
   assert.deepEqual(rowsIn(ccol).map((r) => textOf(r, "dh-gap")), [null, null]);
+});
+
+// #7422 row 4 (Bryce's pick A): STANDINGS' near-black rule is one shared helper,
+// and LIVE's code chip uses it too instead of the raw team colour.
+test("DataTabUtils.teamShade: near-black with a color2 swaps, everything else passes through", () => {
+  const ctx = vm.createContext({});
+  vm.runInContext(UTILS, ctx, { filename: absSrc("js/data/tab-utils.js") });
+  const U = vm.runInContext("DataTabUtils", ctx);
+  assert.deepEqual(U.teamShade(TEAMS.black.color, TEAMS.black), TEAMS.black.color2, "near-black uses color2");
+  assert.deepEqual(U.teamShade(TEAMS.mclaren.color, TEAMS.mclaren), TEAMS.mclaren.color, "a bright colour stays");
+  const noAlt = { color: [0.02, 0.02, 0.02] };
+  assert.deepEqual(U.teamShade(noAlt.color, noAlt), noAlt.color, "no color2: keep the dark colour");
+  assert.equal(U.teamShade(null, TEAMS.black), null, "a missing colour stays missing (LIVE's null fallback)");
+  assert.deepEqual(U.teamShade([0.02, 0.02, 0.02], null), [0.02, 0.02, 0.02], "no team: unchanged");
+  const live = fs.readFileSync(path.join(ROOT, "js/data/live.js"), "utf8");
+  assert.match(live, /DataTabUtils\.teamShade\(DataTabUtils\.driverColor\(/, "LIVE's chip colour goes through teamShade");
 });

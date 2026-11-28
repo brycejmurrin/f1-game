@@ -5,6 +5,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
 import { menuRig, rawPad, setBtn, read } from "../helpers/key-binds-rig.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 function ringRig() {
   const h = menuRig();
@@ -211,4 +212,25 @@ test("#6275 a lesson frame with nothing to walk yet leaves the D-pad to the pare
 test("#6275 Learn marks its lesson frame as a pad scope", () => {
   assert.match(read("js/ui/learn-door.js"), /frame\.dataset\.padScope = /);
   assert.match(read("learn/sandbox.css"), /:root\[data-gamepad-nav="on"\] :focus/);
+});
+
+// #7368 B1 — InputPadMenu.isDestructive, the phone SELECT guard: DESTRUCTIVE_RE is /i, so a camelCase id
+// glued the keyword to a letter and never matched.
+const dctx = vm.createContext({});
+vm.runInContext(read("js/input/pad-menu.js"), dctx, { filename: absSrc("js/input/pad-menu.js") });
+const { isDestructive } = vm.runInContext("InputPadMenu", dctx);
+const el = (o) => ({ tagName: "BUTTON", getAttribute: () => null, ...o });
+
+test("#7368 B1: camelCase ids, classes and names with a destructive keyword count", () => {
+  for (const id of ["resetAll", "btnDeleteSave", "clearData", "doReset", "importBackup2"])
+    assert.equal(isDestructive(el({ id })), true, id);
+  assert.equal(isDestructive(el({ className: "row wipeSaves" })), true, "class");
+  assert.equal(isDestructive(el({ name: "forgetPhone" })), true, "name");
+});
+
+test("words that only contain a keyword stay safe; the explicit opt-out still wins", () => {
+  for (const id of ["preset", "presetPicker", "clearanceBar", "deliveryMode", "importantNote"])
+    assert.equal(isDestructive(el({ id })), false, id);
+  assert.equal(isDestructive(el({ id: "resetAll", dataset: { destructive: "false" } })), false);
+  assert.equal(isDestructive(el({ id: "x", textContent: "RESET ALL" })), true, "visible text still matches");
 });

@@ -389,33 +389,8 @@ const TrackGeom = (function () {
   // Records are built once, survive worker transfer, and avoid retaining the city triangle soup.
   const LIGHT_CELL = 16, LIGHT_STRIDE = 18;
   const lightCellKey = (x, z) => x * 65536 + z;
-  // Opaque tree surfaces, not enclosing boxes. Tessellate once at build time;
-  // runtime queries reuse the cell index and the visor's bounded disk samples.
-  const lightScratch = { pos: [], nrm: [], col: [], idx: [], mat: [] };
-  function lightPrimitive(records, out, kind, args) {
-    const mat = Math.floor((out._mat || 0) + 0.5);
-    if (out._dryRun || (mat !== MAT.FOLIAGE && mat !== MAT.WOOD)) return;
-    for (const key of ["pos", "nrm", "col", "idx", "mat"]) lightScratch[key].length = 0;
-    const fn = kind === "cone" ? addCone : kind === "cyl" ? addCyl : addFrustum;
-    fn(lightScratch, ...args);
-    lightMesh(records, lightScratch);
-  }
-  function lightMesh(records, mesh, transform) {
-    const p = mesh.pos, idx = mesh.idx, cs = Math.cos(transform?.rotY || 0), sn = Math.sin(transform?.rotY || 0);
-    const scale = transform?.scale ?? 1;
-    for (let i = 0; i < idx.length; i += 3) {
-      const v = [];
-      for (let j = 0; j < 3; j++) {
-        const n = idx[i + j] * 3, x = p[n] * scale, y = p[n + 1] * scale, z = p[n + 2] * scale;
-        v.push(x * cs + z * sn + (transform?.x || 0), y + (transform?.y || 0), -x * sn + z * cs + (transform?.z || 0));
-      }
-      // A zero last row distinguishes triangles from invertible box transforms. Shared
-      // stride/bounds keep worker transfer and accepted-stage publication intact.
-      records.push(...v, 0, 0, 0,
-        Math.min(v[0], v[3], v[6]), Math.min(v[1], v[4], v[7]), Math.min(v[2], v[5], v[8]),
-        Math.max(v[0], v[3], v[6]), Math.max(v[1], v[4], v[7]), Math.max(v[2], v[5], v[8]));
-    }
-  }
+  // Opaque tree surfaces (cone/cyl/frustum triangles) are captured by TrackModels.lightPrimitive /
+  // lightMesh in the lazy build (#7388); this index and its queries are shared with lightBox.
   function lightTriangle(data, n, eye, dx, dy, dz, maxT) {
     const ax = data[n], ay = data[n + 1], az = data[n + 2];
     const ex = data[n + 3] - ax, ey = data[n + 4] - ay, ez = data[n + 5] - az;
@@ -448,25 +423,30 @@ const TrackGeom = (function () {
       (h*i-e*k)*s,(a*k-d*i)*s,(d*e-a*h)*s,(e*j-g*i)*s,(b*i-a*j)*s,(a*g-b*e)*s,
       c[0]-x,c[1]-y,c[2]-z,c[0]+x,c[1]+y,c[2]+z);
   }
+  // A box spanning more than this many cells (monaco's sea and city slabs) goes in one
+  // always-tested list instead of every 16 m cell it covers (#7388: 286,241 inserts on monaco).
+  const LIGHT_LARGE_CELLS = 64;
   function* lightIndexSteps(records) {
-    const boxes = new Float32Array(records.length);
-    const count = boxes.length / LIGHT_STRIDE, cells = new Map();
+    // TrackModels.lightRecords holds them as f32 already (#7388): one copy, no per-element loop.
+    const boxes = records._data ? records._data.slice(0, records.length) : new Float32Array(records);
+    const count = boxes.length / LIGHT_STRIDE, cells = new Map(), large = [];
     const bounds = [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity];
-    // Dense forests contribute many small triangles. Copy and bin them in
-    // batches so the paced builder can return to the loading screen. A batch is
-    // counted in cell inserts, not records: one wide slab (monaco's sea and city
-    // fill) spans hundreds of cells, and 2048 such records were one 55 ms step (#6401).
+    // Dense forests contribute many small triangles. Bin them in batches so the
+    // paced builder can return to the loading screen. A batch is counted in cell
+    // inserts, not records: one wide slab spanned hundreds of cells, and 2048 such
+    // records were one 55 ms step (#6401).
     let work = 0;
     for (let id = 0; id < count; id++) {
       const n = id * LIGHT_STRIDE;
-      for (let i = 0; i < LIGHT_STRIDE; i++) boxes[n + i] = records[n + i];
       for (let a = 0; a < 3; a++) {
         bounds[a] = Math.min(bounds[a], boxes[n + 12 + a]);
         bounds[a + 3] = Math.max(bounds[a + 3], boxes[n + 15 + a]);
       }
+      const x0 = Math.floor(boxes[n + 12] / LIGHT_CELL), z0 = Math.floor(boxes[n + 14] / LIGHT_CELL);
       const endX = Math.floor(boxes[n + 15] / LIGHT_CELL), endZ = Math.floor(boxes[n + 17] / LIGHT_CELL);
-      for (let x = Math.floor(boxes[n + 12] / LIGHT_CELL); x <= endX; x++)
-        for (let z = Math.floor(boxes[n + 14] / LIGHT_CELL); z <= endZ; z++) {
+      if ((endX - x0 + 1) * (endZ - z0 + 1) > LIGHT_LARGE_CELLS) { large.push(id); work++; }
+      else for (let x = x0; x <= endX; x++)
+        for (let z = z0; z <= endZ; z++) {
           const key = lightCellKey(x, z);
           let list = cells.get(key);
           if (!list) cells.set(key, list = []);
@@ -479,7 +459,7 @@ const TrackGeom = (function () {
       cells.set(key, new Uint32Array(list));
       if (++packed % 256 === 0) yield;
     }
-    return { boxes, cells, bounds, stamp: new Uint32Array(count), generation: 0, queries: 0, tests: 0 };
+    return { boxes, cells, large: new Uint32Array(large), bounds, stamp: new Uint32Array(count), generation: 0, queries: 0, tests: 0 };
   }
   function lightIndex(records) {
     const steps = lightIndexSteps(records);
@@ -487,6 +467,18 @@ const TrackGeom = (function () {
       const step = steps.next();
       if (step.done) return step.value;
     }
+  }
+  // One record against the segment: a triangle (zero last row) or an inverse-transformed unit box.
+  function lightRecordHit(data, n, eye, dx, dy, dz, maxT) {
+    if (data[n + 9] === 0 && data[n + 10] === 0 && data[n + 11] === 0) return lightTriangle(data, n, eye, dx, dy, dz, maxT);
+    const ox=eye[0]-data[n],oy=eye[1]-data[n+1],oz=eye[2]-data[n+2];
+    let lo=0,hi=maxT;
+    for(let a=0;a<3;a++){
+      const o=n+3+a*3,origin=data[o]*ox+data[o+1]*oy+data[o+2]*oz,dir=data[o]*dx+data[o+1]*dy+data[o+2]*dz;
+      if(Math.abs(dir)<1e-12){if(origin< -1||origin>1)return false;}
+      else{const t0=(-1-origin)/dir,t1=(1-origin)/dir;lo=Math.max(lo,Math.min(t0,t1));hi=Math.min(hi,Math.max(t0,t1));if(lo>hi)return false;}
+    }
+    return hi>1e-6 && lo<maxT-1e-6;
   }
   function lightBlocked(track, eye, dx, dy, dz, maxT) {
     const index=track && track._lightOccluders;
@@ -506,22 +498,14 @@ const TrackGeom = (function () {
     const stepX=Math.abs(LIGHT_CELL/dx),stepZ=Math.abs(LIGHT_CELL/dz),data=index.boxes;
     let gen=(index.generation+1)>>>0;if(!gen){index.stamp.fill(0);gen=1;}index.generation=gen;
     // Broad phase follows only crossed cells; a shared stamp visits a spanning box once per ray.
+    // Wide boxes are in no cell (lightIndexSteps): each is tested once per ray, as a spanning box was.
+    const large=index.large;
+    if(large)for(let q=0;q<large.length;q++){const id=large[q];index.stamp[id]=gen;index.tests++;if(lightRecordHit(data,id*LIGHT_STRIDE,eye,dx,dy,dz,maxT))return true;}
     for(let cells=0;cells<2048;cells++){
       const ids=index.cells.get(lightCellKey(x,z));
       if(ids)for(let q=0;q<ids.length;q++){
         const id=ids[q];if(index.stamp[id]===gen)continue;index.stamp[id]=gen;index.tests++;
-        const n=id*LIGHT_STRIDE,ox=eye[0]-data[n],oy=eye[1]-data[n+1],oz=eye[2]-data[n+2];
-          if (data[n + 9] === 0 && data[n + 10] === 0 && data[n + 11] === 0) {
-            if (lightTriangle(data, n, eye, dx, dy, dz, maxT)) return true;
-            continue;
-          }
-          let lo=0,hi=maxT;
-        for(let a=0;a<3;a++){
-          const o=n+3+a*3,origin=data[o]*ox+data[o+1]*oy+data[o+2]*oz,dir=data[o]*dx+data[o+1]*dy+data[o+2]*dz;
-          if(Math.abs(dir)<1e-12){if(origin< -1||origin>1){hi=-1;break;}}
-          else{const t0=(-1-origin)/dir,t1=(1-origin)/dir;lo=Math.max(lo,Math.min(t0,t1));hi=Math.min(hi,Math.max(t0,t1));if(lo>hi)break;}
-        }
-        if(lo<=hi && hi>1e-6 && lo<maxT-1e-6)return true;
+        if(lightRecordHit(data,id*LIGHT_STRIDE,eye,dx,dy,dz,maxT))return true;
       }
       if(tx>far && tz>far)break;
       if(tx<tz){x+=sx;tx+=stepX;}else{z+=sz;tz+=stepZ;}
@@ -529,6 +513,6 @@ const TrackGeom = (function () {
     return false;
   }
 
-  return { lightPrimitive, lightMesh, lightBox, lightIndex, lightIndexSteps, lightBlocked, MAT, SWAY_FRAC, swayMatAt, ROUND_K, roundNormals, MIN_SEP, SEP_SLOTS, cross, norm, vadd, emit, addMesh,
+  return { lightBox, lightIndex, lightIndexSteps, lightBlocked, MAT, SWAY_FRAC, swayMatAt, ROUND_K, roundNormals, MIN_SEP, SEP_SLOTS, cross, norm, vadd, emit, addMesh,
            addBox, addPrism, addPyramid, addCone, addCyl, addFrustum, addMountain };
 })();

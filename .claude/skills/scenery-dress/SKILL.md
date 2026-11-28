@@ -41,7 +41,9 @@ print command: [references/rules.md](references/rules.md) §Frames (one home; ru
 - **Ground and reservation** (`docs/SCENERY-API.md` §Reserving ground, §Grounding): `groundYAt(k, …)` is a
   NODE query; `terrainYAt(x, z)` is the WORLD-XZ ground (null off the ribbon) — use it once a
   placement leaves the centreline; `groundUnder`, `seat` / `foundation`; `indexSolid` reserves a
-  footprint BEFORE you plant around it; `recordBarrier` books a barrier line.
+  footprint BEFORE you plant around it; `recordBarrier` books a barrier line. A FOOT's height is
+  `groundAt(x, z, { size, basis, pick, fallback })`, never raw `terrainYAt` (a test only; the
+  `scenery-terrainyat-ratchet` test lets the per-file count only fall, #7333).
 - Argument kinds: `grandstand` / `grandstandEx` take a lap fraction `(s,side,...)`; range
   helpers take fraction endpoints; raw primitives take world coordinates.
 - **Floodlight masts/lamps:** the generic mast pass owns ordinary lamps; a hand-modelled

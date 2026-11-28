@@ -250,3 +250,39 @@ test("bridge: a resume hello from a known overlay forces a full frame", () => {
   sub.hello();
   assert.equal(host.takeFresh(), true, "resume hello re-arms a full frame for a known peer");
 });
+
+test("an overlay that connects while the game boots gets its feed once the agent loader exists (#7416)", async () => {
+  const { FakeChannel } = bus();
+  const loops = [];
+  const win = {}, metrics = { loader: null };
+  const apex = { field: () => FIELD, info: () => ({ state: "race", track: "monza" }), sectorState: () => null };
+  const { Bridge } = load({
+    document: { querySelector: () => null, getElementById: () => null },
+    window: win, BroadcastChannel: FakeChannel,
+    GameMetrics: { agentLoader: () => metrics.loader },
+    setInterval: (fn) => { loops.push(fn); return loops.length; }, clearInterval() {},
+  });
+  // The IIFE boot needs #announce; boot the host by hand on a page that has it.
+  const ctxPub = load({
+    document: { querySelector: () => null, getElementById: (id) => (id === "announce" ? { hidden: true, dataset: {}, classList: { contains: () => false } } : null) },
+    window: win, BroadcastChannel: FakeChannel,
+    GameMetrics: { agentLoader: () => metrics.loader },
+    setInterval: (fn) => { loops.push(fn); return loops.length; }, clearInterval() {},
+  });
+  assert.ok(ctxPub.Pub);
+  const tv = timers(), got = [];
+  Bridge.subscribe((f) => got.push(f), { BroadcastChannel: FakeChannel, timers: tv, id: "ov" });
+  tv.fire();
+  await new Promise((r) => setTimeout(r, 0));
+  assert.ok(loops.length > 0, "the publish loop started with no loader yet");
+  const fireAll = () => { for (const fn of [...loops]) fn(); };
+  fireAll();
+  assert.equal(got.length, 0, "no __apex: nothing published");
+  let calls = 0;
+  metrics.loader = () => { calls++; win.__apex = apex; };
+  fireAll(); fireAll();
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(calls, 1, "the tick asks the loader once it exists, and only once");
+  fireAll();
+  assert.ok(got.length > 0 && got.at(-1).rows && got.at(-1).rows.length > 0, "the overlay receives the race once __apex is up");
+});

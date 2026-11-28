@@ -33,7 +33,7 @@ const CONTRACT = [
   "cross", "cypress", "def", "drape", "drapeRun", "ds", "every", "fence", "ferrisWheel", "floodMast",
   "floodMastRing", "forestEdge", "foundation", "frameAt", "gantry", "grandstand", "grandstandEx",
   "gridshellCanopy",
-  "groundPatch", "groundPlane", "groundUnder", "groundYAt", "groundedSegments", "guardrail",
+  "groundAt", "groundPatch", "groundPlane", "groundUnder", "groundYAt", "groundedSegments", "guardrail",
   "hash", "hedge", "house", "hw", "indexSolid", "lampPost", "landmarkKit", "lapBounds", "ledFacadeBands", "lerp",
   "marshalPost", "modelDiagnostics", "modelGroup", "motorhome", "mountain",
   "n", "night", "norm", "onTrack", "out", "overheadSpan", "pal", "palm",
@@ -56,7 +56,10 @@ const CONTRACT = [
 // 112 -> 114 (2026-09-25): `drape` + `drapeRun` (terrain-fitted flat decals,
 // TrackModels.drapeKit) — promoted from four identical ~100-line circuit-local
 // copies (paul_ricard, dijon, okayama, miami), vertex-identical to them.
-const CONTRACT_SIZE = 114;
+// 114 -> 115 (2026-11-27): `groundAt` (the foot query: 3x3 footprint lo/hi/mid,
+// explicit fallback counted on modelDiagnostics.groundFallback) — #7333, the
+// shared form of 275 raw terrainYAt calls and 7+ copied footprint samplers.
+const CONTRACT_SIZE = 115;
 
 test("the frozen contract is the size it declares", () => {
   assert.equal(CONTRACT.length, CONTRACT_SIZE);

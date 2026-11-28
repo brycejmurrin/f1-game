@@ -75,17 +75,27 @@ const ElevPresets = (function () {
     // Overlapping bumps each stay under ~8 %, but their SUM can pass the
     // validator's 15 % red wall (seed 12 measured 16 %). Rescale the whole
     // profile so the steepest chord (seam included) stays under GRADE_MAX.
-    let worst = 0;
-    for (let i = 0; i < n; i++) {
-      const a = pts[i], b = pts[(i + 1) % n];
-      const d = Math.hypot(b[0] - a[0], b[1] - a[1]);
-      if (d > 0) worst = Math.max(worst, Math.abs(out[(i + 1) % n] - out[i]) / d);
-    }
-    if (worst > GRADE_MAX) {
+    // The 0.25 m re-quantise after a rescale can push a short chord back over
+    // (1 m chords: 70/1200 seeds ended above 15 %), so rescale until it holds
+    // and fall back to flat, which always passes, if it never does.
+    for (let pass = 0; pass < 8; pass++) {
+      const worst = steepest(pts, out);
+      if (!(worst > GRADE_MAX)) return out;
       const k = GRADE_MAX / worst;
       for (let i = 0; i < n; i++) out[i] = clampH(out[i] * k);
     }
-    return out;
+    return steepest(pts, out) > GRADE_MAX ? out.map(() => 0) : out;
+  }
+
+  /** Steepest node-to-node grade of heights h over pts, closing chord included. */
+  function steepest(pts, h) {
+    let worst = 0;
+    for (let i = 0; i < pts.length; i++) {
+      const a = pts[i], b = pts[(i + 1) % pts.length];
+      const d = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      if (d > 0) worst = Math.max(worst, Math.abs(h[(i + 1) % pts.length] - h[i]) / d);
+    }
+    return worst;
   }
 
   /** Deterministic [0,1) from seed + salt (same family as TrackRandom). */

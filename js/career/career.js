@@ -530,6 +530,9 @@ function start(opts) {
   career.amb = ambIdx(o.amb);
   applyRegs();
   career.deal = newDeal(team, 1);
+  // The opening brief is stored HERE, at a write point: objective() is a pure read
+  // since #7366, so nothing else stores it before the first pick (#7485).
+  career.obj = objective();
   Log.info("game", `Career.start flavour=${flavour} team=${teamId}`);
   // Quota plays on session-only (persistence-dom.spec); a refusal puts the old career back (#5657).
   save();
@@ -1000,7 +1003,10 @@ function freeMoney(on) {
 // Hand yourself credits. Returns the new balance, or null with no career loaded.
 function grant(n) {
   if (!career || blocked()) return null;
-  const add = Math.max(0, Math.round(Number(n) || GRANT));
+  // Only an omitted amount means the default: grant(0) granted GRANT (#7366).
+  // Nothing to add (0, negative, not a number) is a refusal, not a success.
+  const add = n === undefined ? GRANT : Math.round(Number(n));
+  if (!(add > 0)) return null;
   return commit(() => { career.money += add; }) ? career.money : null;
 }
 const charge = (cost) => (freeMoney() ? 0 : cost);
@@ -1216,11 +1222,11 @@ function objective() {
   if (!career) return null;
   if (seasonDone()) return null;
   const r = career.season.round;
-  if (!career.obj || career.obj.round !== r) {
-    if (blocked()) return career.obj || null;
-    career.obj = objectiveFor(r); save();
-  }
-  return career.obj;
+  // A read never writes (#7366): the hub calls this on every render, and the draw
+  // is pure, so a stale or missing `career.obj` derives the brief in place.
+  // settleRound recomputes it too, and chooseObjective stores the pick itself.
+  if (career.obj && career.obj.round === r) return career.obj;
+  return objectiveFor(r);
 }
 function objectiveMet(o, ctx) {
   switch (o.type) {
@@ -1305,7 +1311,7 @@ function settleRound(order, player, table = Teams.POINTS) {   // table: a shorte
   // income, so the balance floors at zero.
   const wages = wageBill();
   const stake = planning() ? planning().escrow(raced) : 0;
-  career.money += prize + matePrize + salary + bonus + (obj.done ? OBJ_BONUS + stake * 2 : 0) - wages;
+  career.money += prize + matePrize + salary + bonus + (obj.done ? OBJ_BONUS + stake + (stake ? planning().refund(raced) : 0) : 0) - wages;
   career.money = Math.max(0, career.money);
   // THREE reputation channels: the result term is relative to the CAR
   // (expectedFinish encodes the tier), the objective term is flat, and race craft

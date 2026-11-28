@@ -56,3 +56,17 @@ test("setPhysics floors its knobs: a negative pace or expo cannot poison the car
   assert.ok(p.speed >= 0, `speed never runs negative: ${p.speed}`);
   fresh();
 });
+
+// Gardener aside (#7400 row 1): setPhysics({expo}) must reach input.js's private
+// mirror the way speedRef does, or the digital steer ramp inverts with a stale expo.
+test("setPhysics({expo}) pushes the floored expo to Input.setSteerExpo", async () => {
+  await startRace();
+  const I = g.ctx.Input, orig = I.setSteerExpo, seen = [];
+  I.setSteerExpo = (e) => { seen.push(e); return orig(e); };
+  try {
+    g.apex.setPhysics({ expo: 1.7 });
+    g.apex.setPhysics({ expo: -1 });
+  } finally { I.setSteerExpo = orig; }
+  assert.deepEqual(seen, [1.7, 0.2], "each expo write, floored, reaches the input mirror");
+  fresh();
+});

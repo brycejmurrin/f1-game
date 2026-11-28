@@ -405,7 +405,15 @@ const LampBake = (function () {
   const SLICE_MS = 3;
   let _job = null, _jobSrc = null, _jobClamp = NaN, _jobTrk = null, _jobBudget = 0;
   function _now() { return typeof performance !== "undefined" ? performance.now() : Date.now(); }
+  // A bake the module no longer serves (replaced, or reset at a circuit switch) is RETIRED: the renderers
+  // free its atlas at their next frame instead of after ~2 s of unbaked frames, which a paused picker
+  // never draws (#7464: the previous circuit's 8.9 MB atlas + its texture stayed resident there).
+  function _retire(b) { if (b) b.retired = true; }
   function _install(b, track, lights, nearClamp, budget) {
+    // An install supersedes a draw-frame job in flight: the next forTrack would drop it anyway, but
+    // with no next frame (the paused picker) its working set stayed live (7.8 MB on monaco, #7464).
+    _job = null; _jobSrc = null; _jobTrk = null;
+    if (_bake !== b) _retire(_bake);
     _bake = b; _src = lights; _clamp = nearClamp; _trk = track; _budget = budget; _pend = NaN; _pendSrc = null;
     _shK = -1;
     if (_bake) {
@@ -420,6 +428,7 @@ const LampBake = (function () {
   // Forget the cached bake and any job (loadTrack): they hold the previous
   // track object and its atlas, which must not stay resident through the build.
   function reset() {
+    _retire(_bake);
     _pre = null; _job = null; _jobSrc = null; _jobTrk = null; _src = null; _bake = null; _trk = null;
     _pendSrc = null; _pend = NaN; _clamp = NaN; _budget = 0; _shK = -1;
   }
@@ -550,7 +559,9 @@ const LampBake = (function () {
   // The drawing bake's generation (0 = none): packers that cache the
   // LIVE-ONLY lane (TLX's per-chunk lamp texture) key on it.
   function gen() { return _bake ? _bake.gen | 0 : 0; }
+  // A sliced job (draw-frame rebake or menu pre-bake) still holds its working arrays.
+  function pending() { return !!(_job || _pre); }
 
-  return { bake, forTrack, prebake, reset, shadowCol, liveOnlyAt, gen, budget, toHalf, MAX_TEXELS, DESKTOP_TEXELS, TILE };
+  return { bake, forTrack, prebake, reset, shadowCol, liveOnlyAt, gen, pending, budget, toHalf, MAX_TEXELS, DESKTOP_TEXELS, TILE };
 })();
 Object.freeze(LampBake);

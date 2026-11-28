@@ -254,6 +254,14 @@ const DesignerCanvas = (function () {
       }, HOLD_MS);
       hold = me;
     }
+    // An insert thrown away mid-gesture (pinch, pointercancel): its spliced index
+    // (N on the closing segment) is no point at all — hand the prior selection back.
+    function abandonInsert() {
+      if (!inserted) return;
+      inserted = false; moved = false;
+      if (preIns) { sel = preIns.sel; span = preIns.span; }
+      preIns = null; tellSelect();
+    }
     function onDown(ev) {
       if (ev.button != null && ev.button > 0) return;
       if (ev.pointerType) ptype = ev.pointerType;
@@ -268,9 +276,7 @@ const DesignerCanvas = (function () {
         if (mode === "drag" || mode === "held" || mode === "press") {
           work = null; stale = false; dragI = -1; press = null;
           dragGroup = null; dragOrigins = null; drag0 = null;
-          // An insert the pinch threw away: its spliced index (N on the closing
-          // segment) is no point at all — hand the prior selection back.
-          if (inserted) { inserted = false; moved = false; if (preIns) { sel = preIns.sel; span = preIns.span; } preIns = null; tellSelect(); }
+          abandonInsert();
         }
         if (mode === "draw") { path = null; }
         const [a, b] = [...pointers.values()];
@@ -424,7 +430,7 @@ const DesignerCanvas = (function () {
       if (!pointers.has(ev.pointerId)) return;
       cancelHold();
       pointers.delete(ev.pointerId);
-      if (pointers.size === 0) reset();
+      if (pointers.size === 0) { abandonInsert(); reset(); }
       else if (mode === "pinch" && pointers.size < 2) { mode = "pan"; pinch0 = null; }
     }
     function busy() {

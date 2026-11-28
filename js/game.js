@@ -5176,7 +5176,7 @@ function updateCar(c, dt, ranked) {
   if (S.recordInput) S.recordInput.overtake = !!fire;
   if (OvertakeMode.prepare(c, fire, otGate, otFast, otTimeFor(c)) && c.isPlayer && soundOn) GameAudio.deployBoost();
   otFree = c.otT > 0;
-  if (otFree || (wantBoost && c.energy > 0)) deploy = DEPLOY_A * Math.max(driveTune.PACE, 0.05) * deployTaper(c);
+  if (otFree || (wantBoost && c.energy > 0)) deploy = DEPLOY_A * pace.k * deployTaper(c);
   if (c.isPlayer && c.otArmed && !c.wasArmed && soundOn) GameAudio.overtakeReady();
   c.wasArmed = c.otArmed;
 
@@ -5249,7 +5249,7 @@ function updateCar(c, dt, ranked) {
   // accelCeil: the speed a car ABOVE it is bled toward (never a teleport) and
   // the one below it accelerates up to — vmax plus the ERS overspeed margin, a
   // speed, so it rides the pace scale.
-  let gearMult = 1, accelCeil = vmax + 14 * Math.max(driveTune.PACE, 0.05);
+  let gearMult = 1, accelCeil = vmax + 14 * pace.k;
   if (!c.human && aq.safeV < Infinity) accelCeil = Math.min(accelCeil, aq.safeV * vT / VMAX);   // …past tow and ERS too: it lifts
   if (c.human) {
     c.shiftT = Math.max(0, c.shiftT - dt);
@@ -5530,7 +5530,7 @@ function updateCarBrakePlan(c, dt, ranked, S) {
       // and a stopped AI can never steer out. The crawl is itself capped at the
       // vmax race control already granted, so VSC and red flag still win.
       const q = blocker._snapSpeed + clamp(blockerGap - follow, -6, 8);
-      const crawl = onLane ? 0 : Math.min(AiDrive.queueFloor(!!track.street) * Math.max(driveTune.PACE, 0.05), vmax);
+      const crawl = onLane ? 0 : Math.min(AiDrive.queueFloor(!!track.street) * pace.k, vmax);
       vmax = Math.min(vmax, Math.max(q, crawl));
       const qb = AiDrive.queueBrake(c.speed, blocker._snapSpeed, !!track.street, blockerGap, follow, BRAKE, vT / VMAX);
       if (qb) { braking = true; brakeLvl = qb; }
@@ -5674,7 +5674,7 @@ function updateCarLongitudinal(c, dt, ranked, S) {
 
   // Passive resistance never raises speed to the crawl floor or prevents a stop.
   if (c.offroad) {
-    const grassFloor = GRASS_V * 0.6 * Math.max(driveTune.PACE, 0.05);
+    const grassFloor = GRASS_V * 0.6 * pace.k;
     if (c.speed > grassFloor) c.speed = Math.max(grassFloor, c.speed - grassDrag * dt);
     c.offT += dt;
     // ONE STRIKE PER TRIP OFF (#5945 1A): `offCut` latches the count until the car rejoins.
@@ -6557,12 +6557,12 @@ function updateCarAdvance(c, dt, ranked, S) {
         // Stuck IN THE LANE (a queue behind a parked car): back onto the lane's
         // own line at the limit, the stop still on — never onto the road.
         c.x = pits.laneX(c, smp.hw, c.x);
-        c.speed = Math.min(pits.limit(), Math.max(c.speed, 8 * Math.max(driveTune.PACE, 0.05)));
+        c.speed = Math.min(pits.limit(), Math.max(c.speed, 8 * pace.k));
       } else {
         c.x = Collide.rescueX(c, cars, track.total, smp.hw);   // back onto the track, clear of every car (#6763 K2; the player's rescue does the same)
         // Pace-scaled restore floor (same shape as coast()); never above vTop(); not with a car within 8 m (fired into it).
         const near = cars.some(o => o !== c && !o.finished && Math.hypot(wrapS(o._snapProg - c.prog + track.total / 2) - track.total / 2, o._snapX - c.x) < 8);
-        if (!near) c.speed = Math.min(vT, Math.max(c.speed, 14 * Math.max(driveTune.PACE, 0.05)));
+        if (!near) c.speed = Math.min(vT, Math.max(c.speed, 14 * pace.k));
       }
       c.rescueT = 0; c.offT = 0; c.stuckT = 0; c.contactT = 0; c.digEscHeld = false;
     }
@@ -6588,7 +6588,7 @@ function rescuePlayer(c) {
   c.x = Collide.rescueX(c, cars, track.total, smp.hw); c.xVis = c.x;   // centre, unless a car is there (#5775 R5)
   c.head = Math.atan2(smp.t[0], smp.t[2]);   // aligned with the track ahead
   if (typeof CarFields !== "undefined") CarFields.resetFor(c, "rescue");   // slip, aero mode, boost, incident timers: js/race/car-fields.js RESETS (op rescue)
-  c.speed = Math.min(vTop(), 16 * Math.max(driveTune.PACE, 0.05));   // CALLER row: pace-scaled, never the car's own (#5876)
+  c.speed = Math.min(vTop(), 16 * pace.k);   // CALLER row: pace-scaled, never the car's own (#5876)
   const rw = worldFromTrack(c.s, c.x, smp); c.px = rw.x; c.pz = rw.z;   // x = 0: the centre line exactly
   c.rPrevPx = c.px; c.rPrevPz = c.pz; c.rPrevS = c.s; c.rPrevX = c.x; c.rPrevHead = c.head;   // re-seed the render anchors (as retireCar does) or the car smears from the wall for a frame
   c.rescueLastT = raceT;
@@ -6688,7 +6688,7 @@ function coast(c, dt) {
   // that reached the floor HOLDS it (_coastHeld): scrubbing it on to 0 the next
   // step parked every finisher ~v²/40 m past the line on one shared line, where
   // the next car home rear-ended it at 14-29 m/s (bug hunt 2026-09-22).
-  const floor = GRASS_V * 0.6 * Math.max(driveTune.PACE, 0.05);
+  const floor = GRASS_V * 0.6 * pace.k;
   const next = c.speed - 20 * dt;
   if (c.speed > floor) { c.speed = Math.max(floor, next); if (c.speed === floor) c._coastHeld = true; }
   else c.speed = c._coastHeld ? floor : Math.max(0, next);
