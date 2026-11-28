@@ -45,6 +45,10 @@ test("releaseObject: an InstancedMesh gets dispose(), a plain Mesh the dispose e
   const bad = new THREE.Mesh();
   bad.addEventListener("dispose", () => { throw new Error("no render object yet"); });
   assert.doesNotThrow(() => U.releaseObject(bad));
+  // An isInstancedMesh stand-in with no dispose() gets the event (as tlx.js disposeInstancedObject did).
+  let stubEvents = 0;
+  U.releaseObject({ isInstancedMesh: true, dispatchEvent(e) { if (e.type === "dispose") stubEvents++; } });
+  assert.equal(stubEvents, 1);
 });
 
 test("dropRenderObject: the event only, never InstancedMesh.dispose(); a geometry gets its own event", () => {
@@ -92,27 +96,52 @@ test("tsl-aa TAA dispose(): a throwing histInit still disposes outInit (fails on
   ldr.dispose();
 });
 
-// R3: no bare release outside the funnel. Same patterns as the #7334 census (40 sites on base d31ca108).
+// R3: no bare release outside the funnel. Same patterns as the #7334 census (42 sites on base d31ca108), matched on
+// comment-stripped source and across lines, so a multi-line try or a quoted "type" key is caught too.
 const ALLOW = [];   // { file, line: "<source text>", why: "<reason>" }
-const BARE_TRY = /try \{[^}]*\.dispose\(\)[^}]*\} catch/;
-const BARE_EVENT = /dispatchEvent\(\{\s*type:\s*["']dispose["']/;
+const BARE_TRY = /try\s*\{[^{}]*\.dispose\(\)[^{}]*\}\s*catch/;
+const BARE_EVENT = /dispatchEvent\(\{\s*["']?type["']?\s*:\s*["']dispose["']/;
+const stripComments = (src) => src.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " ")).replace(/(^|[^:"'\\])\/\/[^\n]*/g, "$1");
 
 test("guard: no try/dispose or dispose-event dispatch in js/render/three outside tlx-util.js", () => {
-  const hits = [];
+  const hits = [], used = new Set();
   for (const f of fs.readdirSync(DIR).filter((n) => n.endsWith(".js") && n !== "tlx-util.js").sort()) {
-    fs.readFileSync(path.join(DIR, f), "utf8").split("\n").forEach((line, i) => {
-      if (!BARE_TRY.test(line) && !BARE_EVENT.test(line)) return;
-      if (ALLOW.some((a) => a.file === f && line.includes(a.line) && a.why)) return;
-      hits.push(`js/render/three/${f}:${i + 1}: ${line.trim()}`);
-    });
+    const raw = fs.readFileSync(path.join(DIR, f), "utf8"), src = stripComments(raw);
+    for (const re of [BARE_TRY, BARE_EVENT]) {
+      for (const m of src.matchAll(new RegExp(re.source, "g"))) {
+        const line = src.slice(0, m.index).split("\n").length, text = raw.split("\n")[line - 1].trim();
+        const a = ALLOW.find((x) => x.file === f && text.includes(x.line) && x.why);
+        if (a) { used.add(a); continue; }
+        hits.push(`js/render/three/${f}:${line}: ${text}`);
+      }
+    }
   }
   assert.deepEqual(hits, [], "route these through TLXUtil.releaseObject / dropRenderObject / safeDispose (tlx-util.js)");
-  for (const a of ALLOW) assert.ok(a.why && a.why.length > 10, `allowlist entry ${a.file} needs a reason`);
+  for (const a of ALLOW) {
+    assert.ok(a.why && a.why.length > 10, `allowlist entry ${a.file} needs a reason`);
+    assert.ok(used.has(a), `stale allowlist entry ${a.file}: "${a.line}" matches no site`);
+  }
 });
 
-test("guard self-check: the patterns catch both shapes and the funnel itself", () => {
-  assert.ok(BARE_TRY.test('try { a.dispose(); b.dispose(); } catch (_) { /* */ }'));
-  assert.ok(BARE_EVENT.test('m.dispatchEvent({ type: "dispose" });'));
-  assert.ok(BARE_TRY.test(utilSrc) || /x\.dispose\(\)/.test(utilSrc), "tlx-util.js holds the one try");
-  assert.ok(BARE_EVENT.test(utilSrc), "tlx-util.js holds the one dispatch");
+test("guard self-check: the patterns catch both shapes, multi-line too, and the funnel's own sites", () => {
+  const cases = [
+    [BARE_TRY, "try { a.dispose(); b.dispose(); } catch (_) { /* */ }", true],
+    [BARE_TRY, "try {\n  a.dispose();\n} catch (_) {}", true],
+    [BARE_EVENT, 'm.dispatchEvent({ type: "dispose" });', true],
+    [BARE_EVENT, "m.dispatchEvent({ 'type': 'dispose' });", true],
+    [BARE_TRY, stripComments("TLXUtil.safeDispose(a);   // try { x.dispose() } catch"), false],
+    [BARE_TRY, stripComments(utilSrc), true],     // tlx-util.js holds the one try
+    [BARE_EVENT, stripComments(utilSrc), true],   // and the one dispatch
+  ];
+  const wrong = cases.filter(([re, text, want]) => re.test(text) !== want).map(([, text]) => text.slice(0, 60));
+  assert.deepEqual(wrong, []);
+});
+
+// The other three files load BEFORE tlx-util.js (tools/manifest.cjs DEFERRED three); they are safe only while they read
+// TLXUtil at call time. tlx.js is the one that may destructure it at eval (DEFERRED_EDGES tlx-util -> tlx).
+test("load order: no three file but tlx.js reads TLXUtil at eval (a top-level binding from it)", () => {
+  const evalRead = /^(?:const|let|var)\s+[^=\n]*=\s*TLXUtil\b/m;
+  const bad = fs.readdirSync(DIR).filter((n) => n.endsWith(".js") && n !== "tlx.js" && n !== "tlx-util.js")
+    .filter((n) => evalRead.test(stripComments(fs.readFileSync(path.join(DIR, n), "utf8"))));
+  assert.deepEqual(bad, []);
 });
