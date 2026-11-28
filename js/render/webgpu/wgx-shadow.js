@@ -18,7 +18,6 @@ const WGXShadow = (function () {
     const SHADOW_INSTANCE_LAYOUT = core.SHADOW_INSTANCE_LAYOUT;
     const WGX_LITE = core.WGX_LITE;
     const IS_MOBILE = core.IS_MOBILE;
-    const MOBILE_TIER = core.MOBILE_TIER;
     // Keyed on the DEVICE (WGX_LITE), not the memory tier — same rule as
     // js/render/glx/shadow.js: GRAPHICS: HIGH on a phone must not 4× the
     // snap-cache redraw. wgx.js reads SHD.SHADOW_SIZE for the PCF texel
@@ -414,7 +413,7 @@ const WGXShadow = (function () {
     // across Begins and reset only at the frame submit, so this Begin never
     // rewrites slots an earlier recorded pass still references).
     // PHONES keep blob-only shadows, matching GLX — which gates on IS_MOBILE, the
-    // core.device, not MOBILE_TIER: GRAPHICS: HIGH buys quality, not a per-frame extra
+    // core.device: GRAPHICS: HIGH buys quality, not a per-frame extra
     // depth pass on a phone GPU. The map itself is 1×1 there, so this gate is also
     // what keeps the pass from rasterising cars into a 1-pixel target.
     function carShadowBegin(lightVP, boxScale) {
@@ -442,7 +441,7 @@ const WGXShadow = (function () {
     }
 
     function lampShadowBegin(lightVP, lightIdx) {
-      if (core.lost || !lampShadowView || MOBILE_TIER || WGX_LITE) return;
+      if (core.lost || !lampShadowView || IS_MOBILE || WGX_LITE) return;
       _lampArms++;
       _lampIdx = lightIdx | 0;
       const raw = (lightVP && lightVP.length >= 16) ? lightVP : IDENT;

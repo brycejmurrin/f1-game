@@ -48,7 +48,7 @@ test("a real change (≥ 2 px) still rebuilds, once", () => {
 });
 
 test("#3311 equal-pixel orientation swap does not rebuild post targets on mobile", () => {
-  // forceMobileTier makes IS_MOBILE/MOBILE_TIER take the square cover path in
+  // forceMobileTier makes IS_MOBILE true, so createTargets takes the square cover path in
   // createTargets — a 800×400 ↔ 400×800 transpose then fits without realloc.
   const h = bootGlx({ ls: { "apex26.forceMobileTier": "1" } });
   setCss(h, 800, 400);

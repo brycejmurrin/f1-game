@@ -33,9 +33,8 @@ const GLXBackend = (function () {
   const IS_MOBILE = GLX.isMobile;
   // INSTANCE CELL-SET CULL CACHE — owned by js/render/shared/inst-cells.js
   // (apex26.instCellCache=0 escape hatch). Numbers: docs/PERF-FINDINGS.md 2c.
-  // MOBILE TIER = any phone (GLX.mobileTier === GLX.isMobile). All the memory
-  // downgrades, the 1.5 DPR cap included, key off this; no setting restores them.
-  const MOBILE_TIER = GLX.mobileTier;
+  // MOBILE TIER = any phone: GLX.mobileTier === GLX.isMobile, so IS_MOBILE is the one predicate.
+  // All the memory downgrades, the 1.5 DPR cap included, key off it; no setting restores them.
   let _ctxLost = false, _lossCounted = false;   // lost→restore; counted loss arms ctxLostNotice (#3513)
   // Past the ctx-loss reload budget: record for __apex.diag() without painting
   // the full-screen error overlay — RendererPicker.showUnavailable already shows
@@ -810,7 +809,6 @@ const GLXBackend = (function () {
     // the subsystems can reach each other at call time.
     core = {
       gl,
-      MOBILE_TIER,
       IS_MOBILE,
       ctxGone,
       useProg, bindVAO, setBlend, setDepthMask, setCull, setPolyOffset,
@@ -1068,7 +1066,7 @@ const GLXBackend = (function () {
     // square of this; 1.5 is 56% of the pixels of 2 with little visible loss on
     // a ~6" screen, and it multiplies with every other saving.
     // RESOLUTION MAX's _dprBoost and GRAPHICS HIGH's _dprPreset only RAISE that cap, never above the device's own DPR.
-    const dpr = Math.min(window.devicePixelRatio || 1, Math.max(MOBILE_TIER ? 1.5 : 2, _dprBoost, _dprPreset));
+    const dpr = Math.min(window.devicePixelRatio || 1, Math.max(IS_MOBILE ? 1.5 : 2, _dprBoost, _dprPreset));
     const css = cssSize();
     const lastPW = presentW, lastPH = presentH;
     presentW = Math.max(1, Math.round(css.width * dpr));
@@ -2203,7 +2201,7 @@ const GLXBackend = (function () {
   // repacked + re-uploaded twice a frame. In the mirror pass a celled batch now culls/draws its VIEW (own
   // ibo/cbo/VAO/pack/planes/key; vbo/ib, cells, source shared). game.js skips its freeze replay under
   // gfx.instPerPass; a freeze frame keeps the view's resident pack, the bytes that replay re-uploaded.
-  let _instPerPass = !MOBILE_TIER, _mirFreeze = false;
+  let _instPerPass = !IS_MOBILE, _mirFreeze = false;
   try { if (localStorage.getItem("apex26.glxInstPerPass") === "0") _instPerPass = false; } catch (_) { /* no storage: on */ }
   function _passBatch(b) {
     if (!_instPerPass || !b.cells || !b.srcMatrices || !b.vbo || !PST || !PST.mirror.active()) return b;
@@ -2847,7 +2845,7 @@ const GLXBackend = (function () {
     // the first GPU error — the evidence a "see-through car" report lacked.
     ctxLost: () => _ctxLost,   // cheap per-frame read for game.js gfxContextLost (backendState allocates)
     backendState: () => ({
-      api: "webgl2", isMobile: IS_MOBILE, mobileTier: MOBILE_TIER,
+      api: "webgl2", isMobile: IS_MOBILE, mobileTier: IS_MOBILE,
       gpuErrors: _glErrors, gpuFirstError: _glFirstError || null,
       ctxLost: _ctxLost, packLive: !!matAlbedoTex,
       softPresent: Soft.isEnabled(), softBlitGen: Soft.gen(),
@@ -2921,7 +2919,7 @@ const GLXBackend = (function () {
     },
     gpuMs() { return ctxGone() ? -1 : _gpuMs; },
     isMobile: IS_MOBILE,
-    mobileTier: MOBILE_TIER,   // phone NOT opted into GRAPHICS: HIGH → memory-safe caps apply
+    mobileTier: IS_MOBILE,   // same predicate as isMobile (#6519); kept for the facade consumers
   };
 })();
 GLX.install(GLXBackend);
