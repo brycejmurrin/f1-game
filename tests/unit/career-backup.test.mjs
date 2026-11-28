@@ -2380,3 +2380,86 @@ test("#6544 r3: exportAll turns a synchronous throw into a rejection", async () 
   assert.doesNotThrow(() => { p = h.CareerBackup.exportAll(); });
   await assert.rejects(p);
 });
+
+// #7309 — standalone-season handling: the player's seat, a refused write, the config option lists.
+test("#7309 a recovery file of a started season keeps its `you` seat", () => {
+  const h = loadHarness();
+  const season = { round: 1, you: "haas:0", pts: { "haas:0": 25 }, teamPts: { haas: 25 }, driverCodes: {} };
+  const adapted = h.CareerBackup.recoveryEnvelope({ format: "apex26-recovery-v1", season }, { flavour: "driver", i: 0 });
+  assert.equal(adapted.ok, true, adapted.reason);
+  assert.equal(h.CareerBackup.apply(adapted.envelope, { recovery: true }).ok, true);
+  assert.equal(h.store.get("season").you, "haas:0");
+});
+
+test("#7309 a backup import round-trip keeps the season's `you` seat and drops a malformed one", () => {
+  const h = loadHarness();
+  const season = { round: 2, you: "haas:1", pts: { "haas:1": 43 }, teamPts: { haas: 43 }, driverCodes: {} };
+  assert.equal(h.CareerBackup.apply({ format: h.CareerBackup.FORMAT, slots: [], season }).ok, true);
+  assert.equal(h.store.get("season").you, "haas:1");
+  const bad = loadHarness();
+  assert.equal(bad.CareerBackup.apply({ format: bad.CareerBackup.FORMAT, slots: [], season: { ...season, you: "<x>" } }).ok, true);
+  assert.equal("you" in bad.store.get("season"), false);
+});
+
+test("#7309 a refused season write does not re-arm SeasonCal from the old stored season", () => {
+  const h = loadHarness();
+  const write = h.store.write;
+  h.store.write = function (key, value, options) {
+    return key === "season" ? { ok: false, durable: false, reason: "refused" } : write.call(this, key, value, options);
+  };
+  let loads = 0;
+  h.SeasonCal.load = () => { loads++; };
+  const result = h.CareerBackup.apply({ format: h.CareerBackup.FORMAT, slots: [],
+    season: { round: 1, pts: {}, teamPts: {}, driverCodes: {} } });
+  assert.equal(result.issues.some((r) => r.key === "season" && r.rejected), true);
+  assert.equal(loads, 0);
+});
+
+test("#7309 season config laps/drop follow SeasonCal's option lists", () => {
+  const h = loadHarness();
+  assert.deepEqual(Array.from(h.SeasonCal.LAP_OPTS), [3, 5, 10, 25, 57]);
+  assert.deepEqual(Array.from(h.SeasonCal.DROP_OPTS), [0, 2, 3]);
+  for (const config of [{ drop: 1 }, { laps: 7 }]) {
+    // Recovery refuses a file whose rules would silently change on load.
+    const season = { round: 1, pts: {}, teamPts: {}, driverCodes: {}, config: { trackIds: ["t0", "t1"], ...config } };
+    const r = loadHarness();
+    assert.equal(r.CareerBackup.recoveryEnvelope({ format: "apex26-recovery-v1", season }, { flavour: "driver", i: 0 }).ok, false);
+    // A backup import normalises it to what SeasonCal will actually play.
+    const b = loadHarness();
+    assert.equal(b.CareerBackup.apply({ format: b.CareerBackup.FORMAT, slots: [], season }).ok, true);
+    const stored = b.store.get("season").config;
+    assert.equal(stored.laps, b.SeasonCal.DEFAULT_LAPS);
+    assert.equal(stored.drop, 0);
+  }
+  // Every value SeasonCal offers survives both paths, so a new option cannot drift from the mirror.
+  for (const [key, opts] of [["laps", h.SeasonCal.LAP_OPTS], ["drop", h.SeasonCal.DROP_OPTS]]) for (const value of opts) {
+    const season = { round: 1, pts: {}, teamPts: {}, driverCodes: {}, config: { trackIds: ["t0", "t1"], [key]: value } };
+    const r = loadHarness();
+    assert.equal(r.CareerBackup.recoveryEnvelope({ format: "apex26-recovery-v1", season }, { flavour: "driver", i: 0 }).ok, true, key + value);
+    assert.equal(r.CareerBackup.apply({ format: r.CareerBackup.FORMAT, slots: [], season }).ok, true);
+    assert.equal(r.store.get("season").config[key], value, key);
+  }
+  // In-range values pass both paths unchanged.
+  const ok = loadHarness();
+  const season = { round: 1, pts: {}, teamPts: {}, driverCodes: {}, config: { trackIds: ["t0", "t1"], laps: 25, drop: 2 } };
+  assert.equal(ok.CareerBackup.apply({ format: ok.CareerBackup.FORMAT, slots: [], season }).ok, true);
+  assert.equal(ok.store.get("season").config.laps, 25);
+  assert.equal(ok.store.get("season").config.drop, 2);
+});
+
+test("#7309 a seat-less older backup still yields to local qualifying or a finished sprint", () => {
+  const h = loadHarness(), weekend = qualifyingWeekend();
+  h.store.set("season", beforeQualifying(weekend));
+  const envelope = JSON.parse(h.CareerBackup.serialize(h.CareerBackup.build()));
+  h.store.set("season", { ...weekend, you: "haas:0" });
+  const result = h.CareerBackup.apply(envelope);
+  assert.equal(result.applied.includes("season"), false);
+  assert.equal(h.store.get("season").qualiOrder.length, 2);
+  for (const sprint of [true, "rounds"]) {
+    const w = scoredWeekend({ sprint });
+    w.h.store.set("season", { ...w.h.store.get("season"), you: "haas:0" });
+    const revision = w.h.store.keyRevision("season");
+    assert.equal(w.h.CareerBackup.apply(w.envelope).applied.includes("season"), false);
+    assert.equal(w.h.store.keyRevision("season"), revision);
+  }
+});

@@ -13,7 +13,7 @@ const {
 let _refresh = null;
 
 function create(G) {
-Log.info("game", "FlybyPanel.create");
+Log.info("game", "FlybyEditor.create");
 const { $, els, store } = G;
 
 // The edited list. Seeded from the SAVED list, or the shipped DEFAULT, and kept

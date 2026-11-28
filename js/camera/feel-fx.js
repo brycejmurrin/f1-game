@@ -46,10 +46,12 @@ const CamFx = (function () {
 
   /* I3 HOLD + FLASH. A hard hit freezes the external camera's EYE for
      HOLD_MIN..HOLD_MIN+HOLD_SPAN s of wall time (the aim keeps the car in frame;
-     the rig's own damping eases the eye back) and flashes the screen once. Off
-     under comfort, onboard (the rig rides the eye) and with the setting OFF. */
+     the rig's own damping eases the eye back) and flashes the screen once. The
+     setting OFF skips both; comfort / REDUCE MOTION skips both (the flash reads
+     the comfort last seen by the player's solve, holdEye's `comfort`); onboard
+     skips only the hold (the rig rides the eye). */
   const HOLD_MIN_SEV = 0.3, HOLD_MIN = 0.05, HOLD_SPAN = 0.07, FLASH_MAX = 0.22, FLASH_MS = 260;
-  let holdT = 0, holdHave = false;
+  let holdT = 0, holdHave = false, _comfort = false;   // _comfort: holdEye's last `comfort` (extra.reduceMotion)
   const _eye = [0, 0, 0];
   function holdOn() {
     const v = store ? store.get(K_HOLD, true) : true;
@@ -59,11 +61,12 @@ const CamFx = (function () {
     if (!(sev >= HOLD_MIN_SEV) || !holdOn()) return false;
     const n = clamp(sev, 0, 1);
     holdT = Math.max(holdT, HOLD_MIN + HOLD_SPAN * n);
-    flash(FLASH_MAX * n);
+    if (!_comfort) flash(FLASH_MAX * n);
     return true;
   }
   // vantage.js, last on the live solve. True when it wrote the held eye.
   function holdEye(eye, onboard, dt, comfort) {
+    _comfort = !!comfort;
     if (!(dt > 0) || comfort) { holdT = 0; holdHave = false; return false; }
     const live = holdT > 0 && !onboard;
     holdT = Math.max(0, holdT - dt);
@@ -96,3 +99,5 @@ const CamFx = (function () {
 
   return Object.freeze({ K_HOLD, SURGE_LAMBDA, surge, surgeN, surgeScale, chase, impact, holdEye, hold, holdOn, reset, state });
 })();
+// A cut (setCamMode, snapGameCam, a restart's snap): no hold or surge carries into the new vantage (#7350).
+if (typeof Scopes !== "undefined") Scopes.register("camera-mode", { id: "cam-fx", on: ["cut"], touches: ["impact-hold"], exit: () => CamFx.reset() });

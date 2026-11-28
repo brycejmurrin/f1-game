@@ -1909,6 +1909,7 @@
         "tests/unit/apex-surface-pin-vm.test.mjs",
         "tests/unit/boost-hold-restart-vm.test.mjs",
         "tests/unit/cam-avoid-vm.test.mjs",
+        "tests/unit/cam-surge-hold.test.mjs",
         "tests/unit/camera-mode-scope.test.mjs",
         "tests/unit/car-field-writes.test.mjs",
         "tests/unit/car-fields-lifetimes-vm.test.mjs",
@@ -2028,7 +2029,12 @@
         "tests/unit/wind-vm.test.mjs",
         "tests/unit/world-physics-vm.test.mjs"
       ],
-      "kind": "node"
+      "kind": "node",
+      "union": [
+        "test:game-vm-a",
+        "test:game-vm-b1",
+        "test:game-vm-b2"
+      ]
     },
     "test:game-vm-a": {
       "files": [
@@ -2179,7 +2185,11 @@
         "tests/unit/wind-vm.test.mjs",
         "tests/unit/world-physics-vm.test.mjs"
       ],
-      "kind": "node"
+      "kind": "node",
+      "union": [
+        "test:game-vm-b1",
+        "test:game-vm-b2"
+      ]
     },
     "test:game-vm-b1": {
       "files": [
@@ -2342,6 +2352,7 @@
         "tests/unit/fill-gating.test.mjs",
         "tests/unit/fin-design.test.mjs",
         "tests/unit/front-wing-decal.test.mjs",
+        "tests/unit/garage-error-paths.test.mjs",
         "tests/unit/garage-followups.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/garage-panel-side.test.mjs",

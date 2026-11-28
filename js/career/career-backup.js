@@ -353,7 +353,7 @@ const CareerBackup = (function () {
     // slot; restoring it as a standalone championship would mix the two modes.
     const careerAlias = isObj(careerSeason) && sameSeasonValue(careerSeason, clone.season);
     if (clone.season != null && !careerAlias) {
-      const keys = ["round", "pts", "teamPts", "driverCodes", "finishes", "roundPts", "config", "stage", "lastFl", "seed", "qualiOrder", "qualiTrack", "qualiMode", "qualiSeat"];
+      const keys = ["round", "you", "pts", "teamPts", "driverCodes", "finishes", "roundPts", "config", "stage", "lastFl", "seed", "qualiOrder", "qualiTrack", "qualiMode", "qualiSeat"];
       if (Object.keys(clone.season).some((k) => !keys.includes(k))) return { ok: false, reason: "unsupported-season" };
       if (clone.season.round != null && (!Number.isInteger(clone.season.round) || clone.season.round < 0 || clone.season.round > 200)) return { ok: false, reason: "season-invalid" };
       if (clone.season.config != null) {
@@ -420,6 +420,11 @@ const CareerBackup = (function () {
     for (let i = 0; i < Math.min(raw.length, max); i++) out.push(num(raw[i], 0, 1e6) || 0);
     return out;
   }
+  // SeasonCal.normalize resets any lap count or drop rule outside its option
+  // lists, so the cleaner must too: a file claiming drop:1 must not pass the
+  // recovery equality check and then load under drop:0 (#7309). Mirrors
+  // season-cal.js LAP_OPTS / DROP_OPTS (the unit test pins them equal).
+  const SEASON_LAP_OPTS = [3, 5, 10, 25, 57], SEASON_DROP_OPTS = [0, 2, 3];
   function cleanSeasonConfig(raw) {
     const c = plain(raw);
     if (!c) return undefined;
@@ -429,10 +434,10 @@ const CareerBackup = (function () {
       quali: c.quali !== false,
       sprint: c.sprint === true ? true : c.sprint === "rounds" ? "rounds" : false,
       sprintIds: ids(c.sprintIds),
-      laps: num(c.laps, 1, 200) | 0 || 3,
+      laps: SEASON_LAP_OPTS.indexOf(c.laps) >= 0 ? c.laps : 3,
       points: c.points === "classic" ? "classic" : "modern",
       flPoint: c.flPoint === true,
-      drop: num(c.drop, 0, 5) | 0,
+      drop: SEASON_DROP_OPTS.indexOf(c.drop) >= 0 ? c.drop : 0,
     };
   }
   function cleanQualifying(raw, out) {
@@ -488,6 +493,9 @@ const CareerBackup = (function () {
     };
     const cfg = cleanSeasonConfig(r.config);
     if (cfg) out.config = cfg;
+    // The player's seat: SeasonCal.seatPlayer moves points by it, so dropping
+    // it strands the player's points on an AI seat after a seat change (#7309).
+    if (typeof r.you === "string" && ID_RE.test(r.you)) out.you = r.you;
     if (r.stage === "race") out.stage = "race";
     if (typeof r.lastFl === "string" && ID_RE.test(r.lastFl)) out.lastFl = r.lastFl;
     if (Number.isInteger(r.seed) && r.seed > 0 && r.seed <= 0xFFFFFFFF) out.seed = r.seed;
@@ -700,7 +708,8 @@ const CareerBackup = (function () {
     // the backup has one, a different/missing local seed means another season.
     if (incoming.seed != null && incoming.seed !== mine.seed) return false;
     if (local.seed != null && local.seed !== mine.seed) return false;
-    for (const key of ["qualiOrder", "qualiTrack", "qualiMode", "qualiSeat", "seed"]) {
+    // `you` is the seat, not progress: an older backup has none (#7309).
+    for (const key of ["qualiOrder", "qualiTrack", "qualiMode", "qualiSeat", "seed", "you"]) {
       delete mine[key]; delete theirs[key];
     }
     return sameSeasonValue(mine, theirs);
@@ -739,7 +748,7 @@ const CareerBackup = (function () {
       delete mine[key]; delete theirs[key];
     }
     for (const id of Object.keys(theirs.driverCodes)) if (mine.driverCodes[id] !== theirs.driverCodes[id]) return false;
-    for (const key of ["stage", "seed", "driverCodes", "qualiOrder", "qualiTrack", "qualiMode", "qualiSeat"]) {
+    for (const key of ["stage", "seed", "driverCodes", "qualiOrder", "qualiTrack", "qualiMode", "qualiSeat", "you"]) {
       delete mine[key]; delete theirs[key];
     }
     return sameSeasonValue(mine, theirs);
@@ -1030,8 +1039,10 @@ const CareerBackup = (function () {
       const extra = (k) => (envelope[k] != null && isObj(envelope[k]) && progressExtras ? cleanExtra(k, envelope[k]).value : null);
       const season = extra("season");
       if (season && !seasonAhead(s.get("season", null), envelope.season)) {
-        recordWrite("season", s.write("season", season));
-        seasonWritten = true;
+        const result = recordWrite("season", s.write("season", season));
+        // A refused write keeps the old stored season: re-arming from it would
+        // load (and possibly migrate) what the import meant to replace (#7309).
+        seasonWritten = !!result && result.ok !== false;
       }
       const badges = extra("badges");
       if (badges) recordWrite("badges", s.write("badges", mergeBadges(s.get("badges", null), badges)));

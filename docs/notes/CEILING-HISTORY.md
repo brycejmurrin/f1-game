@@ -7,6 +7,16 @@ Eight NEW `lines` rows, each seeded at its current value on tip `f18eba40` (re-m
 `js/ui/settings-export-body.js` **1291**, `js/ui/photo-studio-ui.js` **1278**, `css/carsetup.css` **2118**,
 `css/overlays.css` **2046**, `css/data.css` **1633**, `css/tuner.css` **1565**. Edited in `ratchets.json` itself because
 `applyFragments` ignores a fragment row the base file does not already carry (#7203). They make the #6548 carves stick.
+## 2026-11-27 — PR #7330 (claude/vm-groups-router-7255): VM groups from one list + one path→group router (#7255)
+
+`(tree) assertPinsAll` 10594 → **10604** (+10), past the absorb of 5. Each new assert is a pin that #7255 asks for, and
+both pins fail on base. `tests/unit/node-plan.test.mjs` gains three: game-vm = a ∪ b (cam-surge-hold sat in b only), plus
+the `union` lists of game-vm and game-vm-b. `tests/unit/pick-tests.test.mjs` adds one router test: `pickAll === pick`, the
+ALWAYS/SPECIFIC split, and every `git ls-files` path against the frozen former `EXTRA_ROUTES` rows. Its spot checks
+`vendor/three-…` → tiny + gfx and `controller.html` → tiny + input are the Done-when lines.
+`tests/unit/test-groups-generated.test.mjs` adds one `resolveUnions` test: derivation, key order, drift detection and its
+refusals. Trimming them would drop either a refusal or the parity that the issue's member 1 asks for. Fragment:
+`ratchets.d/claude--vm-groups-router-7255.json`. Label: `ratchet-raise`.
 
 ## 2026-11-27 — PR #7284 (claude/ui-shape-7259): one UiShape module for the phone / screen-shape predicates (#7259)
 
