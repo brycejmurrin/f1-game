@@ -1,12 +1,13 @@
 /* Apex 26 — AgentView: the agent-facing JSON view of the running game. __apex is a dev console: ~180 flat hooks, each answering one narrow question, most of them … */
 const AgentView = (function () {
+  "use strict";   // the IIFE's first statement, or it is an inert expression (#7512)
+
   // The parts budget a given team is actually judged against: a career that
   // owns the team gets Career.budget(), everyone else the free-play constant.
   // Same resolution as js/garage/setup-sheet.js, which is the enforcing side.
   const _partsCap = (team) =>
     (typeof Career !== "undefined" && Career.owned && team && Career.owned(team.id))
       ? Career.budget() : Parts.freeBudget(team);
-  "use strict";
 
   const API_VERSION = 1;
 
@@ -1414,7 +1415,8 @@ const AgentView = (function () {
                     + "filter every row out and read as an empty result");
       }
       const nearM = o.near != null ? Math.max(1, +o.near) : null;
-      const hasWin = o.fromS != null && o.toS != null;
+      // A full-lap window covers every s; wrapped, it collapsed to one point (#7512).
+      const hasWin = o.fromS != null && o.toS != null && (+o.toS - +o.fromS) < total;
       const s0 = hasWin ? wrapS(+o.fromS) : 0, s1 = hasWin ? wrapS(+o.toS) : 0;
       const inWindow = (s) => {
         if (!hasWin) return true;
@@ -1779,7 +1781,11 @@ const AgentView = (function () {
 
       const elapsed = (G.raceT || 0) - startT;
       const lapsDone = (p.lap || 0) - startLap;
+      // Zero ticks ran: the ±Infinity seeds are no measurement; say so (#7512).
+      const none = ran === 0;
       return {
+        ...(none ? { why: "no physics tick ran (" + (stoppedEarly ? stoppedEarly.reason : "ticks:0")
+                          + "): speeds and clearance were not measured" } : {}),
         apiVersion: API_VERSION, physicsVersion: PHYSICS_VERSION,
         conventions: CONVENTIONS,
         episodeId,
@@ -1791,11 +1797,11 @@ const AgentView = (function () {
         from: { frac: +startFrac.toFixed(4), lap: startLap },
         to: { frac: +(p.s / G.track.total).toFixed(4), lap: p.lap || 0 },
         distanceM: r1((p.prog || 0) - startProg),
-        speedKph: { min: r1(minSpeed * 3.6), max: r1(maxSpeed * 3.6),
-                    mean: r1(sumSpeed / Math.max(1, ran) * 3.6), final: r1((p.speed || 0) * 3.6) },
+        speedKph: { min: none ? null : r1(minSpeed * 3.6), max: none ? null : r1(maxSpeed * 3.6),
+                    mean: none ? null : r1(sumSpeed / ran * 3.6), final: r1((p.speed || 0) * 3.6) },
         offTrack: { events: offEvents, seconds: r2(offTicks * dt),
                     pct: r1(offTicks / Math.max(1, ran) * 100) },
-        minClearanceM: r1(minClear),
+        minClearanceM: none ? null : r1(minClear),
         wallContacts: contacts,
         lapsCompleted: lapsDone,
         lastLapS: lapsDone > 0 && p.lastLap ? r2(p.lastLap) : null,
