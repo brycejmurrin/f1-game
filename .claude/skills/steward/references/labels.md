@@ -8,7 +8,9 @@ it in GitHub's default grey; its colour and description come from `.github/label
 **Adding or removing a label** (owner decision 2026-11-11: agents never write with `gh`, whose writes GitHub records
 as Bryce's own click; `bash-guard.sh` refuses them). Use the GitHub MCP `issue_write` (method `update`; a PR is an
 issue), ONE label per call:
-1. Read the live names: `issue_read` method `get_labels` (or `gh api repos/<o>/<r>/issues/<n> --jq '[.labels[].name]'`).
+1. Read the live names. A PR: `pull_request_read` method `get` (`labels[].name`); `issue_read` `get_labels` fails on a
+   PR number ("Could not resolve to an Issue"). An issue: `issue_read` method `get_labels`. Shell read for either (a
+   GET, which `bash-guard.sh` allows): `gh api repos/<o>/<r>/issues/<n> --jq '[.labels[].name]'`.
 2. Send that list plus, or minus, the ONE name. The `labels` field REPLACES the whole list, so `github-mcp-guard.sh`
    reads the live labels itself and refuses any list that differs from them by more or less than one name (a partial
    list, or a stale one after an Action or Bryce labelled in between: re-read and send again). Two labels are two calls.
