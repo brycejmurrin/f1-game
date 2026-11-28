@@ -141,6 +141,8 @@ test("(b) cleanSeason keeps every backup:true field (backup apply)", () => {
   assert.equal(r.ok, true, JSON.stringify(r));
   const stored = JSON.parse(JSON.stringify(h.store.get("season")));   // VM-realm / null-prototype maps
   for (const k of h.SaveMigrate.SEASON_BACKUP_KEYS) assert.deepEqual(stored[k], season[k], k);
+  // The table's row order is the backup output order (byte-stable files).
+  assert.deepEqual(Object.keys(stored), Array.from(h.SaveMigrate.SEASON_BACKUP_KEYS));
 });
 
 test("(b) recoveryEnvelope -> validate keeps every backup:true field", () => {
