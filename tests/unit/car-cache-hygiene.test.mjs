@@ -38,21 +38,13 @@ test("C4: a decal texture made before a throw is freed and never cached", () => 
   assert.deepEqual(freed, made, "every texture made before the throw is freed");
 });
 
-// The real putBoundedMesh, cut out of the source with the LRU state it closes over.
+// The real LRU (js/car/bounded-cache.js, #7516) under car-draw.js's putBoundedMesh default disposer.
 function loadPutBoundedMesh() {
-  const src = fs.readFileSync("js/car/car-draw.js", "utf8");
-  const start = src.indexOf("    const _lruStamp = new WeakMap();");
-  const fn = src.indexOf("function putBoundedMesh(", start);
-  assert.ok(start >= 0 && fn > start, "putBoundedMesh and its LRU state are in car-draw.js");
-  let depth = 0, end = -1;
-  for (let i = src.indexOf("{", fn); i < src.length; i++) {
-    if (src[i] === "{") depth++;
-    else if (src[i] === "}" && --depth === 0) { end = i + 1; break; }
-  }
   const freed = [];
-  const ctx = vm.createContext({ WeakMap, Map, Infinity, freed, freeBodyPair: (m) => freed.push(m) });
-  vm.runInContext(src.slice(start, end) + "\n;this.putBoundedMesh = putBoundedMesh;", ctx, { filename: absSrc("js/car/car-draw.js") });
-  return { put: ctx.putBoundedMesh, freed };
+  const ctx = vm.createContext({ WeakMap, Map, Infinity, Object });
+  vm.runInContext(fs.readFileSync("js/car/bounded-cache.js", "utf8") + "\n;this.BoundedCache = BoundedCache;", ctx, { filename: absSrc("js/car/bounded-cache.js") });
+  const freeBodyPair = (m) => { if (m) freed.push(m); };
+  return { put: (c, o, k, cr, max, f) => ctx.BoundedCache.put(c, o, k, cr, max, f || freeBodyPair), freed };
 }
 
 test("C2: putBoundedMesh never caches a null create() nor lets it evict a live entry", () => {

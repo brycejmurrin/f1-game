@@ -457,6 +457,7 @@ const FULL = [
   // has to satisfy "before whatever consumes it" — game.js, last as always.
   "js/race/car-fields.js", // CarFields.predeclare(car): the late-added car fields as `undefined` at spawn, so all cars share one hidden class (game.js makeCars)
   "js/car/field-lod.js",  // FieldLod: rival-car distance LOD table + selectors (wheels / flaps / flame / whole-car / shadow casters / mirror cap)
+  "js/car/bounded-cache.js", // BoundedCache: LRU-bounded key→mesh cache with a disposer (put / clear), car-draw's mesh caches
   "js/car/car-draw.js",   // car mesh/atlas caches, decal queue, cockpit rig, planted wheels (CarDraw.create(G, deps)), extracted from game.js
   "js/render/shared/shadow-pass.js",   // sun / car / lamp shadow maps, snap caches, caster pools (ShadowPass.create(G, deps)), extracted from game.js
   "js/render/shared/mirror-pass.js",   // HUD rear-view mirror: second camera + rival poses, gfx.mirrorBegin/End (MirrorPass.create(G, deps))
@@ -2285,6 +2286,7 @@ const FULL_TIERS = {
     "js/physics/wall-clamp.js": "race",
     "js/race/car-fields.js": "race",
     "js/car/field-lod.js": "race",
+    "js/car/bounded-cache.js": "race",
     "js/car/car-draw.js": "race",
     "js/render/shared/shadow-pass.js": "boot",
     "js/render/shared/mirror-pass.js": "boot",

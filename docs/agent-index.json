@@ -2648,6 +2648,11 @@
       "roster": "tag"
     },
     {
+      "path": "js/car/bounded-cache.js",
+      "global": "BoundedCache",
+      "roster": "tag"
+    },
+    {
       "path": "js/car/car-body-geom.js",
       "global": "CarBodyGeom",
       "roster": "tag"

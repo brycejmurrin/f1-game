@@ -129,6 +129,7 @@ export function carDrawVm({ casters = false, cam = "chase", legends = false, pla
     ctx.Teams.LIST.push(ctx.Legends.team(ctx.Legends.LIST[0].id));
   }
   run(ctx, "js/car/field-lod.js");
+  run(ctx, "js/car/bounded-cache.js");
   run(ctx, "js/car/car-draw.js");
   run(ctx, "js/render/shared/mirror-pass.js");
 
