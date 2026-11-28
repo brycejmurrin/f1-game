@@ -221,7 +221,7 @@ const ThumbTrainer = (function () {
     const pick = nodes["tt-turn"], speedBtn = nodes["tt-speed"], sketch = nodes["tt-sketch"], time = nodes["tt-time"], cue = nodes["tt-cue"], scoreEl = nodes["tt-score"];
     const sx = sketch.getContext("2d"), tx = time.getContext("2d");
     let name = corner && CORNERS.some(c => c.name === corner) ? corner : (best.last && CORNERS.some(c => c.name === best.last) ? best.last : "T6");
-    let running = false, countdown = 0, t0 = 0, raf = 0, timer = 0, rec = [], colors = {}, preset = "yours";
+    let running = false, countdown = 0, t0 = 0, lastNow = 0, raf = 0, timer = 0, rec = [], colors = {}, preset = "yours";
     const keys = { left: false, right: false, brake: false, gas: false };
     pick.value = name;
     const SPEEDS = [[0.5, "½×"], [0.75, "¾×"], [1, "1×"]];
@@ -444,8 +444,15 @@ const ThumbTrainer = (function () {
       cancelAnimationFrame(raf); clearTimeout(timer);
       nodes["tt-go"].textContent = "START";
     }
+    // A frame gap over GAP_MS (the app backgrounded, a hitch) cut the run short: scoring the samples before
+    // it saved a false best (#7406). Drop the run unscored; ½× only stretches wall time, not the frame cadence.
+    const GAP_MS = 250;
+    function abandon() { stop(); idle(); cue.textContent = "Run stopped: the drill was interrupted. START to go again."; drawAll(null); }
+    function onVis() { if (document.hidden && (running || countdown)) abandon(); }
     function tick(now) {
       if (!running) return;
+      if (now - lastNow > GAP_MS) { abandon(); return; }
+      lastNow = now;
       const C = script(name), t = (now - t0) / 1000 * speed;
       if (t >= C.dur) { finish(); return; }
       rec.push({ t, ...sample() });
@@ -463,7 +470,7 @@ const ThumbTrainer = (function () {
       const step = () => {
         countdown--;
         if (countdown > 0) { drawTime(); timer = setTimeout(step, 600); return; }
-        running = true; t0 = performance.now(); drawTime(); raf = requestAnimationFrame(tick);
+        running = true; t0 = lastNow = performance.now(); drawTime(); raf = requestAnimationFrame(tick);
       };
       timer = setTimeout(step, 600);
     }
@@ -567,6 +574,7 @@ const ThumbTrainer = (function () {
       window.removeEventListener("keydown", onKey, true);
       window.removeEventListener("keyup", onKey, true);
       window.removeEventListener("resize", queue);
+      document.removeEventListener("visibilitychange", onVis);
       cue.hidden = false; nodes["tt-explore"].hidden = true; nodes["tt-drill"].hidden = false; nodes["tt-view"].textContent = "PEDALS";
       observer?.disconnect();
       cancelAnimationFrame(pending);
@@ -597,6 +605,7 @@ const ThumbTrainer = (function () {
     window.addEventListener("keydown", onKey, true);
     window.addEventListener("keyup", onKey, true);
     window.addEventListener("resize", queue);
+    document.addEventListener("visibilitychange", onVis);
     const observer = typeof ResizeObserver !== "undefined" ? new ResizeObserver(queue) : null;
     for (const box of [document.getElementById("dock-left"), document.getElementById("dock-right"), nodes["tt-chart"]]) if (box) observer?.observe(box);
     readColors();

@@ -87,6 +87,13 @@ test("input maps __apex field/info/sectorState onto the v1 frame, with team colo
   assert.equal(empty.state, "idle"); assert.equal(empty.rows.length, 0); assert.equal(empty.battle, null);
 });
 
+test("the tower clears outside a session: menus get no rows, race and results keep them (#7406)", () => {
+  const { Pub, Feed } = load();
+  const rows = (state) => Feed.frame(Pub.input({ field: FIELD, info: { state }, teams: TEAMS })).rows.length;
+  assert.equal(rows("menu"), 0, "quitToMenu leaves the cars in field(): the menus must not show the last race's tower");
+  assert.equal(rows("race"), 4); assert.equal(rows("count"), 4); assert.equal(rows("results"), 4);
+});
+
 test("the caption tap turns #announce changes into captions with fresh ids, and null when hidden", () => {
   const { Pub } = load();
   const els = { "announce-num": { textContent: "" }, "announce-who": { textContent: "" }, "announce-text": { textContent: "" } };
