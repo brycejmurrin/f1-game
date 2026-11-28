@@ -211,7 +211,10 @@ export const SPECIFIC_RULES = [
   [/^js\/audio\/crowd\.js/, ["audio-unit"], "trackside crowd ambience bed + silence gates"],
   [/^js\/audio\/engine\.js/, ["audio-unit", "ui"], "GameAudio init, OfflineAudioContext pitch/layer spec, rival pass-by pool"],
   [/^js\/audio\/ers-layer\.js/, ["audio-unit"], "MGU-K electric deploy/harvest + overtake/boost cue"],
-  [/^js\/audio\//, ["ui", "lifecycle-unit"], ""],
+  // The catch-all skips the five files whose own rule above says audio-unit only (#7474): rules UNION, so
+  // without this lookahead each still pulled the ui browser group (~423 s selected per audio-only PR).
+  // lifecycle-unit reads music-lib, panel and radio-voice, none of these five.
+  [/^js\/audio\/(?!(?:battle-earcon|voice-pack|rivals|crowd|ers-layer)\.js$)/, ["ui", "lifecycle-unit"], ""],
   [/^js\/perf\/(phone-recorder|soak-run)\.js/, ["phone-recorder"], "PHONE TEST recorder + AUTO SOAK (#1633)"],
   // Post-flag ceremony + finish journeys (#1584 slice 5 / #4071); FLOW.md and USAGE-PATHS.md folded into
   // ARCHITECTURE-MAP.md on 2026-11-03 (D-001 §4.9).

@@ -24,7 +24,7 @@ import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseJunit, parseLiveLog, mergeRows, emptyDb, serialise, saveDb, loadDb,
-  growth, steps, bestSplit, mad, median, envBucket, isoSecond, normaliseSpec, defaultSources, validName,
+  growth, steps, bestSplit, mad, median, envBucket, isoSecond, normaliseSpec, defaultSources, validName, pruneMissing,
   KEEP, BUCKETS, TIMINGS_FILE } from "../../tools/ci/spec-timings.mjs";
 import { specSecPerTest, billing, MEASURED, MIN_SAMPLES, CI_BUCKETS,
   timings } from "../../tools/ci/select-budget.mjs";
@@ -576,4 +576,38 @@ test("unionDb keeps every distinct sample from both histories, newest `keep` per
   assert.ok(u.specs[Y], "a spec only one side knows survives");
   const capped = unionDb(a, b, { keep: 1 });
   assert.deepEqual(capped.specs[X].s, [["2026-09-02T00:00:00Z", "llvmpipe", 12, 2]], "newest wins the cap");
+});
+
+test("a merge prunes keys whose spec file is gone; --dry-run writes nothing (#7474)", async () => {
+  const { spawnSync } = await import("node:child_process");
+  const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+  const LIVE = "tests/specs/smoke.spec.js", GONE = `tests/specs/${"zz-deleted"}-fixture.spec.js`; // GONE: a fixture, not a file
+  const seed = () => {
+    const db = emptyDb();
+    for (const spec of [LIVE, GONE]) mergeRows(db, [{ ts: "2026-09-01T00:00:00Z", spec, title: "a", sec: 1 }]);
+    return db;
+  };
+  // The function: only the live key survives, and a root with no tests/specs/ prunes nothing.
+  const db = seed();
+  assert.deepEqual(pruneMissing(db, { root: ROOT }), [GONE]);
+  assert.deepEqual(Object.keys(db.specs), [LIVE]);
+  const bare = seed();
+  assert.deepEqual(pruneMissing(bare, { root: tmpdir() }), [], "a checkout without tests/specs/ must not empty the history");
+  assert.equal(Object.keys(bare.specs).length, 2);
+  // The CLI: --dry-run reports the prune and leaves the file byte-identical; the merge writes it.
+  const dir = tmpdir();
+  const into = path.join(dir, "timings.json"), src = path.join(dir, "empty.log");
+  fs.writeFileSync(src, "");
+  saveDb(seed(), into);
+  const before = fs.readFileSync(into, "utf8");
+  const cli = (...extra) => spawnSync("node", ["tools/ci/spec-timings.mjs", src, "--into", into, "--json", ...extra],
+    { cwd: ROOT, encoding: "utf8" });
+  const dry = cli("--dry-run");
+  assert.equal(dry.status, 0, dry.stderr);
+  assert.deepEqual(JSON.parse(dry.stdout).prunedSpecs, [GONE]);
+  assert.equal(fs.readFileSync(into, "utf8"), before, "--dry-run must write nothing");
+  const wet = cli();
+  assert.equal(wet.status, 0, wet.stderr);
+  assert.equal(JSON.parse(wet.stdout).pruned, 1);
+  assert.deepEqual(Object.keys(loadDb(into).specs), [LIVE]);
 });
