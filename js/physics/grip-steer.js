@@ -71,14 +71,16 @@ const GripSteer = (function () {
    * @returns {{ delta: number, capSm: number }}  shared bag, overwritten by the next call
    */
   function apply(driverDelta, state, kk) {
+    // Every disengaged exit returns capSm 0 (unset), so the next engaged frame
+    // re-seeds at the live cap instead of easing out of a stale one (#7399 row 14).
     const strength = kk == null ? k : +kk || 0;
-    if (!(strength > 0) || !state) return res(driverDelta, state && state.capSm || 0);
+    if (!(strength > 0) || !state) return res(driverDelta, 0);
 
     const speed = +state.speed || 0;
-    if (!(speed > 0)) return res(driverDelta, state.capSm || 0);   // rest + reverse
+    if (!(speed > 0)) return res(driverDelta, 0);   // rest + reverse
 
     const blend = strength * smoothstep(V_LO, V_HI, speed);
-    if (!(blend > 0)) return res(driverDelta, state.capSm || 0);
+    if (!(blend > 0)) return res(driverDelta, 0);
 
     const vx = Math.max(Math.abs(speed), VX_FLOOR);
     const r = +state.yawRate || 0;
@@ -120,7 +122,11 @@ const GripSteer = (function () {
 
   /** Call-site helper for updateCar: identity when the slider is OFF. */
   function forPlayer(driverDelta, c, opts) {
-    if (!(k > 0) || !c || !opts) return driverDelta;
+    if (!(k > 0) || !c || !opts) {
+      // Slider OFF: drop the smoothed cap so re-enabling at speed starts fresh.
+      if (c && c.gripSteerCapSm) c.gripSteerCapSm = 0;
+      return driverDelta;
+    }
     _st.vLat = c.vLat || 0;
     _st.yawRate = c.yawRateCur || 0;
     _st.speed = c.speed;
