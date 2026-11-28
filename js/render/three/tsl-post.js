@@ -75,7 +75,12 @@
       mat: passMaterial(Fn(() => {
         const suv = vec2(VP.uv(brightV)).toVar();
         const vUV = vec2(suv.x, suv.y.oneMinus()).toVar();
-        const c = vec3(sceneT.sample(TL(vUV)).rgb).toVar();
+        // #7438: an Inf texel made Inf/Inf = NaN below, and the down/up chain spread it. Clamp to the largest finite
+        // rg11b10 value; a NaN (and -Inf) fails the >= test and reads 0 — WGSL leaves max/min of a NaN to the
+        // implementation, a comparison is false. Every finite texel <= 65024 passes unchanged.
+        const raw = vec3(sceneT.sample(TL(vUV)).rgb).toVar();
+        const fin = (x) => select(x.greaterThanEqual(-65024.0), min(x, 65024.0), float(0.0));
+        const c = vec3(fin(raw.r), fin(raw.g), fin(raw.b)).toVar();
         const l = max(max(c.r, c.g), c.b).mul(brightU.exposure).toVar();
         const knee = brightU.threshold.mul(0.5).add(1e-4).toVar();
         const soft = clamp(l.sub(brightU.threshold).add(knee), 0.0, knee.mul(2.0)).toVar();
@@ -946,7 +951,7 @@
             // confidence-scaled cover — its env cube covers every direction.
             const cover = select(carDom, conf, float(0.60)).toVar();
             // Fresnel off the SAME normal the ray used, not the bumpy Nv.
-            const fres = pow(max(dot(Nr, V), 0.0).oneMinus(), 3.0).toVar();
+            const fres = pow(clamp(dot(Nr, V), 0.0, 1.0).oneMinus(), 3.0).toVar();   // #7438: a dot > 1 made pow's base < 0
             const strength = ssrGate.mul(select(carDom,
               fres.mul(0.45).add(0.50), fres.mul(0.42).add(0.55))).toVar();
             const gateSrc = select(carDom, C.carReflect, C.reflect);

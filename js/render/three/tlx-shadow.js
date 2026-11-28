@@ -836,8 +836,17 @@
       g.userData.casterOf = src;
       return g;
     }
+    // #7438: three's geometry dispose deletes the index and EVERY attribute still on the geometry from the backend,
+    // and the clone shares the lit batch's — so a regrow freed the live batch's GPU buffers (re-uploaded on its next
+    // draw). Detach what the clone does not own (all but attrCaster's iM0..3) first; disposeCaster has already
+    // dropped the caster's RenderObjects, so only the geometry's own listener reads the trimmed lists.
     function freeCasterGeo(m) {
-      try { m.geometry.dispose(); } catch (_) { /* the clone releases its own instanceMatrix */ }
+      try {
+        const g = m.geometry;
+        if (g.index) g.setIndex(null);
+        for (const k of Object.keys(g.attributes)) if (!/^iM[0-3]$/.test(k)) g.deleteAttribute(k);
+        g.dispose();
+      } catch (_) { /* the clone releases its own instanceMatrix */ }
     }
     const iCast = [];             // this pass's casts, hidden again at the next Begin
     // M-12: phones skip only the shadow caster UBO pad (lit batches keep it).
