@@ -3387,7 +3387,7 @@ const WGX = (function () {
         const lb = f.lampBake, sc = f.lampBakeScale;
         const on = !!(lb && sc && lb.data && lb.indir);
         if (on) { _bakeOffW = 0; _syncLampBake(lb); }
-        else if (_bakeTexW && _bakePlace && ((_bakeSrcW && _bakeSrcW.retired) || ++_bakeOffW > 120)) _freeLampBake();   // retired: a circuit switch (#7464)
+        else if (_bakeTexW && _bakePlace && ++_bakeOffW > 120) _freeLampBake();
         const live = on && lb === _bakeSrcW;
         d[152] = live ? lb.x0 : 0; d[153] = live ? lb.z0 : 0;
         d[154] = live ? lb.tilesX * lb.T * lb.cell : 1; d[155] = live ? lb.tilesY * lb.T * lb.cell : 1;

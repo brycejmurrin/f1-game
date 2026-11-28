@@ -634,10 +634,9 @@ test("a bake the module stops serving is marked retired: reset() at a circuit sw
   assert.equal(LB.gen(), 0);
 });
 
-test("every renderer frees a retired bake at its next unbaked frame, not after 120 of them", () => {
+test("TLX and GLX free a retired bake at its next unbaked frame, not after 120 of them (WGX is frozen, D-049)", () => {
   // The paused picker draws a handful of warm frames and stops: a frame count alone never came due.
   const src = (f) => readFileSync(path.join(ROOT, f), "utf8");
   assert.match(src("js/render/three/tsl-lit.js"), /\(_bakeSrc && _bakeSrc\.retired\) \|\| \+\+_bakeOffN > 120/);
   assert.match(src("js/render/glx/glx.js"), /\(_bakeSrc && _bakeSrc\.retired\) \|\| \+\+_bakeOffN > 120/);
-  assert.match(src("js/render/webgpu/wgx.js"), /\(_bakeSrcW && _bakeSrcW\.retired\) \|\| \+\+_bakeOffW > 120/);
 });
