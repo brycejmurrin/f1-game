@@ -52,7 +52,10 @@ tool, and the parent saves it.
    -- <slice>` shows what moved recently. That IS one simple command — run it
    exactly so, one path per call (`git log --oneline -15 -- js/net/`), never
    with `git -C`, a pipe or a second command after it.
-2. For each suspect: follow `code-nav` for named JS definitions/references/callers;
+2. For each suspect: every named JS symbol you trace (its definition, its callers, who reads it) goes through
+   apex-lsp FIRST: `lsp_outline` on the file to start, then `lsp_callers` / `lsp_references {symbol}` per suspect
+   (pass `symbol` OR `file`+`line`, never both); Grep is for strings, comments, HTML and non-JS files. A row's
+   mechanism cell names the query behind its caller claim, e.g. `(lsp_callers normalizeImported = 3)`. Skill `code-nav`;
    without attached LSP tools use `node tools/mcp/lsp-mcp.mjs` through Bash (the `.sh` wrapper is refused by your hook).
    Follow factory instances, aliases and callbacks where a static binding stops;
    use bounded text cross-checks for HTML/string consumers, tools and tests.

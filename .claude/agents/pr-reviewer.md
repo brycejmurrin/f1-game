@@ -38,8 +38,10 @@ A PR number (optionally a head sha). Nothing else is needed.
 3. **Read around each hunk** on the current tree (Read with an offset; the
    PR's head is `git fetch origin pull/<n>/head` then `git show
    FETCH_HEAD:<file>`). Take the changed paths from `get_files`, not a local
-   `git diff` (a shallow clone may lack the merge base). Callers and consumers of a changed symbol: apex-lsp
-   (`lsp_references` / `lsp_callers`), not grep.
+   `git diff` (a shallow clone may lack the merge base). For EVERY function or member the diff changes under
+   `js/`, call `lsp_callers` or `lsp_references {symbol}` before you write a row about it (start with `lsp_outline`
+   on each changed `js/` file; pass `symbol` OR `file`+`line`, never both); Grep is for strings, CSS, HTML and
+   tests. A row about a changed symbol names the query in its why cell, e.g. `(lsp_callers paintDash = 2)`.
 4. **Look only for what CI will not catch** (a red CI already reports itself):
    - the diff misses a Done-when line, or does something the Goal did not ask
      (scope creep);
