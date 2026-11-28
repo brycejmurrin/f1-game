@@ -781,7 +781,7 @@ test("a failed cache-bust navigation with no cached shell at all still fails (no
 const SHELL_RACE_MS = Number(/const SHELL_RACE_MS = (\d+);/.exec(SW_SOURCE)?.[1]);
 const lateShell = (ms, body) => () => new Promise((resolve) => setTimeout(() => resolve(new Response(body, { status: 200 })), ms));
 test("a plain navigation with a cached shell stops waiting for the network at SHELL_RACE_MS", async () => {
-  assert.equal(SHELL_RACE_MS, 300); // Bryce's decision on #7387 row 8 (was 1000, #6671), not a widened tolerance
+  assert.equal(SHELL_RACE_MS, 300); // Bryce's `decision: #7387 row 8 A` (2026-11-28 02:31Z; was 1000, #6671), not a widened tolerance
   const harness = createHarness({ immediateTimeoutMs: SHELL_RACE_MS, navigator: { onLine: true }, fetchImpl: () => new Promise(() => {}) });
   harness.stores.set("apex26-old", new Map([[`${ORIGIN}/index.html`, new Response("precached shell", { status: 200 })]]));
   const t0 = Date.now();

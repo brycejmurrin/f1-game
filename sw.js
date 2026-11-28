@@ -38,7 +38,7 @@ const NAV_RACE_MS = 3000;
 // A plain shell navigation that HAS a cached shell stops waiting for the network here: on a link that does not
 // answer, an installed app opened to 3 s of nothing. The shell's own version guard still reloads onto a newer build
 // when version.json comes through. With no cached shell (the first launch) the full race above still applies.
-// 300 ms is Bryce's pick (#7387 row 8, 2026-11-28; was 1000, #6671): a repeat launch waits at most this for a fresh shell.
+// 300 ms is Bryce's `decision: #7387 row 8 A` (2026-11-28; was 1000, #6671): a repeat launch waits at most this for a fresh shell.
 const SHELL_RACE_MS = 300;
 // A `?b=` bust with NO cached shell at or above b has nothing to fall back to, so
 // a 3 s fail-fast only dropped a slow-but-alive fetch (#4924); it waits this long.
