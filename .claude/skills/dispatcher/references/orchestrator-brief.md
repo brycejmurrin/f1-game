@@ -55,27 +55,37 @@ judgement, not by an issue:
 ## The brief
 
 Generate it, do not hand-write it: `node tools/ci/brief.mjs render --spec <spec.json> --sessions <list_sessions.json>`
-prints the template below from task facts (role, issue/PR, scope, owned and forbidden paths, STOP AT, the tip state,
-env and permission mode), predicts the `config-ok` / `ratchet-raise` human steps from the owned paths, and refuses a
-duplicate launch (an open PR closing the issue, or a live session tagged `apex:issue-<n>` / `apex:pr-<n>`; PR #6349
-was launched twice). Pass the tag it prints to `create_session`. A hand-edited brief: `brief.mjs lint <file>` before
-sending (missing STOP AT or tip state refuses). Spec fields and exits: the tool's header.
+prints the template below. Spec fields: `kind` (`ISSUE` | `CONTINUE PR` | `DEPLOY-RED` | `TASK`), `number` (the issue,
+PR or red run id; a TASK's `slug`, `[a-z0-9-]+`), `orchestrator`, `role`, `ask` + `askAt`, `task`, `evidence`, `state`,
+`profile`, `stopAndTell`, `scope`, `owned` (`[]` only with `readOnly: true`, printed `OWNED: none`), `forbidden`,
+`humanSteps`, `tip` {`state`, `sha`, `note`}, `stopAt`, `report`, `subagents`, `env` (a role) and `permissionMode`. It
+predicts the `config-ok` / `ratchet-raise` human steps from the owned paths and refuses a duplicate launch (an open PR
+closing the issue, or a live session tagged `apex:issue-<n>` / `apex:pr-<n>` / `apex:deploy-red-<id>` /
+`apex:task-<slug>`; PR #6349 was launched twice). Send the text above the `LAUNCH:` block; that block is the
+`create_session` env, permission mode and tags, not part of the brief. A hand-edited brief: `brief.mjs lint <file>`
+before sending (missing STOP AT or tip state refuses). Exits: the tool's header.
 
 ```text
-<ISSUE n | CONTINUE PR n> for orchestrator <session id>. AGENTS.md and skill `steward` bind; this
-brief adds only task facts.
+<ISSUE n | CONTINUE PR n | DEPLOY-RED run-id | TASK slug> for orchestrator <session id>. AGENTS.md and skill `steward` bind; this brief adds only task facts.
 
-ASK (Bryce's words, with the time): "<quote>"
+ROLE: <worker | hunter | reviewer | …>
+ASK (Bryce's words, <time>): "<quote>"
 TASK: <the one unit; what a player or an agent would see when it is done>
 EVIDENCE: <the measurement or repro, its command, the precedent PR to copy; name JS symbols as apex-lsp calls, e.g. `lsp_callers Tracks.curvature`>
 STATE: head <sha> at <time>; open PRs that touch the same paths (shared, not a blocker: D-033): <list>; decisions already made: <comment URLs>
-PROFILE (phone UI only): newest `tests/data/settings-live-export-*.json`, dated <date>; quote it, do not trust a
-  number in this brief over that file [16]
-HUMAN STEPS ARRANGED: <e.g. "config-ok: send me the head sha once pushed"> | none
+PROFILE: (phone UI only) newest `tests/data/settings-live-export-*.json`, dated <date>; quote it, do not trust a number in this brief over that file [16]
 STOP AND TELL ME: <the condition, e.g. a ceiling or budget blocks you: send the numbers, change nothing>
-STOP AT: start+<N>k (a context budget above the session's measured start; `context-cap.py` reads this form) [6]
-MESSAGE ME ONLY WHEN: blocked, refused (facts only), a decision is needed, merged, or handing off [8]
+SCOPE: <one PR; what is in and out>
+OWNED: <paths the worker may edit> | none (read-only)
+FORBIDDEN: <paths>; nothing in PROTECTED_CONFIG_PATH (tools/ci/merge-gate.mjs) without Bryce's tap
+HUMAN STEPS: <e.g. "config-ok: send me the head sha once pushed"> | none predicted
+TIP: green at <sha> | red — <what to do until it is green> | paused — <what to do until it is green>
+STOP AT: start+150k (start+<N>k: a context budget above the session's measured start; `context-cap.py` reads this form) [6]
+MESSAGE ME ONLY WHEN: blocked, refused (facts only), a decision is needed, land added (PR open; GitHub merges), handing off (send_message session_id <session id>) [8]
 SUBAGENTS: <the role's row in `.claude/agents/README.md` §Roles, e.g. "prior-art-scout, code-hunter per slice, finding-verifier">
+
+LAUNCH: (create_session metadata; not part of the sent text)
+  env: <role> ("<environment name>") · permission_mode <mode> · tags ["apex:<kind>-<n>"]
 ```
 
 ## While workers run

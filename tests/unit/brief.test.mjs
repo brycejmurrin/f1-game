@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { main, renderBrief, lintBrief, specProblems, predictSteps, duplicates, isLive, sessionTag } from "../../tools/ci/brief.mjs";
+import { main, renderBrief, lintBrief, specProblems, predictSteps, duplicates, isLive, sessionTag, splitLaunch, DEFAULT_REPORT } from "../../tools/ci/brief.mjs";
 import { loadRoles, resolveRole, findEnvLiterals, parseOrchestratorBlocks, newestBlock, reapActs, isArchived } from "../../tools/ci/lib/roles.mjs";
 
 const SPEC = {
@@ -23,7 +23,10 @@ test("render: every required line, the predicted config-ok, the tip state and th
   assert.equal(lineOf(b, "HUMAN STEPS:"), "HUMAN STEPS: config-ok (routine: tools/ci/tip-alarm.mjs, .github/workflows/tip-alarm.yml): the orchestrator adds it after reading the diff; send the head sha once pushed");
   assert.equal(lineOf(b, "TIP:"), "TIP: paused at c1e4f959 — commit locally; open the PR after my tip-green: message");
   assert.equal(lineOf(b, "STOP AT:"), "STOP AT: start+150k");
-  assert.equal(lineOf(b, "ENV:"), 'ENV: worker ("Full Access") · permission_mode auto · tags ["apex:issue-6400"]', "the role and its name, never the id");
+  assert.equal(lineOf(b, "ENV:"), undefined, "create_session metadata is not part of the sent text (#7472)");
+  assert.equal(lineOf(b, "  env:"), '  env: worker ("Full Access") · permission_mode auto · tags ["apex:issue-6400"]', "the role and its name, never the id");
+  assert.equal(splitLaunch(b).launch.split("\n")[0], "LAUNCH: (create_session metadata; not part of the sent text)");
+  assert.equal(splitLaunch(b).brief.split("\n").at(-1).split(":")[0], "MESSAGE ME ONLY WHEN", "a spec without the optional fields ends at MESSAGE ME ONLY WHEN");
   assert.equal(lineOf(b, "ASK"), `ASK (Bryce's words, 2026-11-25 02:47Z): "fix all of those"`);
   assert.deepEqual(lintBrief(b), []);
 });
@@ -48,14 +51,14 @@ test("lint: a brief without STOP AT or the tip state is refused, line by line", 
   assert.deepEqual(lintBrief(b.replace(/^STOP AT:.*$/m, "STOP AT: when done")), ["STOP AT: start+<N>k (context-cap.py reads this form)"], "the cap must be a number");
   assert.deepEqual(lintBrief(b.replace(/^TIP:.*$/m, "TIP: red")), ["TIP: a red or paused tip names what to do until it is green (`TIP: red — …`)"]);
   assert.deepEqual(lintBrief(b.replace(/^TIP:.*$/m, "TIP: green")), [], "a green tip needs no note");
-  assert.equal(lintBrief("ISSUE 5 do the thing").length, 9);
+  assert.equal(lintBrief("ISSUE 5 do the thing").length, 8);
 });
 
 test("spec problems are named before anything is printed", () => {
   assert.deepEqual(specProblems(SPEC), []);
   const p = specProblems({ ...SPEC, kind: "PR", stopAt: "150", tip: { state: "red" }, owned: [] });
-  assert.deepEqual(p, ["kind must be one of ISSUE | CONTINUE PR", 'stopAt must read "start+<N>k" (or "<N>k")',
-    "tip.note is required when the tip is not green (what to do until it is)", "owned must list the paths the worker may edit"]);
+  assert.deepEqual(p, ["kind must be one of ISSUE | CONTINUE PR | DEPLOY-RED | TASK", 'stopAt must read "start+<N>k" (or "<N>k")',
+    "tip.note is required when the tip is not green (what to do until it is)", "owned must list the paths the worker may edit (owned: [] only with readOnly: true)"]);
 });
 
 test("duplicates: an open PR closing the issue, a live tagged or titled session; finished sessions and other numbers are not", () => {
@@ -100,6 +103,71 @@ test("main: render refuses a duplicate launch, dup and lint exit codes, a missin
   assert.equal(run([])[0], 2);
 });
 
+// ── every launch kind, one template, one report cadence (#7472, hunt #7471 rows 1-5) ──
+const KIND_SPECS = {
+  "ISSUE": { ...SPEC },
+  "CONTINUE PR": { ...SPEC, kind: "CONTINUE PR", number: 6349 },
+  "DEPLOY-RED": { ...SPEC, kind: "DEPLOY-RED", number: 19876543210, tip: { state: "red", note: "fix the red on a PR; never push the deploy branch" } },
+  "TASK": { ...SPEC, kind: "TASK", number: undefined, slug: "hunt-orchestration", owned: [], readOnly: true, role: "hunter",
+    state: "head 939a225c at 03:00Z; no open PR on tools/ci", stopAndTell: "a finding needs a browser: tag it, change nothing", subagents: "prior-art-scout, code-hunter per slice, finding-verifier" },
+};
+
+test("every launch kind renders, tags itself, and its sent text (minus LAUNCH:) lints clean; the old ENV: line is not required", () => {
+  const tags = { "ISSUE": "apex:issue-6400", "CONTINUE PR": "apex:pr-6349", "DEPLOY-RED": "apex:deploy-red-19876543210", "TASK": "apex:task-hunt-orchestration" };
+  for (const [kind, spec] of Object.entries(KIND_SPECS)) {
+    assert.deepEqual(specProblems(spec), [], kind);
+    const { brief, launch } = splitLaunch(renderBrief(spec));
+    assert.equal(brief.split("\n")[0], `${kind} ${kind === "TASK" ? "hunt-orchestration" : spec.number} for orchestrator ${SPEC.orchestrator}. AGENTS.md and skill \`steward\` bind; this brief adds only task facts.`);
+    assert.deepEqual(lintBrief(brief), [], kind);
+    assert.equal(launch.split("\n")[1], `  env: worker ("Full Access") · permission_mode auto · tags ["${tags[kind]}"]`, kind);
+    assert.equal(sessionTag(kind, kind === "TASK" ? spec.slug : spec.number), tags[kind]);
+  }
+  const t = renderBrief(KIND_SPECS.TASK).split("\n");
+  assert.equal(lineOf(t.join("\n"), "OWNED:"), "OWNED: none");
+  assert.deepEqual(t.filter((l) => /^(EVIDENCE|STATE|STOP AND TELL ME|SCOPE):/.test(l)).map((l) => l.split(":")[0]), ["STATE", "STOP AND TELL ME", "SCOPE"], "the optional fields print before SCOPE");
+  assert.equal(splitLaunch(t.join("\n")).brief.split("\n").at(-1), "SUBAGENTS: prior-art-scout, code-hunter per slice, finding-verifier", "SUBAGENTS: is the last line sent");
+  assert.deepEqual(specProblems({ ...KIND_SPECS.TASK, readOnly: false }), ["owned must list the paths the worker may edit (owned: [] only with readOnly: true)"]);
+  assert.deepEqual(specProblems({ ...SPEC, owned: [] }), ["owned must list the paths the worker may edit (owned: [] only with readOnly: true)"], "owned: [] without readOnly is still refused");
+  assert.deepEqual(specProblems({ ...KIND_SPECS.TASK, slug: "Hunt Orch" }), ["a TASK needs a slug ([a-z0-9-]+) in slug or number"]);
+  assert.deepEqual(lintBrief(renderBrief(SPEC).replace(/^HUMAN STEPS:/m, "HUMAN STEPS ARRANGED:")), [], "a brief as hand-sent (HUMAN STEPS ARRANGED) lints clean");
+});
+
+test("dup: a TASK is checked by tag and title only (no PR scan); DEPLOY-RED by its run id", () => {
+  const sessions = [
+    { id: "s1", title: "TASK hunt-orchestration for orchestrator x", tags: [], status_bucket: "working" },
+    { id: "s2", title: "TASK hunt-orchestration-2", tags: [], status_bucket: "working" },
+    { id: "s3", title: "w", tags: ["apex:deploy-red-555"], status_bucket: "working" },
+  ];
+  assert.deepEqual(duplicates({ kind: "TASK", number: "hunt-orchestration", pulls: [{ number: 1, body: "Closes #1" }], sessions }),
+    ["live session s1 (working) is already on TASK hunt-orchestration (title): message it instead of launching"]);
+  assert.deepEqual(duplicates({ kind: "DEPLOY-RED", number: 555, sessions }), ["live session s3 (working) is already on DEPLOY-RED 555 (tag apex:deploy-red-555): message it instead of launching"]);
+  const run = (argv) => main(argv, { log: () => {}, listOpen: () => ({ json: [] }) });
+  assert.equal(run(["dup", "--task", "hunt-orchestration"]), 0);
+  assert.equal(run(["dup", "--task", "Bad Slug"]), 2);
+  assert.equal(run(["dup", "--deploy-red", "19876543210"]), 0);
+});
+
+test("the documented brief template is the tool's output: its fence lints clean with a real address", () => {
+  const doc = read(".claude/skills/dispatcher/references/orchestrator-brief.md");
+  const fence = /## The brief[\s\S]*?```text\n([\s\S]*?)```/.exec(doc)[1];
+  const text = fence.replace("<ISSUE n | CONTINUE PR n | DEPLOY-RED run-id | TASK slug>", "ISSUE 12");
+  assert.notEqual(text, fence, "the fence's address placeholder");
+  assert.deepEqual(lintBrief(text), []);
+  const order = (t) => t.split("\n").map((l) => (/^([A-Z][A-Z ]+?)(?: \(|:)/.exec(l) || [])[1]).filter(Boolean);
+  const full = { ...KIND_SPECS.TASK, ask: "a", askAt: "t", evidence: "e", profile: "p" };
+  assert.deepEqual(order(splitLaunch(text).brief), order(splitLaunch(renderBrief(full)).brief), "the fence is in the tool's line order");
+  assert.equal(splitLaunch(text).launch.split("\n")[0], "LAUNCH: (create_session metadata; not part of the sent text)", "the fence shows the LAUNCH: block the tool prints");
+  assert.deepEqual(fence.match(/\[\d+\]/g), ["[16]", "[6]", "[8]"], "the rank cites are kept");
+});
+
+test("report cadence: the default MESSAGE moments never ask for a merge; worker-prompt defers to the brief", () => {
+  assert.deepEqual([...DEFAULT_REPORT], ["blocked", "refused (facts only)", "a decision is needed", "land added (PR open; GitHub merges)", "handing off"], "no \"merged\" moment: a worker ends at land");
+  assert.equal(lineOf(renderBrief(SPEC), "MESSAGE ME ONLY WHEN:"), `MESSAGE ME ONLY WHEN: ${DEFAULT_REPORT.join(", ")} (send_message session_id ${SPEC.orchestrator})`);
+  assert.equal(lineOf(renderBrief({ ...SPEC, report: ["merged"] }), "MESSAGE ME ONLY WHEN:"), `MESSAGE ME ONLY WHEN: merged (send_message session_id ${SPEC.orchestrator})`, "an explicit report list still wins");
+  const wp = read("tools/ci/worker-prompt.md");
+  assert.ok(!/at every\s+push/.test(wp), "worker-prompt has no 'at every push' report cadence");
+});
+
 // ── fleet roles (#7049) ──
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
@@ -138,8 +206,8 @@ test("brief.mjs: a spec or a brief holding a literal id is refused (exit 1); `ro
   const RSPEC = { kind: "ISSUE", number: 7049, orchestrator: "session_x", role: "worker", task: "t", scope: "s",
     owned: ["tests/unit/brief.test.mjs"], stopAt: "start+150k", tip: { state: "green" } };
   assert.deepEqual(specProblems(RSPEC), []);
-  const envLine = renderBrief({ ...RSPEC, env: "orchestrator" }).split("\n").find((l) => l.startsWith("ENV:"));
-  assert.equal(envLine, 'ENV: orchestrator ("H") · permission_mode auto · tags ["apex:issue-7049"]');
+  const envLine = renderBrief({ ...RSPEC, env: "orchestrator" }).split("\n").find((l) => l.startsWith("  env:"));
+  assert.equal(envLine, '  env: orchestrator ("H") · permission_mode auto · tags ["apex:issue-7049"]');
   const literal = `a literal environment id (${FAKE_ID}): name the role (env: "worker"); brief.mjs role <role> prints the id`;
   assert.deepEqual(specProblems({ ...RSPEC, env: FAKE_ID }), [literal]);
   assert.deepEqual(specProblems({ ...RSPEC, task: `launch into ${FAKE_ID}` }), [literal]);
@@ -148,10 +216,10 @@ test("brief.mjs: a spec or a brief holding a literal id is refused (exit 1); `ro
   const run = (argv) => { const out = []; const rc = main(argv, { log: (l) => out.push(l), read: (f) => files[f], listOpen: () => ({ json: [] }) }); return [rc, out.join("\n")]; };
   let [rc, out] = run(["render", "--spec", "spec.json", "--no-dup"]);
   assert.equal(rc, 1, out);
-  assert.equal(out.split("\n").find((l) => l.startsWith("ENV:")), undefined, "a refused spec prints no brief");
+  assert.equal(out.split("\n").find((l) => l.startsWith("LAUNCH:")), undefined, "a refused spec prints no brief");
   [rc, out] = run(["lint", "b.txt"]);
   assert.equal(rc, 1, out);
-  assert.equal(out.split("\n")[0], `missing: no literal environment id (${FAKE_ID}): name the role on the ENV: line`);
+  assert.equal(out.split("\n")[0], `missing: no literal environment id (${FAKE_ID}): name the role (env: "worker"); brief.mjs role <role> prints the id`);
   [rc, out] = run(["role", "worker"]);
   assert.equal(rc, 0);
   assert.equal(out.split("\n")[0], loadRoles().worker.id);
