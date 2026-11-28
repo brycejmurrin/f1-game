@@ -238,4 +238,29 @@
     play.hidden = get("replay-speed-row").hidden = reduced;
   });
   selectFixture();
+
+  // TRY IT IN THE RACE: the VSC: BOX OR STAY drill (js/learn-drills/vsc.js), only inside the game's LEARN frame. BACK TO
+  // LESSON posts the last run here (js/ui/learn-door.js reopen()).
+  if (window.frameElement?.id === "learn-lab") {
+    const host = document.querySelector('[aria-labelledby="decision-heading"]') || document.body;
+    const launch = document.createElement("button");
+    launch.type = "button";
+    launch.id = "launch-vsc-drill";
+    launch.textContent = "Try it in a race: VSC, box or stay?";
+    launch.addEventListener("click", () => window.parent.postMessage({type: "apex-learn-scenario", id: "vsc"}, window.location.origin));
+    const result = document.createElement("p");
+    result.id = "vsc-drill-result";
+    result.setAttribute("role", "status");
+    result.hidden = true;
+    host.append(launch, result);
+    window.addEventListener("message", event => {
+      const data = event.data;
+      if (event.origin !== window.location.origin || event.source !== window.parent || data?.type !== "apex-learn-result" ||
+          data.id !== "vsc" || !data.result) return;
+      const r = data.result, medal = r.medal ? r.medal.toUpperCase() : "No medal";
+      result.textContent = "Your last drill: " + medal + " · " + Number(r.value) + " of 3 calls right"
+        + (Number.isFinite(r.best) ? " (best " + r.best + ")" : "") + ". " + (r.verdict || "");
+      result.hidden = false;
+    });
+  }
 })();

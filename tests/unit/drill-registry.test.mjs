@@ -126,7 +126,7 @@ test("the host refuses: not on the menu, netplay, a drill already active, no Mon
   assert.deepEqual(log, []);
 });
 
-test("begin() hands the drill the eight-member DrillPort, clears staging and hides the guide", () => {
+test("begin() hands the drill the nine-member DrillPort (result: a sim drill hands its own score), clears staging and hides the guide", () => {
   const { ctx, log } = load();
   const G = makeG(log, { goRolling: () => "rolled", announce: (m) => m, store: { tag: "store" } });
   let seen;
@@ -139,7 +139,7 @@ test("begin() hands the drill the eight-member DrillPort, clears staging and hid
   assert.equal(drills.begin(), true);
   assert.equal(drills.active().staging, false);
   assert.equal(seen.g, G);
-  assert.deepEqual(Object.keys(seen.port).sort(), ["announce", "goRolling", "physState", "rerun", "retry", "startRace", "store", "variant"]);
+  assert.deepEqual(Object.keys(seen.port).sort(), ["announce", "goRolling", "physState", "rerun", "result", "retry", "startRace", "store", "variant"]);
   assert.equal(seen.port.goRolling(), "rolled");
   assert.equal(seen.port.retry(), true, "the port's retry is the host's: card hidden, a fresh run, then the coach's");
   assert.equal(seen.port.announce("hi"), "hi");

@@ -302,7 +302,9 @@
     "js/learn-drills/telemetry.js",
     "js/learn-drills/harvest.js",
     "js/learn-drills/charge.js",
-    "js/learn-drills/rain-groove.js"
+    "js/learn-drills/rain-groove.js",
+    "js/learn-drills/sim-drill.js",
+    "js/learn-drills/vsc.js"
   ],
     LAZY_DRILL_FORK: [
     "js/race/drill-fork.js"

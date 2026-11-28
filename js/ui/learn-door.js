@@ -240,6 +240,7 @@ const LearnDoor = (function () {
     if (typeof LinesDrill !== "undefined") LinesDrill.define();   // js/learn-drills/lines.js, when it evaluated first
     if (typeof ChargeDrill !== "undefined") ChargeDrill.define();   // js/learn-drills/charge.js, when it evaluated first
     if (typeof RainDrill !== "undefined") RainDrill.define();   // js/learn-drills/rain-groove.js, when it evaluated first
+    if (typeof VscDrill !== "undefined") VscDrill.define();   // js/learn-drills/vsc.js (a kind "sim" drill on js/learn-drills/sim-drill.js)
   }
 
   /** Every lesson id in the curriculum, in index order (tests/unit/learn-curriculum.test.mjs's coverage pin). */

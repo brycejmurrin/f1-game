@@ -1049,5 +1049,41 @@
       "gold": 89.1,
       "goldClean": true
     }
+  },
+  "vsc": {
+    "how": "node tests/helpers/vsc-drill-vm.mjs --write: the Red Bull Ring VSC drill, one boot, all-BOX then RETRY and all-STAY; each round's BOX and STAY branches run by DrillFork to the flag",
+    "metric": "your car's race time to the flag in each branch, s (js/learn-drills/vsc.js timeToFlag); a round is right when the pick is the faster branch",
+    "rule": "medals count right calls: bronze 1, silver 2, gold 3 (#6554 §1.4); deterministic, so no noise band (#6559 decision 4)",
+    "rounds": [
+      {
+        "id": "fresh",
+        "box": 312.98,
+        "stay": 302.33,
+        "best": "stay",
+        "boxPick": 10.65,
+        "stayPick": 0
+      },
+      {
+        "id": "due",
+        "box": 607.12,
+        "stay": 611.23,
+        "best": "box",
+        "boxPick": 0,
+        "stayPick": 4.12
+      },
+      {
+        "id": "worn",
+        "box": 408.38,
+        "stay": 409.15,
+        "best": "box",
+        "boxPick": 0,
+        "stayPick": 0.77
+      }
+    ],
+    "tiers": {
+      "bronze": 1,
+      "silver": 2,
+      "gold": 3
+    }
   }
 }

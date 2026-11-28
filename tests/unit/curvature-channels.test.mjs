@@ -138,6 +138,7 @@ const TOKENS = {
   "js/editor/insight.js": 6, "js/editor/scenery-preview.js": 1, "js/editor/validate.js": 8, "js/game.js": 25,
   "js/garage/exterior-geometry.js": 3, "js/learn-drills/aero.js": 2, "js/learn-drills/charge.js": 1,
   "js/learn-drills/grip.js": 1, "js/learn-drills/harvest.js": 1, "js/learn-drills/lines.js": 1,
+  "js/learn-drills/sim-drill.js": 1,
   "js/learn-drills/taper.js": 1, "js/learn-drills/telemetry.js": 1, "js/learn-drills/torque.js": 1,
   "js/learn-drills/tyre-heat.js": 1, "js/learn-drills/wake.js": 1, "js/perf/soak-run.js": 2,
   "js/physics/aero-zones.js": 1, "js/physics/body-attitude.js": 1, "js/physics/brake-cue.js": 1,

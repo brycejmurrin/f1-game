@@ -15,6 +15,8 @@
    dirtyAir?}], the first is the default) are runs of one drill scored and saved apart: the card's NEXT button is
    rerun(next id), which applies the variant's dirtyAir and retries in place (#6559 step 5, A6). `medals` is a tier
    object or a pure (r, history) function, history this launch's earlier results (#6559 §1a).
+   A kind "sim" drill (vsc.js, on sim-drill.js) has no goal: it hands its own score to port.result(scored), and its
+   own retry(G, port) replays its rounds where RETRY would rewind the coach (#6559 steps 16-17).
    THE ARC NEVER REACHES THE DRIVER: nothing in js/learn-drills/ reads curvature or the racing line
    (tests/unit/drill-registry.test.mjs). Not RaceInsights.DRILLS (practice goals): a separate namespace.
    LAZY_LEARN; js/ui/learn-door.js defines the Aero drill lazily (its open()), never at eval: the bundle loads with no
@@ -73,6 +75,7 @@ const DrillRegistry = (function () {
       variant: () => (current ? current.variant : null),   // the variant being run and scored (rerun() moves it, the card's NEXT included)
       announce: (msg, dur, kind) => G.announce(msg, dur, kind),
       store: G.store,
+      result: (scored) => settle(scored),   // a kind "sim" drill (vsc.js) has no RaceInsights goal: it hands its own score
     });
     let current = null;
     let lastResult = null;
@@ -167,6 +170,7 @@ const DrillRegistry = (function () {
       if (typeof DrillCard !== "undefined") DrillCard.hide();
       current.result = null;
       current.run = null;
+      if (typeof current.d.retry === "function") return !!current.d.retry(G, port);   // a sim drill replays its own rounds
       return !!hooks.retry();
     }
 
@@ -182,8 +186,14 @@ const DrillRegistry = (function () {
 
     /** One finished run: score, medal, save, card. */
     function finish(last) {
-      const a = current, d = a.d;
-      const scored = d.score(G, last, a.run.acc, a.variant);
+      const a = current;
+      return settle(a.d.score(G, last, a.run.acc, a.variant));
+    }
+    /** A scored run (finish()'s, or a sim drill's port.result) → medal, save, card. */
+    function settle(scored) {
+      const a = current;
+      if (!a || !scored) return null;
+      const d = a.d;
       const r = { id: d.id, variant: a.variant, title: d.title || d.id, attempt: ++a.attempt, ...scored };
       r.medal = typeof d.medals === "function" ? d.medals(r, a.history.slice()) : DrillCard.medalOf(r, d.medals);
       a.history.push(r);
