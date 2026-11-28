@@ -117,16 +117,17 @@ const TrackBuildProps = (function () {
     const glassBuf = TrackModels.scratch();
     const waterBuf = TrackModels.scratch();
     const region = buildOptions && buildOptions.region ? TrackSceneryRegion.create(buildOptions.region, [out, glassBuf, waterBuf], RAW) : null;
-    const lightBoxes = out._lightBoxRecords = [], rawBase = region ? region.raw : RAW;
-    const recordLightBox = (o,c,size,col,basis) => { if(o!==glassBuf && o!==waterBuf)TrackGeom.lightBox(o._lightBoxRecords || (o._lightBoxRecords=[]),o,c,size,basis); };
+    const lightBoxes = out._lightBoxRecords = TrackModels.lightRecords(4096), rawBase = region ? region.raw : RAW;
+    const recordLightBox = (o,c,size,col,basis) => { if(o!==glassBuf && o!==waterBuf)TrackGeom.lightBox(o._lightBoxRecords || (o._lightBoxRecords=TrackModels.lightRecords()),o,c,size,basis); };
     const raw = Object.assign({},rawBase,{addBox(o,c,size,col,basis){const result=rawBase.addBox(o,c,size,col,basis);if(result!==false)recordLightBox(o,c,size,col,basis);return result;}});
-    const recordLightTree = (o, kind, args) => {
-      if (o !== glassBuf && o !== waterBuf) TrackGeom.lightPrimitive(o._lightBoxRecords || (o._lightBoxRecords = []), o, kind, args);
+    const recordLightTree = (o, kind, args, from) => {
+      if (o !== glassBuf && o !== waterBuf) TrackModels.lightPrimitive(o._lightBoxRecords || (o._lightBoxRecords = TrackModels.lightRecords()), o, kind, args, from);
     };
     for (const [name, kind] of [["addCone", "cone"], ["addCyl", "cyl"], ["addFrustum", "frustum"]]) {
       raw[name] = (o, ...args) => {
+        const from = o && o.idx ? o.idx.length : -1;   // the triangles the emitter writes next are the record (#7388)
         const result = rawBase[name](o, ...args);
-        if (result !== false) recordLightTree(o, kind, args);
+        if (result !== false) recordLightTree(o, kind, args, from);
         return result;
       };
     }
@@ -1877,7 +1878,7 @@ const TrackBuildProps = (function () {
       if (tn) rec.anyTint = true;
       // treesHi uses a baked silhouette instead of procedural crown primitives.
       if (!region && Math.floor((out._mat || 0) + 0.5) === MAT.FOLIAGE)
-        TrackGeom.lightMesh(lightBoxes, mesh, { x: a.c[0], y, z: a.c[2], rotY: yaw, scale: sc });
+        TrackModels.lightMesh(lightBoxes, mesh, { x: a.c[0], y, z: a.c[2], rotY: yaw, scale: sc });
       if (INST_MODELS) return true;
       return addMesh(out, mesh, { x: a.c[0], y, z: a.c[2], rotY: yaw, scale: sc, tint: tn, mat: o.mat });
     }
