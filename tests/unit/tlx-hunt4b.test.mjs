@@ -1164,7 +1164,7 @@ test("A-P2: discardAttachments acts only on the FBO three has bound; the mirror 
   h.renderer.backend.state.bindFramebuffer(h.gl.FRAMEBUFFER, null);   // setRenderTarget(null) alone binds nothing until the next render
   assert.equal(h.post.discardAttachments(rt, [h.gl.DEPTH_ATTACHMENT]), false, "another FBO bound: no guess");
   assert.equal(h.post.discardAttachments(rt, []), false);
-  assert.match(TLX, /renderer\.render\(scene, mirCam\); \} finally \{ if \(mrt\) _mirMrtArm\(false, prevMrt\); if \(hinted\) post\.discardHintOff\(mirRT\); \}\s*\n[^\n]*\n[^\n]*\n\s*if \(hinted \|\| \(post && post\.discardAttachments && post\.discardAttachments\(mirRT, _mirInv\(mrt\)\)\)\) _mirDiscards\+\+;/,
+  assert.match(TLX, /renderer\.render\(scene, mirCam\);\s*\} finally \{ if \(mrt\) _mirMrtArm\(false, prevMrt\); if \(hinted\) post\.discardHintOff\(mirRT\); \}\s*\n[^\n]*\n[^\n]*\n\s*if \(hinted \|\| \(post && post\.discardAttachments && post\.discardAttachments\(mirRT, _mirInv\(mrt\)\)\)\) _mirDiscards\+\+;/,
     "tlx.js: the mirror discards right after its render, before anything else binds");
   assert.match(TLX, /return mrt \? _mirInvDT : _mirInvD;/, "tag only when the mirror target carries one");
 });

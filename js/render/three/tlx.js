@@ -6148,10 +6148,13 @@ const TLX = (function () {
             renderer.setRenderTarget(mirRT);
             _gpuLastOperation = "render-mirror";
             const mrt = _mirMrt(), prevMrt = mrt ? renderer.getMRT() : null;
-            if (mrt) _mirMrtArm(true);
-            // A-P2W: WebGPU takes the same discard as a hint set BEFORE the pass (vendored patch 17).
-            const hinted = !!(post && post.discardHint && post.discardHint(mirRT, mrt ? 2 : 0, true));
-            try { renderer.render(scene, mirCam); } finally { if (mrt) _mirMrtArm(false, prevMrt); if (hinted) post.discardHintOff(mirRT); }
+            let hinted = false;
+            try {   // #7438: armed inside the try its finally undoes (a throw arming or hinting left the MRT bound)
+              if (mrt) _mirMrtArm(true);
+              // A-P2W: WebGPU takes the same discard as a hint set BEFORE the pass (vendored patch 17).
+              hinted = !!(post && post.discardHint && post.discardHint(mirRT, mrt ? 2 : 0, true));
+              renderer.render(scene, mirCam);
+            } finally { if (mrt) _mirMrtArm(false, prevMrt); if (hinted) post.discardHintOff(mirRT); }
             // A-P2: nothing reads the mirror's depth or its ssrTag attachment (only textures[0] is
             // ever sampled), so on WebGL2 drop both stores while its FBO is still bound (tlx-post).
             if (hinted || (post && post.discardAttachments && post.discardAttachments(mirRT, _mirInv(mrt)))) _mirDiscards++;
@@ -7004,17 +7007,20 @@ const TLX = (function () {
               pinSkyMaterial();
               if (!_postF.noEnv) skyCacheStep();   // E1: before the MRT goes on (its own target, MRT null)
               const _tag = !post.tagOn || post.tagOn();   // R3: a one-attachment scene target takes no MRT
-              if (_tag && lit && lit.setSsrMrt) lit.setSsrMrt(true);
-              if (_tag && fx && fx.setSsrMrt) fx.setSsrMrt(true);
-              const _hadMrt = _tag && !!(TSL.mrt && renderer.setMRT);
-              const _prevMrt = _hadMrt && renderer.getMRT ? renderer.getMRT() : null;
-              if (_hadMrt) renderer.setMRT(_ssrMrtNode());
-              if (post.setMirror) {
-                // Pixels of the present target (the SGSR output size when upscaling).
-                const up = wantSpatialUpscale(), ok = !_postF.noEnv && !!(_mirRect && mirRT && _mirReady && !_mirDead);
-                post.setMirror(ok ? mirRT.texture : null, ok ? _mirPx(up ? presentW : W, up ? presentH : H) : null, ok && mirRT.texture.type !== THREE.UnsignedByteType, _mirFlip);
-              }
+              // #7438: arm INSIDE the try its finally undoes, so a throw from setMirror/_mirPx/_ssrMrtNode cannot
+              // leave the MRT bound for paintCanvas (and saved as the next frame's _prevMrt).
+              let _hadMrt = false, _prevMrt = null;
               try {
+                if (_tag && lit && lit.setSsrMrt) lit.setSsrMrt(true);
+                if (_tag && fx && fx.setSsrMrt) fx.setSsrMrt(true);
+                _hadMrt = _tag && !!(TSL.mrt && renderer.setMRT);
+                _prevMrt = _hadMrt && renderer.getMRT ? renderer.getMRT() : null;
+                if (_hadMrt) renderer.setMRT(_ssrMrtNode());
+                if (post.setMirror) {
+                  // Pixels of the present target (the SGSR output size when upscaling).
+                  const up = wantSpatialUpscale(), ok = !_postF.noEnv && !!(_mirRect && mirRT && _mirReady && !_mirDead);
+                  post.setMirror(ok ? mirRT.texture : null, ok ? _mirPx(up ? presentW : W, up ? presentH : H) : null, ok && mirRT.texture.type !== THREE.UnsignedByteType, _mirFlip);
+                }
                 renderer.setRenderTarget(post.sceneTarget());
                 _gpuLastOperation = "render-scene";
                 if (post.depthBegin) post.depthBegin(opts, _postF);   // A-P1: does this frame's post read the depth?
