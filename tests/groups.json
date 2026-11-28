@@ -776,6 +776,8 @@
     "// LoopHealth fault policy: RUN_CAP / TOTAL_CAP / quiet expiry / clean recovery.",
     "// VM-executed js/perf/loop-health.js (seedLog), controllable clock, ~0.1 s.",
     "tests/unit/loop-health.test.mjs",
+    "// #7443: the M4 re-point (crew ease, designer rng, radio mulberry32) pinned to base goldens.",
+    "tests/unit/m4-repoint-pins.test.mjs",
     "tests/unit/manifest-screenshots.test.mjs",
     "// tools/manifest.cjs TIERS (#6920 U0.4): every FULL path and LAZY_* group is tagged with a tier and where; mutation clones. < 1 s.",
     "tests/unit/manifest-tiers.test.mjs",

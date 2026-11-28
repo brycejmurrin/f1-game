@@ -53,3 +53,30 @@ test("exterior snapshot: a selection without `night` takes the broad answer; an 
     ext.cancel();
   }
 });
+
+// #7443 / #6885 1B (Bryce's pick, 2026-11-28 ~03:12Z): the way-home note and the bay's
+// own hour were NARROW (night only); they now take the broad answer exteriorPick takes,
+// so dusk and dawn light the bay as night. A deliberate change: red on the base by design.
+test("setup-camera noteResult and the bay hour count dusk and dawn as night, like exteriorPick", () => {
+  const src = read("js/garage/setup-camera.js");
+  const sites = [
+    ["noteResult", src.slice(src.indexOf("function noteResult("), src.indexOf("function startHome(")), /night = (GarageExperience\.isNight\(G\.raceTimeOfDay, t\));/],
+    ["bay hour", src, /ctx\.night = h \? home\.mode === "night"\n\s*: (GarageExperience\.isNight\(G\.raceTimeOfDay, t\));/],
+  ];
+  const ctx = context();
+  for (const [name, body, re] of sites) {
+    const m = body.match(re);
+    assert.ok(m, `${name} derives night through GarageExperience.isNight`);
+    const fn = vm.runInContext(`(G, t) => ${m[1]}`, ctx, { filename: absSrc("js/garage/setup-camera.js") });
+    for (const tod of TODS) for (const def of DEFS)
+      assert.equal(fn({ raceTimeOfDay: tod }, def), expected(tod, def), `${name} night for tod=${tod} def=${JSON.stringify(def)}`);
+  }
+});
+
+test("no hand-rolled night spelling is left in js/garage/", () => {
+  const dir = path.join(ROOT, "js/garage");
+  let n = 0;
+  for (const f of fs.readdirSync(dir, { recursive: true })) if (String(f).endsWith(".js"))
+    n += (fs.readFileSync(path.join(dir, String(f)), "utf8").match(/raceTimeOfDay === "night"/g) || []).length;
+  assert.equal(n, 0, 'raceTimeOfDay === "night" occurs 0 times in js/garage/ (use GarageExperience.isNight or M4.isNight)');
+});

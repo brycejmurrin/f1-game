@@ -1265,7 +1265,7 @@ test("a show held on the exterior shares a slice between steps; an unheld prewar
 });
 
 test("an arrival held for its exterior waits on its first pose, then plays from it", () => {
-  const ctx = vm.createContext({});
+  const ctx = withM4(vm.createContext({}));
   vm.runInContext(read("js/garage/crew-draw.js"), ctx, { filename: absSrc("js/garage/crew-draw.js") });
   vm.runInContext(read("js/garage/arrival.js"), ctx, { filename: absSrc("js/garage/arrival.js") });
   const Arrival = vm.runInContext("GarageArrival", ctx);

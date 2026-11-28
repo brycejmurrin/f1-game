@@ -219,14 +219,7 @@ var RadioVoice = (function () {
     for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
     return h >>> 0 || 1;
   }
-  function mulberry32(a) {
-    return function () {
-      a |= 0; a = a + 0x6D2B79F5 | 0;
-      let t = Math.imul(a ^ a >>> 15, 1 | a);
-      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
-      return ((t ^ t >>> 14) >>> 0) / 4294967296;
-    };
-  }
+  const mulberry32 = (a) => M4.rng32(a);   // the shared mulberry32
   /** Light 300–3400 Hz band with tiny seeded jitter. Same seed → same params. */
   function radioBand(seed) {
     const rnd = mulberry32(hashSeed(seed));

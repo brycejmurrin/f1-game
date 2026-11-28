@@ -67,7 +67,7 @@ function driveOutHarness({ soundOn = true } = {}) {
     Teams: { LIST: [{ engine: "v6-test" }] },
     G: { soundOn, teamIdx: 0, store: { get: () => ({ enabled: true, speed: 1 }) } },
     reducedMotion: () => false, endHome() {} };
-  vm.createContext(c);
+  withM4(c);
   vm.runInContext(read("js/garage/crew-draw.js"), c, { filename: absSrc("js/garage/crew-draw.js") });
   vm.runInContext(read("js/garage/arrival.js"), c, { filename: absSrc("js/garage/arrival.js") });
   const cam = read("js/garage/setup-camera.js");
