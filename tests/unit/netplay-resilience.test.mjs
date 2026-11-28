@@ -148,3 +148,29 @@ test("host teardown closes every driver and spectator transport", () => {
   assert.equal(net.stop("local"), true);
   assert.deepEqual(peers.map(({ wire }) => wire.status), ["closed", "closed", "closed"]);
 });
+
+// #7312 row 3 (js/net hunt 2026-11-27): one NetPlay lives for the page
+// (game.js createNetwork), so status().events must restart with each race.
+test("status().events is per race: start() clears the previous race's event log", () => {
+  const hostG = stubG(3, 0);
+  const host = NetPlay.create(hostG);
+  const race = () => {
+    const [a, b] = NetTransport.loopback({ latencyMs: 0 });
+    const hs = NetSession.create({ transport: a });
+    const gs = NetSession.create({ transport: b });
+    const guest = NetPlay.create(stubG(3, 1));
+    assert.equal(host.start({ role: "host", session: hs,
+      sessions: [{ id: "driver-a", session: hs, kind: "driver" }],
+      peers: [{ id: "driver-a", kind: "driver" }] }).ok, true);
+    assert.equal(guest.start({ role: "guest", session: gs }).ok, true);
+    return guest;
+  };
+  let guest = race();
+  let t = 1000;
+  for (let i = 0; i < 20; i++) { t += 25; host.tick(t); guest.tick(t); }
+  assert.ok(host.status().events > 0, "the first race logs the guest's events");
+  host.stop("local"); guest.stop("local");
+  guest = race();
+  assert.equal(host.status().events, 0, "a new race starts with an empty event log");
+  host.stop("local"); guest.stop("local");
+});
