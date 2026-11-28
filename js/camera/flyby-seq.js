@@ -1421,15 +1421,15 @@ const FlybySeq = (function () {
   let _flyS = REF_S;
   function setDuration(ms) { _flyS = ms > 0 ? ms / 1000 : REF_S; }
   // Memoised per frame (#7348); an in-place retime/reorder changes the key.
-  let _bList = null, _bKey = NaN, _bOut = [];
+  let _bList = null, _bKey = NaN, _bTot = NaN, _bOut = [];
   function boundaries(shots) {
     const list = (shots && shots.length) ? shots : DEFAULT;
     let total = 0, key = list.length;
     for (let i = 0; i < list.length; i++) { const d = list[i].dur || 0; total += d; key += d * (i + 1); }
-    if (list === _bList && key === _bKey) return _bOut;
+    if (list === _bList && key === _bKey && total === _bTot) return _bOut;
     const out = [];
     if (total > 0) { let acc = 0; for (let i = 0; i < list.length - 1; i++) { acc += list[i].dur || 0; out.push(acc / total); } }
-    _bList = list; _bKey = key; _bOut = out;
+    _bList = list; _bKey = key; _bTot = total; _bOut = out;
     return out;
   }
   const DIP_MS = 150, REDUCED_DIP_MS = 300;

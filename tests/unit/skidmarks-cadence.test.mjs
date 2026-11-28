@@ -263,6 +263,23 @@ test("X3: a capped rival mark lands at the ring head and outlives older marks", 
   assert.equal(skids.otherCount, 1);
 });
 
+test("X3: a full ring that has wrapped (idx != 0) still puts the capped rival mark at the head", () => {
+  const { S, skids } = makeSkidsX3();
+  let tag = 0;
+  for (let i = 0; i < S.AI_CAP; i++) skids.stampFor({ t: 0 }, at(++tag / 100), true, 1);
+  while (skids.count < S.MAX_SKID) skids.stamp(at(++tag / 100), true, 1);
+  for (let i = 0; i < 7; i++) skids.stamp(at(++tag / 100), true, 1);   // wraps: drops rivals 1..7
+  assert.equal(skids.otherCount, S.AI_CAP - 7);
+  while (skids.otherCount < S.AI_CAP) skids.stampFor({ t: 0 }, at(++tag / 100), true, 1);
+  skids.stampFor({ t: 0 }, at(++tag / 100), true, 1);   // cap full again
+  const order = ringOrder(skids);
+  assert.equal(order.length, S.MAX_SKID);
+  assert.equal(order[order.length - 1], tag, "the newest mark is last in ring order");
+  assert.equal(order.filter((x) => x === 8).length, 0, "the oldest surviving rival (8) was dropped");
+  for (let i = 1; i < order.length; i++) assert.ok(order[i] > order[i - 1], `ring order is age order at ${i}`);
+  assert.equal(skids.otherCount, S.AI_CAP);
+});
+
 test("X3: before the ring is full, a capped rival mark still goes to the head", () => {
   const { S, skids } = makeSkidsX3();
   let tag = 0;

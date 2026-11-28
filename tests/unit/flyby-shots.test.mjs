@@ -1261,6 +1261,8 @@ test("F4: boundaries() is memoised per shot list, and an in-place retime recompu
   assert.deepEqual([...F.boundaries(shots)].map((x) => +x.toFixed(6)), [0.2, 0.4]);
   shots.reverse();      // and reorders it (same length, same total)
   assert.deepEqual([...F.boundaries(shots)].map((x) => +x.toFixed(6)), [0.6, 0.8]);
+  shots[0].dur += 0.25; shots[1].dur += 0.25; shots[2].dur -= 0.25;   // the weighted sum holds (+1 +2 -3 quarters); the total moves
+  assert.deepEqual([...F.boundaries(shots)].map((x) => +x.toFixed(6)), [0.666667, 1]);
   assert.deepEqual([...F.boundaries([{ dur: 0 }, { dur: 0 }])], [], "a zero-length list still has no cuts");
 });
 
