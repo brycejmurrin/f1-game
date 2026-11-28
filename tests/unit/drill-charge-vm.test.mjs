@@ -80,6 +80,24 @@ test("a plan chip on the live card cycles the sector's policy: MANUAL -> DEPLOY 
   }
 });
 
+test("units = mph: the card prints the km/h mean speed converted, with the mph label; value and medal unchanged (#7342)", () => {
+  const AO = vm.runInContext("AppearanceOpts", run.g.ctx), plan = ["manual", "deploy", "manual"];
+  AO.setUnits("mph");
+  try {
+    assert.ok(run.retry());
+    const r = run.drive(plan);
+    assert.deepEqual([r.value, r.unit, r.medal], [at(plan).kmh, "km/h", "gold"], "the score and its tiers stay km/h");
+    const text = run.g.sandbox.document.getElementById("drill-card-medal").textContent;
+    const mph = (at(plan).kmh / 1.609344).toFixed(1);
+    assert.ok(text.startsWith("GOLD · " + mph + " mph"), text);
+    assert.ok(!/km\/h/.test(text), "no km/h on an mph card: " + text);
+    // The earlier gold laps on this plan saved this same best, so the card shows it (not NEW BEST), converted too.
+    const best = text.match(/best ([\d.]+) (\S+)/);
+    assert.ok(best, "the saved best is on the card: " + text);
+    assert.deepEqual([best[1], best[2]], [(r.best / 1.609344).toFixed(1), "mph"], "the best is in the same unit");
+  } finally { AO.setUnits("kmh"); }
+});
+
 test("BACK TO LESSON: end() restores the player's own plan and session", () => {
   run.G.quitToMenu();
   assert.equal(run.G.state, "menu");

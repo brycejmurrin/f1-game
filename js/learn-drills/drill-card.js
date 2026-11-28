@@ -63,7 +63,7 @@ const DrillCard = (function () {
     card = null;
   }
 
-  /** r: {title, value, unit, clean, reason, medal, metrics: [[label, value, unit]], verdict, improved, best}. */
+  /** r: {title, value, unit, display?: {unit, k}, clean, reason, medal, metrics: [[label, value, unit]], verdict, improved, best}. */
   function show(r, actions) {
     hide();
     card = document.createElement("div");
@@ -78,8 +78,10 @@ const DrillCard = (function () {
     medal.id = "drill-card-medal";
     medal.setAttribute("role", "status");
     medal.dataset.medal = r.medal || "none";
-    medal.textContent = (r.medal ? LABEL[r.medal] : "NO MEDAL") + " · " + r.value.toFixed(1) + " " + r.unit
-      + (r.improved ? " · NEW BEST" : Number.isFinite(r.best) ? " · best " + r.best.toFixed(1) + " " + r.unit : "");
+    // r.display {unit, k}: the value and best are in r.unit (the medal tiers' unit), printed as value x k in display.unit.
+    const k = r.display ? r.display.k : 1, unit = r.display ? r.display.unit : r.unit;
+    medal.textContent = (r.medal ? LABEL[r.medal] : "NO MEDAL") + " · " + (r.value * k).toFixed(1) + " " + unit
+      + (r.improved ? " · NEW BEST" : Number.isFinite(r.best) ? " · best " + (r.best * k).toFixed(1) + " " + unit : "");
     const rows = document.createElement("dl");
     rows.id = "drill-card-metrics";
     for (const [label, value, unit] of (r.metrics || []).slice(0, 6)) {

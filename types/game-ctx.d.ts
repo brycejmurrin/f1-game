@@ -171,11 +171,13 @@ interface StoreApi {
 /** The narrow port a LEARN drill's begin() and guide() get from its host (js/learn-drills/registry.js, #6920 U4.1),
     never all of G and no new G member. startRace/goRolling/announce/store are GameCtx's; retry is the host's RETRY
     (the result card down, a fresh run, then the coach's RETRY LAP that game.js hands the host: G.coach's type has no
-    retry); physState is __apex's, null while LAZY_AGENT is absent. */
+    retry); physState is the host's read of the player's car (DrillRegistry.physOf: __apex.physState()'s drill fields,
+    no LAZY_AGENT needed, #7342); variant is the variant being run (rerun() moves it). */
 interface DrillPort extends Pick<GameCtx, "startRace" | "goRolling" | "store"> {
   retry(): boolean;
   rerun(variant: string): boolean;
   physState(): Opaque | null;
+  variant(): string | null;
   announce(msg: string, dur?: number, kind?: string): boolean;
 }
 
