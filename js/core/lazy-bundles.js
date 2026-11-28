@@ -62,14 +62,17 @@ function raceSessionReady() {
   return RACE_SESSION_FILES.every((f) => raceSessionLoaded.has(f));
 }
 // #4274 item 15: one preload for the wave, then one eval per task in edge order (it was one burst of evals).
+// One preload for a serial wave (#7415: audio too): a hint, the injects still fetch.
+function preloadWave(pending) {
+  if (pending.length > 1) try { ScriptLoader.preload(pending); } catch (_) { /* no loader in a VM rig */ }
+}
 async function loadRaceSessionSerial(opts) {
+  opts = { ...opts, generationScope: {} };   // #7415: one worker check per RUN, not per file
   const files = RACE_SESSION_FILES;
   const preds = new Map(files.map((f) => [f, []]));
   for (const [a, b] of RACE_SESSION_EDGES) if (preds.has(a) && preds.has(b)) preds.get(b).push(a);
   const pending = files.filter((f) => !raceSessionLoaded.has(f));
-  if (pending.length > 1 && typeof ScriptLoader !== "undefined" && ScriptLoader.preload) {
-    try { ScriptLoader.preload(pending); } catch (_) { /* a hint: the injects still fetch */ }
-  }
+  preloadWave(pending);
   let first = true;
   while (pending.length) {
     const i = pending.findIndex((f) => preds.get(f).every((p) => raceSessionLoaded.has(p) || !pending.includes(p)));
@@ -645,11 +648,13 @@ async function loadAudioSerial(skipLeadingYield) {
   const pending = new Set(AUDIO_FILES.filter((f) => !audioScriptsLoaded.has(f)));
   const readyFn = (src) => { restoreOnEngine(); return audioFileLanded(src); };
   const hot = () => settingsUiHot();
+  preloadWave([...pending]);   // #7415: fetch the wave at once; one worker check per RUN
+  const o = { strict: true, loaded: audioScriptsLoaded, ready: readyFn, generationScope: {} };
   while (pending.size) {
     const ready = [...pending].filter((f) => preds.get(f).every((p) => audioScriptsLoaded.has(p)));
     if (!ready.length) {
       // Cycle or missing edge: fall back to the bulk loader for what remains.
-      return loadScripts([...pending], AUDIO_EDGES, { strict: true, loaded: audioScriptsLoaded, ready: readyFn });
+      return loadScripts([...pending], AUDIO_EDGES, o);
     }
     // ensureAudio already paint-yielded; only yield between later chunks (Settings hub).
     if (!skipLeadingYield) await audioYieldToMain(hot() ? "paint" : "task");
@@ -657,7 +662,7 @@ async function loadAudioSerial(skipLeadingYield) {
     audioMark("apex:audio:chunk");
     const src = ready[0];
     pending.delete(src);
-    const ok = await loadScripts([src], [], { strict: true, loaded: audioScriptsLoaded, ready: readyFn });
+    const ok = await loadScripts([src], [], o);
     if (!ok) return false;
   }
   return true;

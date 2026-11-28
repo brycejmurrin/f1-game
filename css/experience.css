@@ -125,7 +125,14 @@
   /* INSTALL APP lift lives in css/overlays.css, scoped to tall / compact-wide
      / live-scene wide so desktop Classic (title-desktop golden) is untouched. */
   :where(body[data-shape="tall"]) #overlay[data-home-scene]:not([data-home-scene="static"]) {
-    background: linear-gradient(0deg, var(--carbon) 45%, color-mix(in oklab, var(--carbon) 42%, var(--scrim-heavy)) 78%, var(--scrim));
+    --home-tall-wash: linear-gradient(0deg, var(--carbon) 45%, color-mix(in oklab, var(--carbon) 42%, var(--scrim-heavy)) 78%, var(--scrim));
+    background: var(--home-tall-wash);
+  }
+  /* The shorthand above ties the photo rule's specificity and comes later, so
+     it reset background-image and every portrait still stayed dark (#7448).
+     Layer the saved photo beneath the same wash instead. */
+  :where(body[data-shape="tall"]) #overlay[data-home-scene="photo"][style*="data:image"] {
+    background: var(--home-tall-wash), var(--home-scene-image) center / cover no-repeat;
   }
   /* PORTRAIT PHONE, LIVE SCENE. The scene hides the side-on drawing (opacity 0
      above), but menus.css still places it in grid row 3, an implicit ~235 px

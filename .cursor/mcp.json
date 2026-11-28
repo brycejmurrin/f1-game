@@ -38,7 +38,8 @@
         "bash",
         "tools/mcp/chrome-devtools-mcp.sh",
         "run"
-      ]
+      ],
+      "timeout": 300000
     },
     "js-debugger": {
       "type": "stdio",

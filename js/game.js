@@ -76,7 +76,7 @@ const lazyBundles = LazyBundles.create({
   els, loadBackendScripts, getContext: () => G,
   applyLightTuneIfReady: () => { if (ltStore) applyLightTune(); },
   createNetwork: () => { netPlay = NetPlay.create(G, { qualiNet }); netLobby = NetLobby.create(G, { raceSettings, qualiNet }); return netLobby; },
-  bindAgent: () => { if (typeof ApexApi !== "undefined") { window.__apex = ApexApi.create(G, restoreFreePlaySelection); window.__apex.visorScene = () => typeof VisorOptics !== "undefined" ? VisorOptics.sceneFromG(G) : null; } },
+  bindAgent: () => { if (typeof ApexApi !== "undefined") { window.__apex = ApexApi.create(G, restoreFreePlaySelection); } },
   // Adopt the real audio instances onto the boot handles once LAZY_AUDIO reinjects the `var` globals (#6952); `once` latches each part (a retry re-runs only the one that threw).
   onAudioReady: (once = (k, f) => f()) => {
     once("radio", () => { adoptAudio(radioVoice, RadioVoice.create(G)); });
@@ -734,7 +734,7 @@ function blueFlagCall(ev) {
 const PIT_LAMP_GREEN = ["near", "enter", "armed", "lane", "keep", "near-box", "square", "stop", "box"];
 let /** @type {ReturnType<typeof RaceEngineer.create> | null} */ engineer = null;  // RaceEngineer.create(G), same deferral
 function setCautionEnabled(on) { return raceCtl.setEnabled(on); }
-const redOrder = new Map();   // the field's order when a red flag first shows: redFlagRestart grids from it (#5783 H1)
+const redOrder = new Map(), anyFinished = () => { for (let i = 0; i < cars.length; i++) if (cars[i].finished) return true; return false; };   // redOrder: the field's order when a red flag first shows: redFlagRestart grids from it (#5783 H1)
 function updateCaution(dt) { raceCtl.update(dt); if (raceCtl.level < 4) redOrder.clear(); else if (!redOrder.size) cars.filter((c) => !c.retired).sort((a, b) => b.prog - a.prog).forEach((c, i) => redOrder.set(c, i)); }
 function applyCaution(d) { return raceCtl.apply(d); }
 function cautionInfo() { const i = raceCtl.info(), w = scWatch.info(); i.owed = w.owed; i.owedT = w.t; i.owedCode = w.code; return i; }   // + the give-back window (hud.js flag chip)
@@ -4390,7 +4390,7 @@ function quitToMenu() {
   sessionEntry.cancel();
   qualiSheet.close();
   if (announcer.stop) announcer.stop();   // results commentary must not outlive the race
-  feel.shake = 0; feel.hitStop = 0;
+  feel.shake = 0; feel.hitStop = 0; redOrder.clear();   // the red's grid order holds the race's cars (#7402)
   PerfGov.sentinelArm(false); netPlay.stop("local"); hideCamPicker();   // inactive: forgets a stale disconnect reason
   if (setupTrialSession) setupTrialSession.cancel();
   if (typeof SetupTrials !== "undefined") SetupTrials.invalidate("Session ended before attempt completed");
@@ -4675,7 +4675,7 @@ function update(dt) {
   PerfSpans.begin("ai"); raceCtl.stepGrip(true); try { for (let i = 0; i < cars.length; i++) updateCar(cars[i], dt, ranked); } finally { raceCtl.stepGrip(false); } PerfSpans.end("ai");   // per-car step: AI + player
   pits.stepEnd();
   if (!drills?.active() && jumpStartPenalty.reactWindowOpen()) { // this drill starts with both cars at speed
-    for (const c of cars) jumpStartPenalty.tickReaction(c);
+    for (let i = 0; i < cars.length; i++) jumpStartPenalty.tickReaction(cars[i]);
   }
   RaceControl.settleLineStep();   // finishers cannot be promoted to a new incident
 
@@ -4724,7 +4724,7 @@ function update(dt) {
   // countdown below would hit zero in that window and endRace() would run
   // before takeRestart() ever asked. Once anyone has finished the restart is
   // off the table and the countdown stands.
-  if (raceCtl.level === 4 && !cars.some((c) => c.finished)) resultT = 0;
+  if (raceCtl.level === 4 && !anyFinished()) resultT = 0;
   else if (resultT === 0) {
     postFinish.net = session === "race" && netPlay.active(); postFinish.solo = session === "race" && !postFinish.net && !realRace.isWatch();
     resultT = RaceControl.finishDelay(cars, raceT, lapsTarget, realRace.raceT0(), postFinish);
@@ -6650,17 +6650,17 @@ function retireCar(c, reason) {
 // fraction of the full race at the green light (see armReliability), so a 3-lap
 // blast and a 25-lap race lose their cars at the same points of the story.
 // A drawn failure is a fraction of the RACE, so it is tested against the leader's distance: a backmarker (0.93 pace) never covers the full distance itself (#6634 F8).
-const dnfDue = (c) => cars.reduce((m, o) => Math.max(m, o.prog - (o._progGift || 0)), 0) / (lapsTarget * track.total) >= c.dnfAt;
+const leadFrac = () => { let m = 0; for (let i = 0; i < cars.length; i++) m = Math.max(m, cars[i].prog - (cars[i]._progGift || 0)); return m / (lapsTarget * track.total); }, dnfDue = (c, lead = leadFrac()) => lead >= c.dnfAt;   // checkRetirements reads the lead once per step (#7402)
 const stallRetire = (c) => retireCar(c, "stationary");   // ONE function, not a fresh arrow per step (#7070, #6506 row 6)
 function checkRetirements(dt) {
   AiDrive.stallSweep(cars, dt, state === "race" && !paused && raceCtl.level < 4 && raceT > 0 && !isPractice() && !isQuali(), stallRetire);   // a parked player is retired after 60 s, under its own caution too (#5892); a red or a pause stops the clock; practice (a drill, TT) never retires (#6631)
-  for (const c of cars) {
+  for (let i = 0, lead = -1; i < cars.length; i++) { const c = cars[i];
     if (c.dnfAt == null || c.retired || c.finished) continue;
     // The remote human's slot was still an AI when armReliability drew its
     // dnfAt (netPlay.start() re-roles it afterwards) — never park a car
     // another person is driving.
     if (netPlay.owns(c) || realRace.owns(c)) continue;
-    if (dnfDue(c)) retireCar(c, c.dnfWhy);
+    if (dnfDue(c, lead < 0 ? (lead = leadFrac()) : lead)) retireCar(c, c.dnfWhy);
   }
 }
 
