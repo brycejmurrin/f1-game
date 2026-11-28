@@ -243,15 +243,14 @@ test("towGain: hunger lifts permanent tow; street and no-arg stay base", () => {
   assert.ok(A.towGain(false, 2.5) <= 0.045 * 1.65 + 1e-9, "capped at +65 %");
 });
 
-test("sbsCommitT / sbsEase: conceding defender tucks sooner; streets and no-arg stay", () => {
-  assert.equal(A.sbsCommitT(), 2);
-  assert.equal(A.sbsEase(), 0.97);
+test("sbsLimits: conceding defender tucks sooner; streets and no-arg stay", () => {
+  const L = (ctx) => ({ ...A.sbsLimits(ctx) });   // pooled out: copy each result
+  assert.deepEqual(L(), { commitT: 2, ease: 0.97 });
   const beaten = { street: false, traits: mid, vTop, ourVmax: them, ourPace: themP, otherVmax: us, otherPace: usP };
-  assert.ok(A.sbsCommitT(beaten) < 2, "0.8 %+ concede shortens the alongside");
-  assert.ok(A.sbsEase(beaten) < 0.97, "conceding yielder eases more");
-  assert.equal(A.sbsCommitT({ ...beaten, street: true }), 2);
-  assert.equal(A.sbsEase({ ...beaten, street: true }), 0.97);
-  assert.equal(A.sbsCommitT({ ...beaten, other: { human: true } }), 2, "human alongside keeps 2 s");
+  assert.ok(L(beaten).commitT < 2, "0.8 %+ concede shortens the alongside");
+  assert.ok(L(beaten).ease < 0.97, "conceding yielder eases more");
+  assert.deepEqual(L({ ...beaten, street: true }), { commitT: 2, ease: 0.97 });
+  assert.equal(L({ ...beaten, other: { human: true } }).commitT, 2, "human alongside keeps 2 s");
 });
 
 test("wantBoost: pace edge on the tow car arms catch when live speeds are level", () => {

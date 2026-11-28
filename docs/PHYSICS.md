@@ -742,7 +742,7 @@ other or me." Measured with `tools/check/ai-tactics.mjs` (before/after in
   yields (`sideYieldsA(.., kTurn)`; `collide.js` passes `kTurn` only between AI
   cars, so no curvature read decides a player's scrub). A yielder still
   alongside after 2 s that is not clearly the faster lifts to 0.97 of the other
-  car and tucks in (`sbsCommitT` / `sbsEase`); a latched attacker keeps its own
+  car and tucks in (`sbsLimits`: commit time and ease); a latched attacker keeps its own
   patience instead.
 - **Defending** (`defendPull`): mid-train when the chaser is nearer than the
   car ahead; the chaser scan sees the adjacent lane (|dx| < 5.5 m) within half

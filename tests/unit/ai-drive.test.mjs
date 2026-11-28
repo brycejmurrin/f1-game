@@ -1015,6 +1015,14 @@ test("trailYieldStep: the yield scales with how close the trailer is, and is gon
   assert.equal(c._trYT, 0);
   [c, b] = mk(20);
   assert.equal(A.trailYieldStep(c, b, true), false, "streets never yield");
+  // a finished or human car keeps a frozen _trOf / trailT latch: never yield to it (#7496)
+  [c, b] = mk(25); b.finished = true;
+  assert.equal(A.trailYieldStep(c, b, false), false, "a finished trailer's stale latch");
+  assert.equal(c._trYT, 0);
+  [c, b] = mk(25); b.human = true;
+  assert.equal(A.trailYieldStep(c, b, false), false, "a human trailer's stale latch");
+  [c, b] = mk(25);
+  assert.equal(A.trailYieldStep(c, b, false), true, "the AI trailer still gets the yield");
   // a far trailer costs only part of the blue-flag ease
   const t = { experience: 1 };
   assert.equal(A.trailYieldEase(0, t), 1, "no proximity, no lift");
@@ -1059,12 +1067,12 @@ test("pooled hunger / side-by-side bags give the literal-ctx answers and allocat
     const other = { human: false };
     const sLit = { street, traits: tr, vTop: 70, other, ourVmax: blkV, ourPace: blkP, otherVmax: ourV, otherPace: ourP };
     const sb = A.sbsArgs(street, tr, 70, other, blkV, blkP, ourV, ourP);
-    assert.equal(A.sbsCommitT(sb), A.sbsCommitT({ ...sLit }));
-    assert.equal(A.sbsEase(sb), A.sbsEase({ ...sLit }));
-    assert.ok(A.sbsCommitT(sb) >= A.SBS_COMMIT_MIN, "SBS_COMMIT_MIN is the floor game.js gates on");
+    const fromBag = { ...A.sbsLimits(sb) };   // pooled out: copy before the next call
+    assert.deepEqual(fromBag, { ...A.sbsLimits({ ...sLit }) });
+    assert.ok(fromBag.commitT >= A.SBS_COMMIT_MIN, "SBS_COMMIT_MIN is the floor game.js gates on");
   }
   assert.equal(A.sbsArgs(false, tr, 70, null, 1, 1, 1, 1), A.sbsArgs(true, null, 60, null, 2, 2, 2, 2), "one pooled bag");
-  assert.equal(A.sbsCommitT(A.sbsArgs(false, { craft: 1, awareness: 1, experience: 1 }, 70, { human: false }, 60, 1, 64, 1.03)), A.SBS_COMMIT_MIN, "a clearly faster other: the floor");
+  assert.equal(A.sbsLimits(A.sbsArgs(false, { craft: 1, awareness: 1, experience: 1 }, 70, { human: false }, 60, 1, 64, 1.03)).commitT, A.SBS_COMMIT_MIN, "a clearly faster other: the floor");
 });
 
 test("otWant: a blocker that is slow but PULLING AWAY is a launching car, not an obstacle", () => {
@@ -1494,8 +1502,9 @@ test("sideYieldsA: level, the car on the OUTSIDE of the next corner concedes (kT
 });
 
 test("commit or yield is a couple of seconds and a small lift", () => {
-  assert.ok(A.sbsCommitT() >= 1.5 && A.sbsCommitT() <= 3);
-  assert.ok(A.sbsEase() > 0.9 && A.sbsEase() < 1);
+  const { commitT, ease } = A.sbsLimits();
+  assert.ok(commitT >= 1.5 && commitT <= 3);
+  assert.ok(ease > 0.9 && ease < 1);
 });
 
 test("otSide breaks a tie toward the inside of the corner the pass is for", () => {
@@ -2067,9 +2076,8 @@ test("lateralScales / sbsLimits are bit-identical to the single-purpose function
     }
   const lim = { commitT: 0, ease: 0 };
   for (const ctx of [null, { street: true }]) {
-    A.sbsLimits(ctx, lim);
-    assert.equal(lim.commitT, A.sbsCommitT(ctx));
-    assert.equal(lim.ease, A.sbsEase(ctx));
+    assert.equal(A.sbsLimits(ctx, lim), lim, "writes the caller's out");
+    assert.deepEqual(lim, { commitT: 2, ease: 0.97 });
   }
 });
 
