@@ -108,7 +108,7 @@ function boot(opts) {
   CrowdAudio.bind(G);
   CrowdAudio.attach(ctx, bus);
   resetCreated();
-  return { CrowdAudio, GameAudio, G, ctx, nodes, bus, results, created, resetCreated, sfx: {
+  return { CrowdAudio, GameAudio, G, ctx, nodes, bus, results, created, resetCreated, doc: sb.document, sfx: {
     get on() { return sfxEnabled; },
     set on(v) { sfxEnabled = !!v; },
   } };
@@ -417,4 +417,38 @@ test("finish() adds no second flag cheer: the flag's cheer comes from checkEvent
   GameAudio.finish();
   const extra = nodes.filter((n) => n.kind === "gain" && n.gain.ramps && n.gain.ramps.length);
   assert.equal(extra.length, 0, "finish() is a no-op for the crowd");
+});
+
+test("a played cheer stops re-holding after its envelope is cut: 360 countdown silences, at most 2 holds per voice (#7402)", () => {
+  const { CrowdAudio, ctx, nodes } = boot();
+  ctx.currentTime = 10;
+  CrowdAudio.silence();
+  const played = [];
+  ctx.currentTime += 1; CrowdAudio._resetEvents();
+  for (let k = 0; k < 3; k++) {   // `once` skips the spacing gap: three distinct voices sound together
+    assert.equal(CrowdAudio.fireCheer(0.05, 0.5, true), true, "cheer " + k + " fires");
+    played.push(nodes.map((n) => n.gain).find((g) => g && g.ramped && !played.includes(g)));
+  }
+  const base = played.map((g) => ({ holds: g.holds || 0, targets: g.targets.length }));
+  for (let i = 0; i < 360; i++) { ctx.currentTime += 1 / 60; CrowdAudio.silence(); }
+  played.forEach((g, k) => {
+    assert.ok(g.holds - base[k].holds <= 2, `voice ${k}: ${g.holds - base[k].holds} holds over 360 silences`);
+    assert.ok(g.targets.length - base[k].targets <= 2, `voice ${k}: ${g.targets.length - base[k].targets} setTargets`);
+    assert.equal(g.targets[g.targets.length - 1], 0, "and it rests at 0");
+  });
+});
+
+test("update() looks #results up once, not per setEngine (#7402)", () => {
+  const { CrowdAudio, doc } = boot();
+  const look = doc.getElementById; let n = 0;
+  doc.getElementById = (id) => { n++; return look(id); };
+  for (let i = 0; i < 120; i++) CrowdAudio.update();
+  assert.ok(n <= 1, `${n} lookups over 120 updates`);
+});
+
+test("setGridIdle reuses one options record per countdown step, like _ersArg/_scrubArg (#7402)", () => {
+  const eng = fs.readFileSync(path.join(ROOT, "js/audio/engine.js"), "utf8");
+  const body = eng.slice(eng.indexOf("function setGridIdle("), eng.indexOf("const _gridArg"));
+  assert.ok(body.length > 0 && /setEngine\([^)]*_gridArg|setEngine\([^)]*, a\)/.test(body), "setEngine gets the shared record");
+  assert.doesNotMatch(body, /setEngine\([^;]*\{/, "no object literal allocated per step");
 });
