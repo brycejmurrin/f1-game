@@ -30,15 +30,16 @@ const DrillCard = (function () {
     return all && typeof all === "object" && !Array.isArray(all) ? all : {};
   }
 
-  /** Persist one run. Returns the saved row and whether it beat the old best. */
-  function record(store, key, r) {
+  /** Persist one run. Returns the saved row and whether it beat the old best. `again`: a re-score of a run this key
+   *  already recorded (Telemetry's THIS CORNER pick): best and medal update, the run count n does not. */
+  function record(store, key, r, again) {
     const all = read(store), old = all[key];
     if (!Number.isFinite(r.value)) return { row: old || null, improved: false };   // NaN/Infinity would store null and wipe the best
     const hadBest = !!(old && Number.isFinite(old.best));
     const best = hadBest ? Math.max(old.best, r.value) : r.value;
     const oldMedal = old && RANK[old.medal] ? old.medal : null;
     const medal = (RANK[r.medal] || 0) > (RANK[oldMedal] || 0) ? r.medal : oldMedal;
-    const row = { best: +best.toFixed(2), medal, n: Math.min(9999, ((old && old.n) | 0) + 1) };
+    const row = { best: +best.toFixed(2), medal, n: Math.min(9999, ((old && old.n) | 0) + (again && old ? 0 : 1)) };
     store.set(KEY, { ...all, [key]: row });
     return { row, improved: hadBest && r.value > old.best };
   }
