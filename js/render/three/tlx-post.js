@@ -410,6 +410,10 @@
         bloomLv = [];
         for (let i = 0; i < BLOOM_LEVELS_MAX; i++) {
           const rt = bloom11 ? makeRT(1, 1, THREE.UnsignedInt101111Type, THREE.RGBFormat) : makeRT(1, 1, hdrType);
+          // #7420: present() runs with the scene's ssrTag MRT still set, and three takes each attachment's blend
+          // from MRTNode.getBlendMode(texture.name): only "output" keeps the material's (ONE,ONE) up-pass blend,
+          // an unnamed target draws with NoBlending and the additive octaves overwrite instead of summing.
+          rt.texture.name = "output";
           bloomLv.push({ rt, w: 1, h: 1 });
         }
         layoutBloom();

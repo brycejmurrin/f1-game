@@ -54,3 +54,28 @@ test("R7: TAA history resize goes through ctx.rtSetSize so rtResizes counts it",
   assert.match(post, /ownRT, rtSetSize, trackMaterial/);
   assert.match(aa, /ctx\.rtSetSize\(hist\[0\], w, h\); ctx\.rtSetSize\(hist\[1\], w, h\)/);
 });
+
+/* #7420: the bloom up-passes keep their additive blend under the scene's ssrTag MRT. present() runs the post chain
+ * with the MRT still set; three's WebGPU pipeline takes each attachment's blend from MRTNode.getBlendMode(texture.name)
+ * and only "output" maps to the material blend. The live A/B is the GPU census. */
+const tsl = fs.readFileSync(path.join(ROOT, "vendor/three-0.187.0/three.tsl.min.js"), "utf8");
+const gpu = fs.readFileSync(path.join(ROOT, "vendor/three-0.187.0/three.webgpu.min.js"), "utf8");
+test("every bloom level target is named \"output\" before it joins bloomLv", () => {
+  const fn = body(post, "function ensureBloom()", "return nLv > 0;");
+  const name = fn.indexOf('rt.texture.name = "output"'), push = fn.indexOf("bloomLv.push({ rt");
+  assert.ok(name > 0, "ensureBloom names the level texture");
+  assert.ok(push > name, "named before it is pushed (every level, both formats)");
+  assert.match(fn, /const rt = bloom11 \?[^\n]*\n[\s\S]*rt\.texture\.name = "output"/, "the name follows the one makeRT line");
+});
+
+test("the up-passes that need the blend still draw into bloomLv targets", () => {
+  assert.match(post, /runPass\(up\.mat, bloomLv\[i - 1\]\.rt, i > 1\)/);
+});
+
+test("vendor three: MRT keeps material blend only for the \"output\" name", () => {
+  // MRTNode constructor: blendModes = { output: <MaterialBlending mode> }; getBlendMode(name) falls back to NoBlending.
+  assert.match(tsl, /this\.blendModes=\{output:(\w+)\}/, "default blend map keys \"output\" only");
+  assert.match(tsl, /getBlendMode\(e\)\{return this\.blendModes\[e\]\|\|\w+\}/, "lookup by attachment name with a fallback");
+  // WebGPU pipeline: the per-attachment blend comes from mrt.getBlendMode(texture.name).
+  assert.match(gpu, /getBlendMode\(n\.name\)/, "pipeline keys blend by the attachment texture's name");
+});
