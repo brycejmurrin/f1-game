@@ -9,6 +9,8 @@
  *        TLX kept painting. Source pins: the chain is a re-callable factory, a
  *        post-only death owes a rebuild at the next render-target realloc, and
  *        the post-only candidate does not move the bound label.
+ *   #7504 (hunt #7437 row 8) a throwing depth pass left three 0.187's render() `_callDepth` raised (it has no
+ *        try/finally), keying later renders as nested.
  * No browser (~0.1 s). */
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -30,14 +32,15 @@ const mk = () => {
 function boot(opt = {}) {
   const state = { boom: false };
   const renderer = { backend: {}, getRenderTarget: () => null, setRenderTarget() {},
-    render() { if (state.boom) throw new Error("depth pass boom"); }, autoClear: true };
+    // three 0.187's render() bumps _callDepth with no try/finally (#7504 row 8).
+    _callDepth: -1, render() { this._callDepth++; if (state.boom) throw new Error("depth pass boom"); this._callDepth--; }, autoClear: true };
   if (opt.lampStatic) renderer.copyTextureToTexture = () => {};
   const ls = opt.lampStatic ? (k) => (k === "apex26.tlxLampStatic" ? "1" : null) : () => null;
   const ctx = vm.createContext({ window: {}, localStorage: { getItem: ls }, Log: { warn() {} },
     Float32Array, Math, Array, Object, WeakMap, Map, Set, Number });
   vm.runInContext(read("js/render/three/tlx-shadow.js"), ctx, { filename: absSrc("js/render/three/tlx-shadow.js") });
   const sys = ctx.window.TLXShaders.shadowSys(mk(), mk(), { renderer, isMobile: false, softwareGL: false });
-  return { sys, S: sys.S, state };
+  return { sys, S: sys.S, state, renderer };
 }
 
 test("a throw in the CAR depth pass disables the car pass, not the sun (M14)", () => {
@@ -83,6 +86,21 @@ test("a throw in the SUN depth pass still disables the sun (M14)", () => {
   sys.shadowEnd();
   assert.equal(S.enabled, false);
   assert.equal(S.carEnabled, true);
+});
+
+// #7504 row 8 (row 19 lives in tlx-recovery-lifecycle.test.mjs).
+test("row 8: a throwing depth pass leaves three's _callDepth where it found it", () => {
+  for (const [begin, end, args] of [["shadowBegin", "shadowEnd", [new Float32Array(16)]],
+    ["carShadowBegin", "carShadowEnd", [new Float32Array(16), 1]], ["lampShadowBegin", "lampShadowEnd", [new Float32Array(16), 0]]]) {
+    const { sys, state, renderer } = boot();
+    state.boom = true;
+    sys[begin](...args);
+    sys[end]();
+    assert.equal(renderer._callDepth, -1, `${end}: depth restored after the throw`);
+  }
+  const ok = boot();
+  ok.sys.shadowBegin(new Float32Array(16)); ok.sys.shadowEnd();
+  assert.equal(ok.renderer._callDepth, -1, "control: a clean pass balances on its own");
 });
 
 function bootWgpu(isMobile) {

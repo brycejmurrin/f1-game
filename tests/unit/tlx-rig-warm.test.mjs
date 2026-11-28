@@ -237,6 +237,35 @@ test("A·W56: a queued rig job outlives a long held warm while presents come, an
   assert.deepEqual(c.compiles.map((x) => x.geo === late.geo), [true], "the dropped job compiled nothing; the next one ran");
 });
 
+test("#7504: the non-queued 20 s timer never resolves a warm that already started; unstarted, it resolves false", async (t) => {
+  // A started warm that runs past 20 s (a slow software-GL compile) was resolved false under itself.
+  const h = await rig(t);
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  const c0 = h.renderer.compileAsync;
+  h.renderer.compileAsync = async (...a) => { await gate; return c0(...a); };
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  let settled = "pending";
+  const p = h.R.warmDraws(() => h.R.draw({ geo: geo(RIG_LAYOUT) }, I, CAB));
+  p.then((v) => { settled = v; });
+  assert.equal(h.R.present(), false, "the present starts the warm (job.started)");
+  t.mock.timers.tick(20000);
+  await new Promise((r) => setImmediate(r));
+  assert.equal(settled, "pending", "past 20 s the started job is still its own to resolve");
+  t.mock.timers.reset();
+  release();
+  while (h.R.pending()) await h.R.pending();
+  assert.equal(await p, true, "the warm resolves itself, ok");
+  // Control (as on base): no present ever came, so the job never started and the timer resolves it false.
+  const c = await rig(t);
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const q = c.R.warmDraws(() => c.R.draw({ geo: geo(RIG_LAYOUT) }, I, CAB));
+  t.mock.timers.tick(20000);
+  t.mock.timers.reset();
+  assert.equal(await q, false);
+  assert.equal(c.R.warmQueued(), false, "the job was dropped");
+});
+
 test("A·W56: a queued rig job reports warmQueued until a present starts it, so the menu keeps its last warm frame owed", async (t) => {
   // The present that starts a rig job paints nothing. Counted as the menu's last hidden warm frame (game.js
   // "menu warm drawn"), the paused picker never drew the built world (track-switch-memory: no proven submission).

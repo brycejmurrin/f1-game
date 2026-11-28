@@ -1119,6 +1119,8 @@
       cur.prevUsed = used; cur.used = used; shown = cur;
       const prev = renderer.getRenderTarget();
       const keepDepth = _passKeepsDepth, autoClear0 = renderer.autoClear;
+      // three's render() bumps _callDepth with no try/finally: a throw would leave it raised and later renders re-keyed as nested.
+      const depth0 = renderer._callDepth;
       _passKeepsDepth = false; _passOpen = null; _lastPassOk = false;
       try {
         renderer.setRenderTarget(target);
@@ -1132,6 +1134,7 @@
           castScene.children = _passKids;
         }
         try { renderer.render(castScene, shadowCam); } finally {
+          if (depth0 !== undefined) renderer._callDepth = depth0;
           castScene.children = all;
           _passKids.length = 0;   // release loaned casters even if this is the track's last pass
         }
@@ -1171,6 +1174,7 @@
           blockerQuad.render(renderer);
         } catch (e) {
           try { Log.warn("gfx", "TLX: PCSS blocker pass failed —", e); } catch (_) { /* Log absent */ }
+          if (depth0 !== undefined) renderer._callDepth = depth0;
           S.pcssEnabled = false;
         }
       }
