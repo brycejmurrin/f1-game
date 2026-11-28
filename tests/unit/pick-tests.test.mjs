@@ -9,7 +9,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
-import { DEPLOY_BRANCH, RULES, SPEC_OWNER_REASON, blanketOnly, pick, specOwners, stripSpecOwner } from "../../tools/ci/pick-tests.mjs";
+import { ALWAYS_RULES, DEPLOY_BRANCH, RULES, SPECIFIC_RULES, SPEC_OWNER_REASON, blanketOnly, pick, specOwners, stripSpecOwner } from "../../tools/ci/pick-tests.mjs";
+import { pickAll } from "../../tools/ci/select-specs.mjs";
 import { changedPaths } from "../../tools/lib/changed-files.mjs";
 import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 
@@ -56,7 +57,8 @@ test("F1 Dev Tools package paths select structural checks without browser suites
 test("vendored Trystero changes select the wire regression group", () => {
   const result = json("vendor/trystero-0.25.4/core/action-wire.js");
   assert.equal(result.reason, "matched");
-  assert.deepEqual(result.groups.map(row => row.group), ["net-unit"]);
+  // net + tiny come from the former EXTRA_ROUTES rows (#7253 P3a): CI's pickAll() already named them.
+  assert.deepEqual(result.groups.map(row => row.group), ["net", "net-unit", "tiny"]);
   assert.deepEqual(result.unclaimed, []);
 });
 
@@ -335,4 +337,40 @@ test("garage-census usage lists every flag it parses; assets-api.spec cites only
   assert.equal(help.split("\n").filter((l) => l.startsWith("//")).length, 0, help);
   const scripts = JSON.parse(read("package.json")).scripts;
   for (const [, name] of read("tests/specs/assets-api.spec.js").matchAll(/npm run ([\w:-]+)/g)) assert.ok(scripts[name], `npm run ${name} is not in package.json`);
+});
+
+// ONE PATH→GROUP ROUTER (#7253 P3a). select-specs' EXTRA_ROUTES used to be applied by its pickAll()
+// only, so pick() (this CLI, node-plan, select-recall) said nothing for vendor/, the standalone pages
+// and agent config while CI routed them. The rows below are EXTRA_ROUTES as it stood, frozen: every
+// tracked path must get each matching row's groups (and reason) from pick() itself.
+const FORMER_EXTRA_ROUTES = [
+  [/^vendor\/(three-[^/]+|three-patches)\//, ["tiny", "gfx"], "three.js: the shipped default renderer (TLX) boots on it"],
+  [/^vendor\/rapier-[^/]+\//, ["physics-core", "collisions"], "Rapier: the debris world and the incident takeover"],
+  [/^vendor\/(trystero-[^/]+|jsqr-[^/]+)\//, ["net"], "multiplayer signalling and the QR room-code scan"],
+  [/^vendor\/gpu-capture\//, ["hooks"], "the GPU capture toggle (gpu-capture.spec.js)"],
+  [/^vendor\//, ["tiny"], "a vendored script the page may load"],
+  [/^controller\.html$/, ["tiny", "input"], "the phone-as-controller page"],
+  [/^overlay\.html$/, ["modes"], "the stream overlay page (overlay-live.spec.js)"],
+  [/^cockpit-view\.html$/, ["tiny", "ui"], "the cockpit-view page"],
+  [/^bench\.html$/, ["perf-frametime"], "the benchmark page (perf-frametime.spec.js)"],
+  [/^\.(claude|cursor|codex)\/|^\.githooks\//, ["guards"], "agent hooks and config: the guard suites exec them"],
+];
+test("pick() is the one router: every tracked path gets the former EXTRA_ROUTES groups (#7253 P3a)", () => {
+  assert.equal(pickAll, pick, "select-specs routes through pick() itself");
+  assert.deepEqual(RULES, [...ALWAYS_RULES, ...SPECIFIC_RULES], "RULES is the always rows then the specific ones");
+  assert.equal(ALWAYS_RULES.length, 2);
+  const tracked = execFileSync("git", ["ls-files"], { cwd: ROOT, encoding: "utf8" }).split("\n").filter(Boolean);
+  const missing = [];
+  for (const f of tracked) {
+    const got = pick([f]);
+    for (const [re, gs, why] of FORMER_EXTRA_ROUTES) {
+      if (!re.test(f)) continue;
+      for (const g of gs) if (!got.get(g)?.has(why)) missing.push(`${f} → ${g} (${why})`);
+    }
+  }
+  assert.deepEqual(missing.slice(0, 20), [], `${missing.length} path→group routes pick() drops`);
+  const three = pick(["vendor/three-0.187.0/three.webgpu.min.js"]);
+  assert.ok(three.has("tiny") && three.has("gfx"), `a vendored three.js path names tiny + gfx: ${[...three.keys()]}`);
+  const ctl = pick(["controller.html"]);
+  assert.ok(ctl.has("tiny") && ctl.has("input"), `controller.html names tiny + input: ${[...ctl.keys()]}`);
 });

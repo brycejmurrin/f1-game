@@ -251,7 +251,9 @@ const DataTelemetryModel = (function () {
     if (cum.t.length > 1) {
       const dA = distAtT(cum, tAtDate(tel.car, +loc[lo].date));
       const dB = distAtT(cum, tAtDate(tel.car, +loc[hi].date));
-      if (dB > dA) f = clamp((distAtT(cum, t) - dA) / (dB - dA), 0, 1);
+      // Past the last car sample distAtT is NaN: keep the time-based f (#7315).
+      const d = distAtT(cum, t);
+      if (dB > dA && Number.isFinite(d)) f = clamp((d - dA) / (dB - dA), 0, 1);
     }
     return lerpLoc(loc[lo], loc[hi], f);
   }

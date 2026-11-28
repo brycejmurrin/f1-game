@@ -231,6 +231,7 @@ const NetSdp = (function () {
     return out;
   }
 
+  const ICE_TOKEN = /^[\x21-\x7e]+$/;   // non-empty, printable, no space
   function unpack(bytes) {
     if (!bytes || bytes.length < 4) return null;
     let o = 0;
@@ -247,6 +248,9 @@ const NetSdp = (function () {
     const pwLen = bytes[o++];
     if (bytes.length < o + pwLen) return null;
     const pwd = NetBytes.ascii(bytes, o, pwLen); o += pwLen;
+    // pack() only emits printable ufrag/pwd (strBytes): refuse anything else
+    // here too, or a CR/LF in a hostile code splices extra SDP lines (#7311).
+    if (!ICE_TOKEN.test(ufrag) || !ICE_TOKEN.test(pwd)) return null;
 
     const cands = [];
     for (let i = 0; i < count; i++) {

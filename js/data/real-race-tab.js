@@ -94,6 +94,10 @@ const DataRealRace = (function () {
     }
 
     function renderBody(meta, body) {
+      // A picker change abandons the old session's download: drop its queued
+      // OpenF1 requests, or the new session's bodies wait behind them (#7315).
+      if (loading || bodyFetch) F1API.cancelAll();
+      bodyFetch = false;
       ++requestGen;
       releaseIncomplete();
       loading = null; queuedGo = null; replayUi = null; driveAction = null; traceError = "";

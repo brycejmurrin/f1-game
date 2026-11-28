@@ -373,11 +373,15 @@ const DataTelemetryRender = (function () {
       const splits = Number.isFinite(start) && view.sectors ? view.sectors.map((t) => start + t * 1000) : [];
       const colors = TrackMaps.sectorColors();
       const sectorInk = view.mapMode === "sectors" && splits.length === 2 ? colors : null;
+      // First sample at or after date (else the last). Segments walk forward, so
+      // keep a cursor; the closing segment's loc[0] goes back and resets it.
+      let speedIndex = 0, speedDate = -Infinity;
       function speedAtDate(date) {
         if (!car || !car.length) return null;
-        let ci = 0;
-        while (ci < car.length - 1 && car[ci].date < date) ci++;
-        return car[ci].speed;
+        if (!(date >= speedDate)) speedIndex = 0;
+        speedDate = date;
+        while (speedIndex < car.length - 1 && car[speedIndex].date < date) speedIndex++;
+        return car[speedIndex].speed;
       }
       const ranges = view.mapOverlays?.[view.mapMode];
       const gearMode = view.mapMode === "gears";

@@ -143,7 +143,7 @@ const SceneryCity = (function () {
         ctx.noteSuppressed("building", `building SUPPRESSED at k=${k} side=${side}: gap=${gap} w=${w} (footprint over track)`);
         return;
       }
-      ctx.note("building", [p.c[0], p.c[1] + h / 2, p.c[2]], [w, h, d], { k, side });
+      const bldRec = ctx.note("building", [p.c[0], p.c[1] + h / 2, p.c[2]], [w, h, d], { k, side });
       if (opts.kind) {
         const wl = opts.wall ? (opts.wall[0] + opts.wall[1] + opts.wall[2]) / 3 : 1;
         const tone = {
@@ -276,7 +276,16 @@ const SceneryCity = (function () {
       // flat-coplanar spots on fuji/interlagos/cota/shanghai/mosport). Its top
       // (the visible ledge) stays at plH.
       const PL_SINK = 0.05;
-      addBox(out, vadd(p.c, p.u, (plH - PL_SINK) / 2), [w + 2 * plOut, plH + PL_SINK, d + 2 * pdOut], plinth, b);
+      const plinthOk = addBox(out, vadd(p.c, p.u, (plH - PL_SINK) / 2), [w + 2 * plOut, plH + PL_SINK, d + 2 * pdOut], plinth, b) !== false;
+      // What stands is solid ground: stop the car and claim the footprint. A
+      // rejected section returns early, but the plinth (and a lower storey)
+      // it leaves still ship, so they still block and claim (#7243 3c); with
+      // no plinth and no first storey nothing stands and the note goes back.
+      const claim = () => {
+        blockAt(k, side, gap, d / 2);   // solid: stop the car before the façade
+        massAdd(p.c, w, d, b);          // claim the ground so later masses yield
+      };
+      const refuseBase = () => { if (plinthOk) claim(); else if (ctx.unnote) ctx.unnote(bldRec); };
       // Ground-floor entrance on the trackside face — a recessed door + short
       // canopy so a blank plinth reads as a building people enter, not a crate.
       // Skipped at night (neon facade owns the read) and for very narrow units.
@@ -309,23 +318,23 @@ const SceneryCity = (function () {
       let topY = h, topW = w, topD = d;
       const diag = Math.max(w, d);
       if (arch === "flat") {
-        if (section(0, w, h, d) === false) return;
+        if (section(0, w, h, d) === false) { refuseBase(); return; }
       } else if (arch === "setback") {
         const h1 = h * 0.55, collar = h * 0.05;
-        if (section(0, w, h1, d) === false) return;
+        if (section(0, w, h1, d) === false) { refuseBase(); return; }
         addFrustum(out, vadd(p.c, p.u, h1), diag * 0.5, diag * 0.40, collar, crownCol, 8, b);
         // Upper storey rejected → drop crown/cap dependents (same atomic rule).
-        if (section(h1 + collar, w * 0.72, h - h1 - collar, d * 0.72) === false) return;
+        if (section(h1 + collar, w * 0.72, h - h1 - collar, d * 0.72) === false) { claim(); return; }
         topW = w * 0.72; topD = d * 0.72;
       } else if (arch === "taper") {
         const bh = h * 0.90;
-        if (section(0, w, bh, d) === false) return;
+        if (section(0, w, bh, d) === false) { refuseBase(); return; }
         addFrustum(out, vadd(p.c, p.u, bh), diag * 0.5, diag * 0.33, h - bh, crownCol, 8, b);
         addCyl(out, vadd(p.c, p.u, bh + (h - bh) * 0.4), diag * 0.40, (h - bh) * 0.16, glass, 8, b);
         topW = w * 0.5; topD = d * 0.5; topY = h;
       } else { // spire: windowed shaft → a short tapered cap → a tall lit spire
         const bh = h * 0.86, crownH = h * 0.10;
-        if (section(0, w, bh, d) === false) return;
+        if (section(0, w, bh, d) === false) { refuseBase(); return; }
         addFrustum(out, vadd(p.c, p.u, bh), diag * 0.5, diag * 0.30, crownH, crownCol, 8, b);
         topY = bh + crownH; topW = w * 0.36; topD = d * 0.36;
       }
@@ -393,8 +402,7 @@ const SceneryCity = (function () {
           addBox(out, vadd(p.c, p.u, topY + 2.4), [1.1, 1.1, 1.1], [3.2, 0.4, 0.3], b);    // red beacon
         }
       }
-      blockAt(k, side, gap, d / 2);   // solid: stop the car before the façade
-      massAdd(p.c, w, d, b);          // claim the ground so later masses yield
+      claim();
     };
     // neonTowerBody returns early from a dozen refused sections with out._mat still
     // METAL; the wrapper resets it on every path so the next emitter is untextured.
@@ -835,14 +843,15 @@ const SceneryCity = (function () {
         ctx.noteSuppressed("billboard", `billboard SUPPRESSED at k=${k} side=${side}: gap=${gap} w=${w} (a panel end is on the road)`);
         return;
       }
-      ctx.note("billboard", vadd(p.c, p.u, h + 1.6), [0.3, 3.2, w], { k, side });
+      const boardRec = ctx.note("billboard", vadd(p.c, p.u, h + 1.6), [0.3, 3.2, w], { k, side });
+      let landed = 0;
       const place = { o: p.c, r: p.r, u: p.u, t: p.t };
       const postCol = (opts && opts.postCol) || [0.2, 0.2, 0.22];
       const posts = st === "fascia" ? []
         : st === "monopole" || st === "tower" ? [0]
         : [-w * 0.4, w * 0.4];
       for (const o of posts)
-        ctx.instance(`billboard-post|${h}|${st}|${postCol.join(",")}`,
+        landed += ctx.instance(`billboard-post|${h}|${st}|${postCol.join(",")}`,
           { o: vadd(p.c, p.t, o), r: p.r, u: p.u, t: p.t },
           (rec) => {
             rec.mat(0);   // never inherit a leaked out._mat (graph-parity matInherit)
@@ -872,7 +881,7 @@ const SceneryCity = (function () {
       // and every height shares one model; fascia sits on the barrier at any h.
       const fascia = st === "fascia";
       const panel = !FACE_STYLES.has(st);
-      ctx.instance(`billboard-face|${st}` + (panel ? `|${side}` : "") + `|${postCol.join(",")}`,
+      landed += ctx.instance(`billboard-face|${st}` + (panel ? `|${side}` : "") + `|${postCol.join(",")}`,
         Object.assign({ s: [1, 1, w], col: face }, place, fascia ? null : { o: vadd(p.c, p.u, h) }),
         (rec) => {
           const NC = TrackGraph.NODE_COLOR, h = 0;   // canonical: the face's foot, lifted by the origin
@@ -903,6 +912,9 @@ const SceneryCity = (function () {
           }
         },
         { kind: "billboard", k, side });
+      // Nothing landed (the graph dropped posts and face whole): no record and
+      // no blockAt in front of empty ground (#7243 3a).
+      if (!landed) { if (ctx.unnote) ctx.unnote(boardRec); return; }
       blockAt(k, side, gap, w * 0.4);   // posts + panel face → stop before it
     };
 

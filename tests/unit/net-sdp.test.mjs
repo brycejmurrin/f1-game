@@ -211,6 +211,26 @@ test("a truncated struct unpacks to null rather than a plausible offer", () => {
   assert.equal(NetSdp.unpack(null), null);
 });
 
+// #7311: unpack() rebuilt ufrag/pwd from any bytes, so a hand-made code with
+// CR LF in the ufrag spliced extra lines into the CRLF-joined SDP.
+function withUfrag(packed, ufragBytes) {
+  const o = 35;                               // version, setup, count, 32-byte fingerprint
+  const ufLen = packed[o];
+  const tail = packed.slice(o + 1 + ufLen);
+  const out = new Uint8Array(o + 1 + ufragBytes.length + tail.length);
+  out.set(packed.slice(0, o)); out[o] = ufragBytes.length;
+  out.set(ufragBytes, o + 1); out.set(tail, o + 1 + ufragBytes.length);
+  return out;
+}
+test("unpack refuses a ufrag/pwd pack() would never emit (CR LF injection, empty) (#7311)", () => {
+  const packed = NetSdp.pack(REAL);
+  const ascii = (s) => Uint8Array.from(s, (c) => c.charCodeAt(0));
+  assert.ok(NetSdp.unpack(withUfrag(packed, ascii("abcd"))), "a printable ufrag still unpacks");
+  assert.equal(NetSdp.unpack(withUfrag(packed, ascii("ab\r\na=fingerprint:sha-256 00"))), null, "CR LF in ufrag");
+  assert.equal(NetSdp.unpack(withUfrag(packed, ascii("a b"))), null, "space in ufrag");
+  assert.equal(NetSdp.unpack(withUfrag(packed, new Uint8Array(0))), null, "ufLen 0");
+});
+
 test("the relay candidate survives the budget, because it arrives last", () => {
   // MEASURED, and unguarded until now. SDP lists candidates in GATHERING
   // order — host, then srflx once STUN answers, then relay once TURN

@@ -50,13 +50,18 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 // drift apart silently the way a comment naming a branch would.
 export const DEPLOY_BRANCH = "claude/f1-game-project-26h3ng";
 /* [matcher, groups, why] — matcher is a RegExp over the repo-relative path.
-   Every rule that matches contributes its groups; the union is what runs. */
-export const RULES = [
-  // ── always ──────────────────────────────────────────────────────────────
+   Every rule that matches contributes its groups; the union is what runs.
+   RULES = ALWAYS_RULES ++ SPECIFIC_RULES (below). */
+// ── always ──────────────────────────────────────────────────────────────
+// The two blanket catch-alls: every source edit boots the page and runs the
+// structural suite. blanketOnly() measures what ONLY these reach, so they are
+// their own list rather than "rows 0–1 of RULES" (#7253 P3a).
+export const ALWAYS_RULES = [
   [/^(js|css)\//, ["tiny"], "any source edit: does the page still boot"],
   [/^(js|css|index\.html|version\.json)/, ["tooling-fast"],
    "load order, docs integrity, api contracts — ~2 min at three files at a time, catches the structural slips"],
-
+];
+export const SPECIFIC_RULES = [
   [/^tests\/unit\/render-final-contracts\.test\.mjs$/, ["tooling-fast"], "renderer ownership, post health, material detail and particle residency contracts"],
   [/^plugins\/f1-dev-tools\//, ["tooling-fast"], "F1 Dev Tools helpers and package routing — f1-dev-tools.test.mjs"],
   // ── renderer ────────────────────────────────────────────────────────────
@@ -353,7 +358,25 @@ export const RULES = [
   [/^desktop\//, ["desktop-unit", "tooling-fast"], "electron-builder config, identity, notices, version"],
   [/^(AGENTS|CLAUDE|README)\.md$|^docs\/|^\.claude\/(skills|agents|rules)\/|^\.agents\/skills\//, ["tooling-fast"], "docs integrity is a real test"],
   [/^package\.json$/, ["tooling-fast"], "gen scripts and test:* entries — tooling-fast + gen:check"],
+
+  // ── vendored libraries, standalone pages, agent config ──────────────────
+  // These lived in select-specs' EXTRA_ROUTES (audit W31 row 2), applied by its
+  // pickAll() only, so pick() — this CLI, node-plan and select-recall — said
+  // nothing for them while CI routed them. ONE router now (#7253 P3a).
+  [/^vendor\/(three-[^/]+|three-patches)\//, ["tiny", "gfx"], "three.js: the shipped default renderer (TLX) boots on it"],
+  [/^vendor\/rapier-[^/]+\//, ["physics-core", "collisions"], "Rapier: the debris world and the incident takeover"],
+  [/^vendor\/(trystero-[^/]+|jsqr-[^/]+)\//, ["net"], "multiplayer signalling and the QR room-code scan"],
+  [/^vendor\/gpu-capture\//, ["hooks"], "the GPU capture toggle (gpu-capture.spec.js)"],
+  [/^vendor\//, ["tiny"], "a vendored script the page may load"],
+  [/^controller\.html$/, ["tiny", "input"], "the phone-as-controller page"],
+  [/^overlay\.html$/, ["modes"], "the stream overlay page (overlay-live.spec.js)"],
+  [/^cockpit-view\.html$/, ["tiny", "ui"], "the cockpit-view page"],
+  [/^bench\.html$/, ["perf-frametime"], "the benchmark page (perf-frametime.spec.js)"],
+  // Executable agent config (change-kind: not prose): its suites are node
+  // guards, so no browser group; claimed, so the diff is not "unmatched".
+  [/^\.(claude|cursor|codex)\/|^\.githooks\//, ["guards"], "agent hooks and config: the guard suites exec them"],
 ];
+export const RULES = [...ALWAYS_RULES, ...SPECIFIC_RULES];
 
 /** Manifest files that ONLY the two blanket rules (tiny / tooling-fast) reach:
  *  no rule names them or their directory, so an edit there is told "boot the
@@ -366,7 +389,7 @@ export const RULES = [
  *  guard prints the live list so the offender names itself.
  *  The two "always" rules are excluded on purpose. */
 export function blanketOnly(manifest = createRequire(import.meta.url)("../manifest.cjs")) {
-  const specific = RULES.slice(2);
+  const specific = SPECIFIC_RULES;
   const files = [
     ...manifest.FULL, ...Object.values(manifest.DEFERRED).flat(), ...manifest.LAZY_AGENT,
     ...manifest.LAZY_RACE, ...manifest.LAZY_SCENERY, ...manifest.LAZY_DATA, ...manifest.LAZY_NET,

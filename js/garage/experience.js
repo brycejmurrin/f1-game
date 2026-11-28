@@ -89,7 +89,7 @@ const GarageExperience = (function () {
       for (let i = 0; i < hull.length; i += 3) {
         const x = hull[i] - cx, y = hull[i + 1] - cy, z = hull[i + 2] - cz;
         const depth = dist - (x * sa * ce + y * se + z * ca * ce);
-        if (depth <= 0.1) return false;
+        if (depth <= 0.1) { x0 = NaN; return false; }   // a point behind the eye: no fit at this distance
         const nx = (x * ca - z * sa) / (depth * tan * rig.aspect);
         const ny = (-x * sa * se + y * ce - z * ca * se) / (depth * tan);
         x0 = Math.min(x0, nx); x1 = Math.max(x1, nx); y0 = Math.min(y0, ny); y1 = Math.max(y1, ny);
@@ -102,6 +102,7 @@ const GarageExperience = (function () {
       if (project(mid)) hi = mid; else lo = mid;
     }
     project(hi);
+    if (!Number.isFinite(x0 + x1 + y0 + y1)) return null;   // every probe failed (#7339)
     return { dist: hi, shiftX: (x0 + x1) / 2 - (pane.left + pane.right - 1),
       shiftY: (y0 + y1) / 2 - (1 - pane.top - pane.bottom), width: x1 - x0, height: y1 - y0 };
   }

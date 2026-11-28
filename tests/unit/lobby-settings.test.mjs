@@ -125,6 +125,19 @@ test("releaseEphemeral removes the pushed circuit and a later install pushes fre
   assert.equal(guest.S.releaseEphemeral(), false, "idempotent");
 });
 
+test("installCircuit never overwrites a same-id local circuit, and release leaves it (#7311)", () => {
+  const { host, guest } = peers({});
+  const it = host.C.sanitize(design({ seed: 3 }));
+  const mine = { id: it.id, custom: true, mine: true };
+  guest.Tracks.LIST.push(mine);
+  const len = guest.Tracks.LIST.length;
+  const idx = guest.S.installCircuit(it);
+  assert.equal(guest.Tracks.LIST[idx], mine, "the guest's own entry is reused, not replaced");
+  assert.equal(guest.S.releaseEphemeral(), false, "nothing of ours to release");
+  assert.equal(guest.Tracks.LIST.length, len);
+  assert.equal(guest.Tracks.LIST[idx], mine);
+});
+
 test("normaliseSettings refuses an oversized or hostile circuit body", () => {
   const { host } = peers({});
   const S = host.S;
