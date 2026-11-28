@@ -71,6 +71,8 @@
     "tests/unit/apex-physstate.test.mjs",
     "// __apex surface pin: Object.keys(__apex) == tests/data/apex-surface.json, agentHelp() names only real hooks; gates the apex.js carves (#6635 item 0). One VM boot, ~3 s.",
     "tests/unit/apex-surface-pin-vm.test.mjs",
+    "// APEX (#7411): the tier's storage, its phone and adapter gates, and the contactSS march and graph.",
+    "tests/unit/apex-tier.test.mjs",
     "tests/unit/apex-tools-mcp-agents.test.mjs",
     "tests/unit/apex-tools-mcp-args.test.mjs",
     "tests/unit/apex-tools-mcp-concurrency.test.mjs",

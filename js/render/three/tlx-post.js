@@ -508,7 +508,7 @@
       sceneTex: sceneRT.texture, sceneTagTex, sceneDepthTex,
       dirtTex, whiteTex, blackTex,
       trackMaterial, vp: phys ? VP : null, hdrPeak,
-      hi, ownTexture,
+      hi, ownTexture, contactSS: !!ctx.contactSS,
     }, ex || {});
     // A desktop extra that fails to build must not cost the chain: first without this PR's extras (velocity, SSGI
     // accumulation, AgX), then today's pass set with nothing extra. With neither, a throw is the chain's (as before).

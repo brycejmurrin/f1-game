@@ -20,6 +20,16 @@
     return 0.75;
   }
 
+  // LONG CONTACT SHADOWS (APEX `contactSS`, #7411): the sun contact march at STEPS taps out to REACH metres, in
+  // place of the shipped 5 x 0.04 m. dist() spaces the taps quadratically (short steps at the contact, long ones at
+  // the far end); weight() is full strength through the shipped 0.2 m reach and fades to 0 at REACH, so a far
+  // occluder gives a soft edge. The CPU twin of contactLongT below (tests/unit/apex-tier.test.mjs).
+  const contactLong = Object.freeze({
+    STEPS: 16, REACH: 1.0, LIN: 0.2, FULL: 0.2,
+    dist(i, jitter) { const u = (i + 0.25 + 0.75 * jitter) / this.STEPS; return this.REACH * u * (this.LIN + (1 - this.LIN) * u); },
+    weight(d) { const t = Math.min(1, Math.max(0, (d - this.FULL) / (this.REACH - this.FULL))); return 1 - t * t * (3 - 2 * t); },
+  });
+
   function post(THREE, TSL, ctx) {
     const {
       Fn, If, Loop, Break, Continue, uniform, uniformArray, texture,
@@ -38,6 +48,7 @@
     const VP = ctx.vp || { enabled: false, view: () => null, uv: () => screenUV, tex: (n) => n };
     // DESKTOP TIERS (tsl-gi.js buildPlan): which extra variants to build. Absent = today's pass set, nothing else built.
     const HI = ctx.hi || null;
+    const CSL = !!ctx.contactSS;   // APEX contactSS: tlx.js passes it only on a desktop-class adapter
     const GIM = typeof window !== "undefined" && window.TLXShaders && window.TLXShaders.gi || null;
 
     // GL bottom-left uv -> the node system's top-left texture space.
@@ -61,7 +72,7 @@
       m.blending = THREE.NoBlending;
       m.fog = false;
       m.lights = false;
-      const k = key || "tlx-post";
+      const k = (key || "tlx-post") + (CSL ? "+cs" : "");   // the long march is a different program
       m.customProgramCacheKey = _pinKeys[k] || (_pinKeys[k] = () => k);
       return m;
     }
@@ -290,6 +301,7 @@
     // Contact shadows: short view-space march toward the sun (SSAO_FS), folded into ao. Shared by the SSAO term and
     // GTAO (tsl-gi.js); the SSAO term builds it in the same place and order it always did.
     function contactShadowT(P, N, ao) {
+          if (CSL) { contactLongT(P, N, ao); return; }
           If(ssaoU.contact.greaterThan(0.0).and(ssaoU.sunVS.z.lessThan(0.05)), () => {
             const sh = float(1.0).toVar();
             Loop({ start: int(1), end: int(6), type: "int", condition: "<" }, ({ i }) => {
@@ -305,6 +317,33 @@
               const aboveBias = float(0.05).add(max(P.z.negate().sub(6.0), 0.0).mul(0.01));
               If(dz.greaterThan(0.015).and(dz.lessThan(0.5)).and(above.greaterThan(aboveBias)), () => {
                 sh.assign(ssaoU.contact.oneMinus());
+                Break();
+              });
+            });
+            const front = clamp(ssaoU.sunVS.z.negate().mul(6.0), 0.0, 1.0);
+            ao.mulAssign(mix(float(1.0), sh, front));
+          });
+    }
+    // contactSS: the same march, same occluder tests, at contactLong's taps. The start jitter trades banding for
+    // noise the AO blur (and TRAA) averages. Bounded: STEPS depth taps per pixel, fixed here at graph build.
+    function contactLongT(P, N, ao) {
+          const C = contactLong;
+          If(ssaoU.contact.greaterThan(0.0).and(ssaoU.sunVS.z.lessThan(0.05)), () => {
+            const sh = float(1.0).toVar();
+            const jit = ignoise(screenCoordinate.xy).mul(0.75).add(0.25).toVar();
+            const aboveBias = float(0.05).add(max(P.z.negate().sub(6.0), 0.0).mul(0.01)).toVar();
+            Loop({ start: int(0), end: int(C.STEPS), type: "int", condition: "<" }, ({ i }) => {
+              const u = float(i).add(jit).div(C.STEPS).toVar();
+              const dist = u.mul(u.mul(1 - C.LIN).add(C.LIN)).mul(C.REACH).toVar();
+              const q = P.add(ssaoU.sunVS.mul(dist)).toVar();
+              const cp = clipXYW(ssaoU, q).toVar();
+              const quv = cp.xy.div(cp.z).mul(0.5).add(0.5).toVar();
+              If(quv.x.lessThan(0.0).or(quv.x.greaterThan(1.0))
+                .or(quv.y.lessThan(0.0)).or(quv.y.greaterThan(1.0)), () => { Break(); });
+              const B = ssaoViewPos(quv).toVar();
+              const dz = B.z.sub(q.z).toVar();
+              If(dz.greaterThan(0.015).and(dz.lessThan(0.5)).and(dot(N, B.sub(P)).greaterThan(aboveBias)), () => {
+                sh.assign(max(smoothstep(C.FULL, C.REACH, dist).oneMinus().mul(ssaoU.contact).oneMinus(), 0.0));
                 Break();
               });
             });
@@ -1432,5 +1471,5 @@
              ssao, godray, composite, fxaa, sgsr, blit, mirror, ssaoHi, godrayHi, gi, makePhotoFocus };
   }
 
-  window.TLXShaders = Object.assign(window.TLXShaders || {}, { post, labFxaaSubpix });
+  window.TLXShaders = Object.assign(window.TLXShaders || {}, { post, labFxaaSubpix, contactLong });
 })();
