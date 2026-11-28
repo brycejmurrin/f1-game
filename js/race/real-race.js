@@ -331,7 +331,7 @@ const RealRaceBody = (function () {
       for (let n = 1; n < Ls; n++) { const rl = realLapFor(n, simLaps, realLaps); if (refRow[rl] != null) simRef[n] = K0 * refRow[rl]; }
       G.raceT = K0 * at.t0; raceT0 = G.raceT;
       const wearOn = G.tyres && G.tyres.on && G.tyres.on();
-      const vTop = G.vTop ? G.vTop() : 80;
+      const vTop = G.vTop ? G.vTop() : PaceMath.V_FALLBACK;
       // The real positions, when loaded and the distance is real: each car at the published jump instant.
       const built = active.traces && simLaps === realLaps && typeof RealReplay !== "undefined" ? RealReplay.buildTraces(G.track, script, active.traces) : null;
       const real = {};

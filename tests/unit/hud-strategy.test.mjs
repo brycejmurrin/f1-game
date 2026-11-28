@@ -14,7 +14,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 const SRC = fs.readFileSync(path.join(ROOT, "js/ui/hud-strategy.js"), "utf8");
 
 function load(extra = {}) {
-  const ctx = { console, ...extra };
+  const ctx = { console, PaceMath: { V_FALLBACK: 80 }, ...extra };   // PaceMath.V_FALLBACK: the vTop() a G without one reads
   vm.createContext(ctx); withI18n(ctx);
   vm.runInContext(SRC, ctx, { filename: absSrc("js/ui/hud-strategy.js") });   // a filename, so V8 coverage attributes the run to the file
   vm.runInContext("this.HudStrategy = HudStrategy;", ctx);

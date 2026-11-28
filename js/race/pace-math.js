@@ -132,6 +132,8 @@ const PaceMath = (function () {
     };
   }
 
-  return { create, taperAt, regenSpeedAt };
+  // The vTop() a module reads when its G has none (a bare unit VM): one value, not 80 at four sites and 90 at a
+  // fifth (#7129, Bryce D3). The live façade always has vTop, so the game never reads it.
+  return { create, taperAt, regenSpeedAt, V_FALLBACK: 80 };
 })();
 Object.freeze(PaceMath);
