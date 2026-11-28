@@ -193,7 +193,7 @@ var CrowdAudio = (function () {
       filt.connect(g);
       g.connect(d);
       try { src.start(0); } catch (e) { /* already */ }
-      cheers.push({ src, filt, g, freeAt: 0, played: false });
+      cheers.push({ src, filt, g, freeAt: 0, played: false, held: 0 });
     }
     return true;
   }
@@ -214,16 +214,20 @@ var CrowdAudio = (function () {
         g._apexCrowdTgt = undefined;
         aim(g, 0, at, 0.05);
         cheers[i].freeAt = at;
+        // Two holds cover the envelope the fire scheduled (the pinned next grid update); after them the
+        // voice sits at 0 like an unused one, so later countdown updates stop rewriting it (#7402).
+        if (cheers[i].played && ++cheers[i].held >= 2) cheers[i].played = false;
       }
     }
     swellUntil = 0;
     swellAmt = 0;
   }
 
+  let resultsEl = null;   // the static shell's #results, looked up until found (liveOk runs every setEngine)
   function resultsOpen() {
     try {
-      const el = typeof document !== "undefined" && document.getElementById
-        ? document.getElementById("results") : null;
+      const el = resultsEl || (resultsEl = typeof document !== "undefined" && document.getElementById
+        ? document.getElementById("results") : null);
       return !!(el && !el.hidden);
     } catch (e) { return false; }
   }
@@ -312,7 +316,7 @@ var CrowdAudio = (function () {
     const pk = Math.min(CHEER_PEAK, peak || CHEER_PEAK) * (lowPower() ? 0.7 : 1);
     const d = dur > 0 ? dur : 0.55;
     const g = v.g.gain;
-    v.played = true;
+    v.played = true; v.held = 0;
     g.cancelScheduledValues(t0);
     g.setValueAtTime(EMPTY, t0);
     g.linearRampToValueAtTime(pk, t0 + 0.04);
