@@ -1,6 +1,6 @@
 /* gfx-preset-rule.test.mjs — GfxQuality.presetRule / presetDefault (the "Use preset · On|Off" text and the
  * "Preset:" help line of SETTINGS › GRAPHICS › Graphics details) agree with what each option's consumer
- * actually turns on, for every row the UI lists, at all five presets, with no overrides and nothing shed.
+ * actually turns on, for every row the UI lists, at all six presets, with no overrides and nothing shed.
  *
  * Run: node --test tests/unit/gfx-preset-rule.test.mjs
  */
@@ -19,10 +19,12 @@ const QSRC = fs.readFileSync(path.join(ROOT, "js/perf/quality-preset.js"), "utf8
 const UI = fs.readFileSync(path.join(ROOT, "js/ui/desktop-graphics.js"), "utf8");
 // The rows the UI lists: `name: ["Label", "Explanation"]` entries of the groups table.
 const ROWS = [...UI.matchAll(/^\s+(\w+): \["[^"]+", "/gm)].map(m => m[1]);
-const PRESETS = ["low", "medium", "high", "ultra", "extreme"];
+const PRESETS = ["low", "medium", "high", "ultra", "extreme", "apex"];
 
 function boot(preset) {
-  GameStore.store.set("gfxPreset", preset);
+  // APEX is stored as EXTREME plus the gfxApex flag (quality-preset.js).
+  GameStore.store.set("gfxPreset", preset === "apex" ? "extreme" : preset);
+  GameStore.store.set("gfxApex", preset === "apex");
   GameStore.store.set("gfxFeatureOverrides", {});
   for (const k of ["apex26.gfxDetail", "apex26.gfxHoldExtras", "apex26.tlxAgx"]) GameStore.store.rawSet(k, "");
   return eval(QSRC + ";GfxQuality");
@@ -51,7 +53,7 @@ for (const preset of PRESETS) {
 
 test("presetRule names the lowest preset that turns a row on", () => {
   const Q = boot("high");
-  const order = { high: 2, ultra: 3, extreme: 4, cinema: 4 };
+  const order = { high: 2, ultra: 3, extreme: 4, cinema: 4, apex: 5 };
   for (const name of ROWS) {
     const rule = Q.presetRule(name);
     const first = PRESETS.findIndex(p => Q.presetDefault(name, p));
@@ -61,6 +63,7 @@ test("presetRule names the lowest preset that turns a row on", () => {
   assert.equal(Q.presetRule("msaa"), "ultra");
   assert.equal(Q.presetRule("hexTiling"), "extreme");
   assert.equal(Q.presetRule("dof"), "cinema");
+  assert.equal(Q.presetRule("contactSS"), "apex");
   assert.equal(Q.presetRule("agx"), null);
   assert.equal(Q.presetRule("tyreWearVisual"), null);
 });

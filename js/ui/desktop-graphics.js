@@ -15,6 +15,7 @@ const DesktopGraphics = (() => {
       sunMap: ["High-resolution sun shadows", "Gives sun-cast shadows finer edges. Look at the shadows from barriers and fencing."],
       carMap: ["High-resolution car shadows", "Adds detail to the shadow cast by the car, especially around the wheels and wings."],
       csm: ["Cascaded sun shadows", "Divides the sun shadow map by distance so nearby shadows can stay detailed over a longer view."],
+      contactSS: ["Long contact shadows", "Extends the short shadow where the car, kerbs and barriers meet the ground to about a metre, with a soft edge. Requires three.js WebGPU on a desktop GPU."],
       lampShadows: ["Floodlight shadows", "Lets floodlights cast shadows during night sessions."],
       brakeLightSpill: ["Brake heat lighting", "After dark, hot front brakes light the area around the wheels. With per-chunk lighting, ground illumination requires three.js."],
       lightsHi: ["Extended light count", "Allows more lights to illuminate the scene at once, especially around floodlit sections."],
@@ -84,13 +85,14 @@ const DesktopGraphics = (() => {
   let expand;
   function mount() {
     const panel = document.getElementById("pm-panel-graphics");
+    GfxQuality.refresh?.();   // the renderer is installed by now: APEX shows disabled where the adapter cannot run it
     if (!panel || typeof GLX === "undefined" || panel.querySelector("[data-desktop-graphics]")) return;
     // "Use preset" names what the CURRENT preset gives (GfxQuality.presetDefault), so the rules live in one place. A phone's
     // 90 px stepper cell fits "Preset" (every phone row is off by preset); the option's aria-label keeps the full value.
     const presetOn = effect => GfxQuality.presetDefault(effect, GfxQuality.current()) ? "On" : "Off";
     const values = effect => [["", presetLabel(presetOn(effect), GLX.isMobile, window.innerWidth)], ["on", "On"], ["off", "Off"]];
     const nameOption = (sel, effect) => sel.options[0]?.setAttribute("aria-label", `Use preset (${presetOn(effect)})`);
-    const RULES = { high: "on from HIGH", ultra: "on from ULTRA", extreme: "EXTREME only", cinema: "EXTREME only, in garage, photo and replay" };
+    const RULES = { high: "on from HIGH", ultra: "on from ULTRA", extreme: "EXTREME and APEX", apex: "APEX only", cinema: "EXTREME and APEX, in garage, photo and replay" };
     const ruleText = effect => "Preset: " + (GLX.isMobile ? "off unless you turn it on." : (RULES[GfxQuality.presetRule(effect)] || "off at every preset") + ".");
     function add(parent, tag, text) {
       const el = document.createElement(tag);
@@ -176,6 +178,8 @@ const DesktopGraphics = (() => {
             const requested = choice === "on" || (choice === "" && GfxQuality.feature(effect, true));
             if (requested && effect === "garageProbeParallax" && !GLX.garageProbeEnabled)
               reason = GLX.backend !== "three" || !GLX.isWebGPU ? "Inactive on this renderer. Requires hardware WebGPU with three.js." : "Garage reflections are inactive in this session.";
+            else if (requested && GfxQuality.APEX[effect] && GLX.apexTier !== true)
+              reason = "Inactive on this renderer. Requires three.js WebGPU on a desktop GPU.";
             else if (requested && effect === "hdrOut" && !GLX.hdrOutputActive)
               reason = "This session is displaying standard dynamic range.";
             else if (choice !== "off" && GfxQuality.shedFeature(effect))

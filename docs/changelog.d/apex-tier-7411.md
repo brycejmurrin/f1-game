@@ -1,0 +1,1 @@
+New: GRAPHICS has an opt-in APEX setting above EXTREME for desktop GPUs on the three.js renderer with WebGPU. Its first effect is long contact shadows: the short shadow where the car, kerbs and barriers meet the ground now reaches about a metre with a soft edge. APEX is never chosen automatically and is not offered on phones (#7411).

@@ -60,6 +60,18 @@
   const _gk = (T, id) => PostCommon.knob(T, id);
   const POST_VIZ = ["ssao", "bloom", "shafts", "godray", "composite-off", "scene"];
 
+  // The build ladder, as [hi, extras] rows tried in order. APEX (#7411): each rung is followed by the same rung with the
+  // long contact march off, so a march that fails to build costs only itself, never GTAO/SSGI or the desktop extras.
+  function postAttempts(HI, EX0, contactSS) {
+    const rungs = [];
+    if (EX0) rungs.push([HI, EX0]);
+    rungs.push([HI, null]);
+    if (HI) rungs.push([null, null]);
+    if (!contactSS) return rungs;
+    const out = [];
+    for (const [hi, ex] of rungs) out.push([hi, ex], [hi, Object.assign({}, ex, { contactSS: false })]);
+    return out;
+  }
   function postChain(THREE, TSL, ctx) {
     const renderer = ctx.renderer;
     // Manual experiment, read once per chain; opt-in takes effect on reload.
@@ -508,14 +520,11 @@
       sceneTex: sceneRT.texture, sceneTagTex, sceneDepthTex,
       dirtTex, whiteTex, blackTex,
       trackMaterial, vp: phys ? VP : null, hdrPeak,
-      hi, ownTexture,
+      hi, ownTexture, contactSS: !!ctx.contactSS,
     }, ex || {});
     // A desktop extra that fails to build must not cost the chain: first without this PR's extras (velocity, SSGI
     // accumulation, AgX), then today's pass set with nothing extra. With neither, a throw is the chain's (as before).
-    const attempts = [];
-    if (EX0) attempts.push([HI, EX0]);
-    attempts.push([HI, null]);
-    if (HI) attempts.push([null, null]);
+    const attempts = postAttempts(HI, EX0, !!ctx.contactSS);
     let P = null, EX = null;
     for (let i = 0; i < attempts.length && !P; i++) {
       try { P = TLXShaders.post(THREE, TSL, postCtx(attempts[i][0], attempts[i][1])); HI = attempts[i][0]; EX = attempts[i][1]; } catch (e) {
@@ -523,7 +532,7 @@
         try { Log.warn("gfx", "TLX post: desktop-tier passes failed to build, falling back: " + (e && e.message)); } catch (_) { /* harness */ }
       }
     }
-    if (!EX) agx = false;
+    if (!EX || !EX.agx) agx = false;
     ownTexture(P.composite && P.composite.giOffTex);
     let _hiLive = null, _hiAge = 0, _hiLatched = false;
     // feature() reads storage; a 15-present cadence keeps it off the hot path (a shed or the cinema flag lands <0.25 s late).
@@ -1941,5 +1950,5 @@
     }
   }
 
-  window.TLXShaders = Object.assign(window.TLXShaders || {}, { postChain });
+  window.TLXShaders = Object.assign(window.TLXShaders || {}, { postChain, postAttempts });
 })();

@@ -843,7 +843,7 @@ const TLX = (function () {
         try { raw = localStorage.getItem("apex26.tlxForceHw") || ""; } catch (_) { raw = ""; }
         const set = new Set(String(raw).split(",").map((p) => p.trim()).filter(Boolean));
         const all = set.has("1") || set.has("all");
-        return { on: all || set.size > 0, has: (part) => all || set.has(part) };
+        return { on: all || set.size > 0, has: (part) => all || set.has(part), named: (part) => set.has(part) };
       })();
       // Content skips ask these, not softGpu()/softwareGL, so the switches reach them.
       // Which backend three ACTUALLY bound. `_softAdapter` is a fact about
@@ -881,6 +881,9 @@ const TLX = (function () {
       // so that was every desktop Safari boot. On the WebGPU path the two terms
       // are the same value, so nothing there changes.
       function softContent(part) { return softwareGL && !_forceHw.has(part); }
+      // APEX (#7411, D-050): a desktop-class adapter is a desktop, non-WebKit, hardware adapter with three bound to
+      // WebGPU (the backend is bound: init() was awaited above). apex26.tlxForceHw=apex opens it on a software adapter for a container still; no player has that key.
+      const _apexTier = (_deskTier && isWebGPU()) || _forceHw.named("apex");   // by name: tlxForceHw=1 / all (probes, the census) do not open it
       function softOutRT() {
         if (!softGpu()) return null;
         const up = wantSpatialUpscale();
@@ -1483,6 +1486,7 @@ const TLX = (function () {
               postSubmitHold: function () { return _postSubmitOn; },
               // Desktop tiers (tsl-aa.js): TRAA on native WebGPU in place of FXAA; the HDR composite peak (1 = SDR).
               traa: !forceWebGL && _deskTier && _gfxx("traa"), hdrPeak: _hdrPeak,
+              contactSS: _apexTier && _gfxx("contactSS"),   // APEX (#7411): long contact shadows, tsl-post.js
               // SCENE MSAA: on the desktop WebGL2 backend only, sized by the
               // GRAPHICS preset exactly like glx/post.js (4x on ULTRA, 2x
               // below, clamped to what the HDR format supports). The WebGL
@@ -6237,6 +6241,7 @@ const TLX = (function () {
         // The opt-out as a capability: game.js skips its whole probe branch (a track
         // sample, the latch bookkeeping) instead of calling a begin that returns null.
         hdrOutputActive: _hdrPeak > 1,
+        apexTier: _apexTier,
         garageProbeEnabled: !!(garageProbeRequested && envRT && lit && lit.uniforms && lit.uniforms.garageBox),
         get envProbeOptOut() { return raceProbeOff || !envRT || _envGaveUp; },
         envProbeReady() { return !garageProbeRoom && (envReady || _envGaveUp); },
