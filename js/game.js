@@ -398,8 +398,8 @@ function aTop()  { return ACCEL * pace.k; }
 // A car's driveTune.PACE as the AI judges it: vmax less its X-mode gain, and for a HUMAN x its paceF (AiDrive.paceSample). A net-owned human never reaches updateCar's stamp, so it reads vTop().
 // xVmaxGain / paceRef / xDfLoss / xCoastCut: js/race/pace-math.js
 function paceVmax(o) { return (o._vmaxNow || (o.human ? vTop() : 0)) / (1 + xVmaxGain(o) * (o.aeroX || 0)) * (o.human ? (o.paceF || 1) : 1); }
-// Scripted field pace (tierV×skill) for AiDrive.pairEdgeN (pass-completion).
-function scriptPace(o) { return (o && o.tierV > 0 && o.skill > 0) ? o.tierV * o.skill : 0; }
+// Scripted field pace (tierV×skill) for AiDrive.pairEdgeN (pass-completion): the one body is AiDrive's (trailStep reads it too).
+const scriptPace = AiDrive.scriptPaceOf;
 // These four are `let` so the tuning harness (setPhysics) can sweep them: the core feel levers, not pause-menu sliders.
 // driveTune.FRONT_GRIP: front friction bias (<1, understeer-safe). YAW_DAMP: arcade yaw stability. YAW_INERTIA: rotational
 // inertia scale (<1 = snappier turn-in, quicker chicanes). PLAYER_GRIP: forgiveness headroom over the AI.
@@ -5110,8 +5110,7 @@ function updateCar(c, dt, ranked) {
     _aiBoost.ourVmax = S.pvA; _aiBoost.ourPace = scriptPace(c); _aiBoost.towPace = towCar ? scriptPace(towCar) : 0;
     aiWantsBoost = AiDrive.wantBoost(_aiBoost);
   }
-  const wantBoost = ((c.human ? c.boostOn : aiWantsBoost) && !ersHeld)
-    ;   // OVERTAKE eligibility is resolved below from this tick's toggle.
+  const wantBoost = ((c.human ? c.boostOn : aiWantsBoost) && !ersHeld);   // OVERTAKE eligibility is resolved below from this tick's toggle.
   // OVERTAKE IS FREE. Its push does not come out of the battery, so an OT burst
   // costs nothing, fires on a flat ERS, and never competes with BOOST for charge.
   // It is already rationed by its own 0.5 MJ allowance per earned lap, which is what
@@ -5120,8 +5119,6 @@ function updateCar(c, dt, ranked) {
   // press emptied 80% of the battery, so using the overtake button left you
   // slower for the rest of the lap than if you had never pressed it.
   let otFree = false;
-  // driveTune.PACE-scaled like every other accel term (docs/PHYSICS.md): unscaled it was 2.56x a pace-0.44 car's build-up but 1.54x a 1.34 one's.
-  // The drain and `c.deploying` follow `onThrottle` below: the push only enters `a` on the throttle branch.
 
 
   // --- overtake mode --- (FIA 2026 B7.2.3(c), js/race/overtake-mode.js)
@@ -5176,6 +5173,7 @@ function updateCar(c, dt, ranked) {
   if (S.recordInput) S.recordInput.overtake = !!fire;
   if (OvertakeMode.prepare(c, fire, otGate, otFast, otTimeFor(c)) && c.isPlayer && soundOn) GameAudio.deployBoost();
   otFree = c.otT > 0;
+  // driveTune.PACE-scaled like every other accel term (docs/PHYSICS.md): unscaled it was 2.56x a pace-0.44 car's build-up but 1.54x a 1.34 one's.
   if (otFree || (wantBoost && c.energy > 0)) deploy = DEPLOY_A * pace.k * deployTaper(c);
   if (c.isPlayer && c.otArmed && !c.wasArmed && soundOn) GameAudio.overtakeReady();
   c.wasArmed = c.otArmed;
@@ -5541,7 +5539,7 @@ function updateCarBrakePlan(c, dt, ranked, S) {
     // SQUEEZED (AiDrive.squeezeEase / squeezeBrake): touching a car we must
     // yield to, with no lane to yield into — back out under its speed, brake
     // dabbed, until we are clear. The pass latch below reads it too.
-    if (alongO && c.sbsT > AiDrive.SBS_COMMIT_MIN) {   // sbsCommitT's floor: below it no bag is filled
+    if (alongO && c.sbsT > AiDrive.SBS_COMMIT_MIN) {   // sbsLimits' commitT floor: below it no bag is filled
       const sb = AiDrive.sbsArgs(!!track.street, aiT, vT, alongO, S.pvA, scriptPace(c), paceVmax(alongO), scriptPace(alongO)), sbl = AiDrive.sbsLimits(sb);   // pooled; one concede feeds commitT and ease
       if (c.sbsT > sbl.commitT && c.passOf !== alongO && alongO._snapSpeed >= c.speed - 0.5 * vT / VMAX) vmax = Math.min(vmax, alongO._snapSpeed * sbl.ease);   // COMMIT OR YIELD: tuck in behind
     }
@@ -5584,6 +5582,7 @@ function updateCarLongitudinal(c, dt, ranked, S) {
     ? (inp ? !!inp.throttle : ((autoThrottle() && !wallPinned) || Input.throttle()))
     : true;
   if (otFree) deploy *= OvertakeMode.consume(c, dt, onThrottle && !braking && deploy > 0, otTimeFor(c));
+  // The drain and `c.deploying` follow `onThrottle`: the push only enters `a` on the throttle branch.
   if (!onThrottle || braking) deploy = 0;   // no thrust, so no drain and no "deploying" (BOOST held through a brake drained for nothing)
   // BOOST alone still pays: deploy always produces thrust while held (see deployTaper), so it always costs energy — a BOOST that drains nothing does nothing.
   if (deploy > 0 && !otFree) { c.energy = Math.max(0, c.energy - drainFor(c) * dt); if (c.energy <= 0) c.boostOn = false; }   // auto-release the toggle when drained
@@ -6550,8 +6549,8 @@ function updateCarAdvance(c, dt, ranked, S) {
     // window — do not stack another 7 s on top (that left monaco crawls at 10 s).
     if (c.rescueT > AiDrive.aiRescueDelay((c.contactT || 0) > 0, digEsc)) {
       Tracks.sample(track, c.s, smp);
-      // Break the weld SIDEWAYS first: a car pinned against another is stuck
-      // laterally, and a bare speed restore re-loads the same contact next frame.
+      // A car welded to another: shove toward the roomier side. On the road rescueX
+      // overwrites c.x, so this only picks the side it tries first; in the lane it feeds laneX.
       if ((c.contactT || 0) > 0) c.x += (roomR >= roomL ? 1 : -1) * 1.2;
       if (pits.inLane(c)) {
         // Stuck IN THE LANE (a queue behind a parked car): back onto the lane's

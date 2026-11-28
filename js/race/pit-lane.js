@@ -1655,7 +1655,8 @@ var PitLane = (function () {
       // seconds (js/race/flying-start.js); its plan is still the player's.
       if (G.flyingStart && G.flyingStart.owns(c)) return "";
       // The last lap, or the leader already flagged: no stop pays (the player's
-      // engineer has the same finalLap guard). A lapped AI still boxed for wets.
+      // engineer has the same finalLap guard). Once the leader has flagged no car
+      // boxes at all, a lapped one on the wrong tyre for the weather included.
       if ((G.lapsTarget > 0 && (c.lap || 0) >= G.lapsTarget) || flagNow()) return "";
       // A red flag (4) is not a pit window: the field is held and the restart clears arms.
       if (cautionNow() >= 4) return "";
