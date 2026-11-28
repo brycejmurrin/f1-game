@@ -25,7 +25,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 // `const Career` lands in the context's global LEXICAL scope, not on the global
 // object — read it back by evaluating its name (same shape as race-control).
-function load(seasonLen, raceRules = false, onWrite = () => {}) {
+function load(seasonLen, raceRules = false, onWrite = () => {}, durable = true) {
   const stored = new Map();
   const ctx = vm.createContext({
     Math, JSON, Object, Array, String, Number, Date, isNaN, isFinite, console,
@@ -33,7 +33,8 @@ function load(seasonLen, raceRules = false, onWrite = () => {}) {
       CAREER_V: 3,
       store: {
         get: (k, d) => (stored.has(k) ? stored.get(k) : d),
-        set: (k, v) => { onWrite(k); return stored.set(k, v); },
+        // durable=false plays a quota-refused store: the write is session-only.
+        set: (k, v) => { onWrite(k); stored.set(k, v); return durable; },
       },
       seasonDriverId: (teamId, i) => teamId + ":" + i,
       migrateCareer: (c) => c,
@@ -138,6 +139,24 @@ for (const flavour of ["myteam", "driver"]) {
     } else {
       assert.equal(sponsor, null, "driver careers do not own sponsor contracts");
     }
+  });
+}
+
+// #7485: since #7366 objective() is a pure read, so the opening brief must be
+// stored by start() itself, durable or session-only (persistence-dom.spec's
+// bootBroken waits on career().obj before it captures the recovery export).
+for (const durable of [true, false]) {
+  test(`start() stores the round's brief, and a later objective() read writes nothing (durable=${durable})`, () => {
+    let writes = 0;
+    const Career = load(4, false, () => { writes++; }, durable);
+    assert.ok(Career.start({ flavour: "driver", teamId: "haas", seat: 1, seed: 2026 }));
+    assert.equal(Career.saveStatus().durable, durable);
+    const c = Career.data();
+    assert.ok(c.obj, "career.obj is set after start");
+    assert.deepEqual(c.obj, Career.objectiveFor(c.season.round));
+    const before = writes;
+    assert.equal(Career.objective(), c.obj);
+    assert.equal(writes, before, "objective() still never writes (#7366)");
   });
 }
 
