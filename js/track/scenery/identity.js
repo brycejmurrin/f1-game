@@ -295,10 +295,11 @@ const SceneryIdentity = (function () {
       const saferGap = opts.saferGap != null ? opts.saferGap : 7.0;
       const doSafer = opts.safer !== false;
       let stripe = 0;
+      const kerbMsg = () => `kerb SUPPRESSED on side=${side}`, saferMsg = () => `saferStrip SUPPRESSED on side=${side}`;
       along(s0, s1, opts.step || 3.2, (k, spacing) => {
         const col = (stripe++ & 1) ? kerbWht : kerbRed;
         const a = anchor(k, side, 1.35);
-        if (onTrack(a.c[0], a.c[2], 1.1)) return;
+        if (SceneryGuards.refuseOnRoad(ctx, "kerb", a.c[0], a.c[2], 1.1, kerbMsg)) return;
         const b = [a.r, a.u, a.t];
         const SINK = 0.3;
         addBox(out, vadd(a.c, a.u, 0.16 + SINK), [1.05, 0.26, spacing * 0.90], col, b);
@@ -315,7 +316,7 @@ const SceneryIdentity = (function () {
       if (!doSafer) return;
       along(s0, s1, opts.saferStep || 4.0, (k, spacing) => {
         const a = anchor(k, side, saferGap);
-        if (onTrack(a.c[0], a.c[2], 1.4)) return;
+        if (SceneryGuards.refuseOnRoad(ctx, "saferStrip", a.c[0], a.c[2], 1.4, saferMsg)) return;
         const b = [a.r, a.u, a.t];
         addBox(out, vadd(a.c, a.u, 0.55), [0.58, 1.10, spacing * 0.94], saferCol, b);
         addBox(out, vadd(a.c, a.u, 1.14), [0.62, 0.12, spacing * 0.94], kerbRed, b);
@@ -335,9 +336,10 @@ const SceneryIdentity = (function () {
       ];
       // Solid seating mass — index it so foliage cannot grow through the bowl.
       indexSolid(s0, s1, side, gap - thick / 2, thick);
+      const bowlMsg = () => `bowlSeatWall SUPPRESSED on side=${side} gap=${gap}`;
       along(s0, s1, opts.step || 7, (k, spacing) => {
         const p = anchor(k, side, gap);
-        if (onTrack(p.c[0], p.c[2], thick / 2 + 2)) return;
+        if (SceneryGuards.refuseOnRoad(ctx, "bowlSeatWall", p.c[0], p.c[2], thick / 2 + 2, bowlMsg)) return;
         const bv = [p.r, p.u, p.t];
         addBox(out, vadd(p.c, p.u, h * 0.48), [thick, h * 0.95, spacing * 0.94], shell, bv);
         // crowd outer face = 0.38*thick + 0.275 meets the shell face (thick/2) near thick 2.3 m;

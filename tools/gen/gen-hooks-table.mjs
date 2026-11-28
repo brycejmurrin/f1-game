@@ -216,15 +216,18 @@ export function sourceHooks() {
  * Reconcile the live key list with the source parse: one row per LIVE name, in
  * live order. Throws when the parse found a name the game does not expose.
  * @param {string[]} live Object.keys(__apex)
+ * @param {{name:string,args:string,doc:string}[]} [play] ApexPlay.rows(): the fallback for a def()'d hook (no source parse sees it)
  */
-export function collectHooks(live) {
+export function collectHooks(live, play = []) {
   if (!Array.isArray(live) || !live.length) throw new Error("collectHooks(live): need the live __apex key list");
   const parsed = sourceHooks();
   const liveSet = new Set(live);
   const bogus = parsed.filter((h) => !liveSet.has(h.name)).map((h) => `${h.file || APEX}:${h.line} ${h.name}`);
   if (bogus.length) throw new Error(`source parse found names that are not live __apex hooks (parser bug?): ${bogus.join(", ")}`);
   const byName = new Map(parsed.map((h) => [h.name, h]));
+  const playBy = new Map((play || []).map((r) => [r.name, r]));
   return live.map((name) => byName.get(name)
+    || (playBy.has(name) && { name, sig: `${name}(${playBy.get(name).args})`, kind: "live", summary: playBy.get(name).doc.replace(/\s+/g, " ").replace(/\|/g, "\\|") })
     || { name, sig: name, kind: "live", summary: "live key set outside `api` (e.g. `js/game.js` bindAgent after `ApexApi.create`)" });
 }
 
@@ -256,8 +259,8 @@ export function collectAgentSurface() {
   return groups;
 }
 
-export function renderBlock(live) {
-  const hooks = collectHooks(live);
+export function renderBlock(live, play = []) {
+  const hooks = collectHooks(live, play);
   const agent = collectAgentSurface();
   const nAsync = hooks.filter((h) => h.kind === "async").length;
   const out = [
@@ -281,7 +284,7 @@ export function renderBlock(live) {
 }
 
 export function render(existing, live, play = []) {
-  return replaceBlock(replaceBlock(existing, "hooks-table", renderBlock(live)), "play-hooks", renderPlayBlock(live, play));
+  return replaceBlock(replaceBlock(existing, "hooks-table", renderBlock(live, play)), "play-hooks", renderPlayBlock(live, play));
 }
 
 if (isMain(import.meta.url)) {

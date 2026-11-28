@@ -746,8 +746,9 @@ const api = {
   //   opts.fov   (default 52)   field of view degrees
   //   opts.azOff (default 0)    extra azimuth twist on top of auto angle
   // Returns the same {eye, target, fov, az} object as orbit() plus the curvature k.
-  cinematic(frac, opts = {}) {
+  cinematic(frac, opts) {
     if (!G.track) return false;
+    opts = opts || {};
     const fr = ((frac % 1) + 1) % 1;
     const k = Tracks.curvature(G.track, fr * G.track.total);
     // +k is a LEFT-hand bend (measured — agentview.js corner-table note), whose
@@ -766,8 +767,10 @@ const api = {
     return res ? Object.assign(res, { az: +az.toFixed(1), k: +k.toFixed(5) }) : false;
   },
 
-  tourShots(n = 12, opts = {}) {
+  tourShots(n = 12, opts) {
     if (!G.track) return [];
+    opts = opts || {};
+    n = Number.isFinite(n) ? Math.min(Math.max(Math.floor(n), 0), 500) : 12;   // cap 500: tourShots(1e7) would loop 1e7 times
     const dist    = opts.dist     != null ? opts.dist     : 80;
     const el      = opts.el       != null ? opts.el       : 20;
     const azOff   = opts.azOffset != null ? opts.azOffset : 35;
@@ -805,13 +808,13 @@ const api = {
   // Lets a harness measure pure side-by-side jitter without pack chaos.
   pair(frac, speed) {
     if (!G.track) return false;
+    const ai = G.cars.filter((c) => !c.isPlayer);
+    if (ai.length < 2) return false;   // needs ≥2 AI cars — unavailable in time trial; checked BEFORE any state flip
     G.cmd.setState("race", "agent-pair"); G.raceT = Math.max(G.raceT, 1);
     resetStartLights(true);
     G.lightsLit = 0;   // the DOM alone leaves the counter at 5 — see the façade
     const f = frac == null ? 0.3 : frac, v = speed == null ? 55 : speed;
     const prog = f * G.track.total, s = wrapS(prog);
-    const ai = G.cars.filter((c) => !c.isPlayer);
-    if (ai.length < 2) return false;   // needs ≥2 AI cars — unavailable in time trial
     const a = ai[0], b = ai[1];
     [a, b].forEach((c, i) => {
       c.prog = prog; c.s = s; c.speed = v;
@@ -822,11 +825,13 @@ const api = {
     return { a: G.cars.indexOf(a), b: G.cars.indexOf(b) };
   },
   jam(n) {
-    if (!G.track) return false;
+    if (!G.track || !G.player) return false;
+    const ai = G.cars.filter((c) => !c.isPlayer);
+    if (!ai.length) return false;   // no grid (menu / time trial): refuse before any state flip
     G.cmd.setState("race", "agent-jam"); G.raceT = Math.max(G.raceT, 1);
     resetStartLights(true);
     G.lightsLit = 0;   // the DOM alone leaves the counter at 5 — see the façade
-    const ai = G.cars.filter((c) => !c.isPlayer), m = Math.min(n || 5, ai.length);
+    const m = Math.min(n || 5, ai.length);
     const prog = 0.5 * G.track.total;
     const ids = [];
     const stacked = ai.slice(0, m);
@@ -1033,7 +1038,10 @@ const api = {
   careerMoney(n) {
     const c = Career.data();
     if (!c) return null;
-    if (n != null) { c.money = Math.max(0, n | 0); Career.save(); }
+    if (n != null) {
+      if (!Number.isFinite(+n)) return c.money;   // NaN / Infinity: refuse, keep the balance
+      c.money = Math.max(0, Math.floor(+n)); Career.save();   // n|0 wrapped int32 (3e9 stored 0)
+    }
     return c.money;
   },
   careerReset() { const result = Career.clear(); if (result.ok) G.refreshCareerButton(); return result; },
