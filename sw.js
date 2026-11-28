@@ -423,7 +423,9 @@ async function shellAtLeast(b) {
   try { ordered = await cacheOrder(); } catch (_) { return undefined; }
   for (const name of ordered) {
     if (!(cacheBuild(name) >= want)) continue;
-    const hit = await caches.match("index.html", { cacheName: name });
+    // A rejected match must not reject respondWith: fall through to the network, then bustFallback (#7497 row 2).
+    let hit;
+    try { hit = await caches.match("index.html", { cacheName: name }); } catch (_) { return undefined; }
     if (hit) return hit;
   }
   return undefined;

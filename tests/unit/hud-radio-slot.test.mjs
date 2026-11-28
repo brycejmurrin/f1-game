@@ -208,11 +208,12 @@ test("LiveRegion speaks inside the topmost open modal, through an empty polite t
 // last race call stayed in #announce-live for browse mode. A dialog that opens
 // or closes during the 60 ms beat must not leave the line on the node that
 // just became inert.
-function liveModalHarness() {
+function liveModalHarness({ uiTop } = {}) {
   const timers = [];
   let seq = 0;
   const node = (tag) => ({ tagName: tag, attrs: {}, kids: [], textContent: "",
     setAttribute(k, v) { this.attrs[k] = v; }, appendChild(n) { this.kids.push(n); return n; },
+    contains(n) { return n === this || this.kids.some((k) => k === n || (k.contains && k.contains(n))); },
     querySelector(sel) { return sel === ":scope > [data-announce-modal]" ? this.kids.find((k) => "data-announce-modal" in k.attrs) || null : null; } });
   const page = node("div");
   const dialogs = [];
@@ -230,6 +231,7 @@ function liveModalHarness() {
     setTimeout: (fn) => { timers.push({ id: ++seq, fn }); return seq; },
     clearTimeout: (id) => { const i = timers.findIndex((t) => t.id === id); if (i >= 0) timers.splice(i, 1); },
     performance: { now: () => 0 },
+    ...(uiTop ? { UiLayers: { top: () => uiTop() } } : {}),
   };
   vm.runInNewContext(read("js/ui/live-region.js") + ";this.LiveRegion=LiveRegion;", sb, { filename: absSrc("js/ui/live-region.js") });
   const fire = () => { const t = timers.shift(); if (t) t.fn(); };
@@ -274,6 +276,37 @@ test("LiveRegion retargets a line when a dialog opens during the clear-then-writ
   assert.ok(twin, "the open dialog gets a twin");
   assert.equal(twin.textContent, "RACE CONTROL: SAFETY CAR", "the line is spoken where the reader can hear it");
   assert.equal(h.page.textContent, "", "it is not left on the now-inert page region");
+});
+
+// #7497 row 1: :modal lists DOM order. #pausemenu precedes #standings in
+// index.html, so PAUSE opened over STANDINGS put the line in the covered,
+// inert standings twin. The dialog UiLayers ranks on top gets it; a :modal
+// nested inside that one (the Data Hub telemetry popup) still wins.
+test("LiveRegion speaks into the dialog opened last, not the last :modal in DOM order (#7497)", () => {
+  let top = null;
+  const h = liveModalHarness({ uiTop: () => top });
+  const pause = h.node("dialog"), standings = h.node("dialog");
+  h.dialogs.push(pause, standings);
+  h.setModals([pause, standings]);   // DOM order; pause was shown last
+  top = pause;
+  h.L.say("RACE CONTROL: SAFETY CAR", "flag");
+  h.fire(); h.fire();
+  const twin = pause.querySelector(":scope > [data-announce-modal]");
+  assert.ok(twin, "the pause dialog the reader is in gets the twin");
+  assert.equal(twin.textContent, "RACE CONTROL: SAFETY CAR");
+  assert.equal(standings.querySelector(":scope > [data-announce-modal]"), null, "the covered, inert standings dialog gets nothing");
+
+  let hub = null;
+  const h2 = liveModalHarness({ uiTop: () => hub });
+  hub = h2.node("dialog");
+  const tele = h2.node("dialog");
+  hub.appendChild(tele);
+  h2.dialogs.push(hub, tele);
+  h2.setModals([hub, tele]);
+  h2.L.say("Lap 12", "radio");
+  h2.fire(); h2.fire();
+  const inner = tele.querySelector(":scope > [data-announce-modal]");
+  assert.equal(inner && inner.textContent, "Lap 12", "the nested telemetry popup still wins");
 });
 
 test("both radio slots size the card to the slot, not to the dock lane announceLane still publishes (UI-HUNT-2-HUD)", () => {

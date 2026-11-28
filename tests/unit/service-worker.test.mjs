@@ -36,7 +36,7 @@ function requestKey(value) {
   return value.url;
 }
 
-function createHarness({ fetchImpl, putImpl, matchImpl, immediateTimeout = false, immediateTimeoutMs = null, navigator, hostname = "apex.test", registration, posted, workerURL, globals, clientWindows, source = SW_SOURCE } = {}) {
+function createHarness({ fetchImpl, putImpl, matchImpl, storageMatchImpl, immediateTimeout = false, immediateTimeoutMs = null, navigator, hostname = "apex.test", registration, posted, workerURL, globals, clientWindows, source = SW_SOURCE } = {}) {
   const listeners = new Map();
   const stores = new Map();
   const deleted = [];
@@ -78,6 +78,7 @@ function createHarness({ fetchImpl, putImpl, matchImpl, immediateTimeout = false
     // the option it walks every cache in creation order — Map insertion order.
     async match(request, options) {
       const key = requestKey(request);
+      if (storageMatchImpl) await storageMatchImpl(request, options);
       if (options && options.cacheName != null) {
         const store = stores.get(options.cacheName);
         return store && store.has(key) ? store.get(key).clone() : undefined;
@@ -3036,4 +3037,27 @@ test("promotion waits for a settled current generation and hashes a mismatching 
   digests = 0;
   for (let i = 0; i < 3; i++) await hit(forged);
   assert.equal(digests, 1, "a key whose digest misses is hashed once per worker, not on every hit");
+});
+
+// #7497 row 2: shellAtLeast ran before the fetch handler's try, and its per-cache
+// index.html match was unguarded, so one rejected CacheStorage.match rejected
+// respondWith: the update-bust navigation got the browser's network error.
+test("a rejected shell match under a ?b= bust still answers the navigation (#7497)", async () => {
+  let failed = 0;
+  const h = createHarness({
+    immediateTimeoutMs: 3000,
+    navigator: { onLine: false },
+    fetchImpl: () => Promise.reject(new TypeError("offline")),
+    storageMatchImpl: async (request, options) => {
+      if (!failed && options && options.cacheName && requestKey(request).endsWith("/index.html")) {
+        failed += 1;
+        throw new DOMException("cache read failed", "UnknownError");
+      }
+    },
+  });
+  h.stores.set("apex26-9999", new Map([[`${ORIGIN}/index.html`, new Response("shell 9999", { status: 200 })]]));
+  const res = await h.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/index.html?b=9999` }).responsePromise;
+  assert.equal(failed, 1, "the shell lookup did reject");
+  assert.ok(res instanceof Response, "respondWith resolves to a Response");
+  await assertBustHop(res, "the bust falls through to bustFallback", `${ORIGIN}/index.html`);
 });

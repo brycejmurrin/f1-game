@@ -26,10 +26,23 @@ const LiveRegion = (function () {
   const queue = [];
   const now = () => (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now());
 
+  /* The dialog the reader is in. :modal lists DOM order, not opening order:
+     #pausemenu precedes #standings/#results/#datahub in index.html, so with
+     PAUSE over one of them the last :modal was the covered, inert one
+     (#7497 row 1). UiLayers ranks modals by opening; then the deepest :modal
+     inside it wins, so a nested popup (Data Hub telemetry) still gets the line. */
+  function topModal(open) {
+    let top;
+    try { top = UiLayers.top(); } catch (_) { /* no layers.js */ }
+    if (open.indexOf(top) < 0) top = open[open.length - 1];
+    // A descendant follows its ancestor in DOM order, so index 0 never is one; top itself returns top.
+    for (let i = open.length - 1; i >= 1; i--) if (top.contains(open[i])) return open[i];
+    return top;
+  }
   // An open modal makes #announce-live inert: speak through a polite twin inside the topmost one (UI hunt 3).
   function modalRegion() {
     let top = null;
-    try { const open = document.querySelectorAll(":modal"); top = open.length ? open[open.length - 1] : null; } catch (_) { return null; }
+    try { top = topModal(Array.from(document.querySelectorAll(":modal"))); } catch (_) { return null; }
     if (!top) return null;
     let r = top.querySelector(":scope > [data-announce-modal]");
     if (!r) {
@@ -129,13 +142,10 @@ const LiveRegion = (function () {
     const live = document.getElementById && document.getElementById("announce-live");
     if (live) { live.textContent = ""; el = live; }
     if (!document.querySelectorAll) return;
-    const blank = (n) => { if (n) n.textContent = ""; };
     let twins = [];
     try { twins = document.querySelectorAll("[data-announce-modal]"); } catch (_) { twins = []; }
-    for (const n of twins) blank(n);
-    let modals = [];
-    try { modals = document.querySelectorAll(":modal"); } catch (_) { modals = []; }
-    for (const top of modals) blank(top && top.querySelector && top.querySelector(":scope > [data-announce-modal]"));
+    // Every twin, open dialog or closed: [data-announce-modal] already finds each :modal's own.
+    for (const n of twins) n.textContent = "";
   }
 
   /** Test / debug view of the announcer (never a source of game state). */
