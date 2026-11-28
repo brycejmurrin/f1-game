@@ -485,9 +485,12 @@ test("A·W14: the mirror shares the scene pass's render context — the eager wa
 
 test("A·W14: tlx.js wiring — mirrorEnd and the mirror warm arm the scene MRT only for a mirror-shaped target, the knob read once", () => {
   const me = TLX.slice(TLX.indexOf("        mirrorEnd() {"), TLX.indexOf("        mirrorRect(r, flip)"));
-  const arm = me.indexOf("if (mrt) _mirMrtArm(true);"), draw = me.indexOf("try { renderer.render(scene, mirCam); } finally { if (mrt) _mirMrtArm(false, prevMrt); if (hinted) post.discardHintOff(mirRT); }");   // A-P2W: the WebGPU discard hint comes off in the same finally
-  assert.ok(me.includes("const mrt = _mirMrt(), prevMrt = mrt ? renderer.getMRT() : null;") && arm > 0 && draw > arm,
-    "mirrorEnd arms the MRT for a mirror-shaped target and restores the previous one after the draw, even on a throw");
+  // #7438: the arm and the A-P2W hint sit INSIDE the try whose finally restores the MRT and takes the hint off.
+  const open = me.indexOf("let hinted = false;\n            try {"), arm = me.indexOf("if (mrt) _mirMrtArm(true);");
+  const draw = me.indexOf("renderer.render(scene, mirCam);");
+  const fin = me.indexOf("} finally { if (mrt) _mirMrtArm(false, prevMrt); if (hinted) post.discardHintOff(mirRT); }");
+  assert.ok(me.includes("const mrt = _mirMrt(), prevMrt = mrt ? renderer.getMRT() : null;") && open > 0 && arm > open && draw > arm && fin > draw,
+    "mirrorEnd arms the MRT for a mirror-shaped target inside the try and restores the previous one after the draw, even on a throw");
   const ws = TLX.slice(TLX.indexOf("      async function warmMirrorStage("), TLX.indexOf("      // garageSceneOnly:"));
   assert.ok(ws.indexOf("_mirMrtArm(_mirMrt());") < ws.indexOf("await renderer.compileAsync(scene, camera);"), "the world compiles under the mirror's MRT");
   assert.ok(ws.indexOf("_mirMrtArm(false);") > ws.indexOf("await renderer.compileAsync(scene, camera);")

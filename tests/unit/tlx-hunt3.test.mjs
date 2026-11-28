@@ -328,8 +328,8 @@ test("R3: tlx.js sets the ssrTag MRT only on a tagged chain (present + warm), an
   assert.match(TLX, /viz: vizMode, ssrTag: _wantTag\(\),/, "buildPost passes the rule to the chain");
   const at = TLX.indexOf("const _tag = !post.tagOn || post.tagOn();");
   assert.ok(at > 0, "present() reads the chain's tag state");
-  assert.match(TLX.slice(at, at + 400),
-    /if \(_tag && lit && lit\.setSsrMrt\) lit\.setSsrMrt\(true\);[\s\S]*if \(_tag && fx && fx\.setSsrMrt\) fx\.setSsrMrt\(true\);[\s\S]*const _hadMrt = _tag && /);
+  assert.match(TLX.slice(at, at + 800),
+    /if \(_tag && lit && lit\.setSsrMrt\) lit\.setSsrMrt\(true\);[\s\S]*if \(_tag && fx && fx\.setSsrMrt\) fx\.setSsrMrt\(true\);[\s\S]*_hadMrt = _tag && /);
   const warm = TLX.slice(TLX.indexOf("function startProgramWarm(opts) {"), TLX.indexOf("const ENV_PROBE_TRIES"));
   assert.match(warm, /const useTag = usePost && \(!post\.tagOn \|\| post\.tagOn\(\)\);/);
   assert.doesNotMatch(warm, /setSsrMrt\(usePost\)|usePost \? _ssrMrtNode\(\)/, "the warm compiles the MRT variant present() will use");
@@ -1391,4 +1391,184 @@ test("TLX sky gates the azimuth noise on up < 0.51 and the cloud lighting on cov
       } finally { geo.dispose(); material.dispose(); sky.dispose(); }
     }
   } finally { renderer.dispose(); }
+});
+
+/* batch #7438 (render hunt #7437 rows 1, 5, 6, 7): three failure-path guards that leave
+ * every healthy frame pixel-identical. Each test runs the SHIPPED source text (extracted, not re-typed) in a VM and
+ * fails on the base:
+ *   1. tsl-post bright pass: an Inf or NaN scene texel must not come out NaN (Inf/Inf) and seed the bloom chain;
+ *      the reflection fresnel base is clamped to [0, 1] (pow of a negative base is undefined in WGSL).
+ *   2. tlx present(): a throw from post.setMirror must not leave the SSR MRT bound (or lit armed) for paintCanvas.
+ *   3. tlx-shadow freeCasterGeo: freeing a caster deletes only its own instance attributes, never the lit
+ *      batch's shared index / vertex attributes (three r187 deletes what is ON the geometry at dispose). */
+const POST = read("js/render/three/tsl-post.js");
+const SHADOW = read("js/render/three/tlx-shadow.js");
+
+// ---- 1. bright pass -------------------------------------------------------------------------------------------
+// A scalar stand-in for the TSL ops the bright Fn uses, with WGSL's worst case for a NaN: Math.max/min propagate
+// it (WGSL leaves max/min of a NaN to the implementation) and a comparison with a NaN is false.
+class S {
+  constructor(a) { this.a = a; }
+  static of(x) { return x instanceof S ? x : new S([x]); }
+  map2(o, f) { const b = S.of(o).a; const n = Math.max(this.a.length, b.length); return new S(Array.from({ length: n }, (_, i) => f(this.a[i % this.a.length], b[i % b.length]))); }
+  add(o) { return this.map2(o, (x, y) => x + y); }
+  sub(o) { return this.map2(o, (x, y) => x - y); }
+  mul(o) { return this.map2(o, (x, y) => x * y); }
+  div(o) { return this.map2(o, (x, y) => x / y); }
+  oneMinus() { return new S(this.a.map((x) => 1 - x)); }
+  greaterThanEqual(o) { return this.map2(o, (x, y) => x >= y); }
+  toVar() { return new S(this.a.slice()); }
+  assign(o) { this.a = S.of(o).a.slice(); return this; }
+  get x() { return new S([this.a[0]]); } get y() { return new S([this.a[1]]); }
+  get r() { return new S([this.a[0]]); } get g() { return new S([this.a[1]]); } get b() { return new S([this.a[2]]); }
+  get rgb() { return new S(this.a.slice(0, 3)); }
+}
+const vec = (...xs) => new S(xs.flatMap((x) => S.of(x).a));
+const ops = {
+  vec2: vec, vec3: vec, vec4: vec, float: (x) => S.of(x),
+  max: (a, b) => S.of(a).map2(b, Math.max), min: (a, b) => S.of(a).map2(b, Math.min),
+  clamp: (x, lo, hi) => S.of(x).map2(lo, Math.max).map2(hi, Math.min),
+  select: (c, a, b) => { const cc = S.of(c).a, aa = S.of(a).a, bb = S.of(b).a; return new S(cc.map((t, i) => (t ? aa[i % aa.length] : bb[i % bb.length]))); },
+  TL: (uv) => uv, VP: { uv: () => vec(0.5, 0.5) }, brightV: {},
+  brightU: { threshold: S.of(0.75), exposure: S.of(1.0) },
+};
+function brightPass() {
+  const at = POST.indexOf("const bright = {");
+  const from = POST.indexOf("mat: passMaterial(Fn(", at) + "mat: passMaterial(Fn(".length;
+  const to = POST.indexOf(')(), "tlx-post-bright")', from);
+  assert.ok(at > 0 && from > at && to > from, "the bright pass Fn is where the test reads it");
+  const body = POST.slice(from, to);
+  return (rgb) => {
+    const sceneT = { sample: () => vec(...rgb, 1) };
+    const fn = new Function(...Object.keys(ops), "sceneT", `return (${body});`)(...Object.values(ops), sceneT);
+    return fn().a;
+  };
+}
+
+test("#7438 row 1: the bloom bright pass returns finite values for an Inf or NaN scene texel", () => {
+  const bright = brightPass();
+  for (const rgb of [[Infinity, 0.2, 0.1], [NaN, 0.5, 0.5], [NaN, NaN, NaN], [-Infinity, 2, 1], [Infinity, Infinity, Infinity]]) {
+    const out = bright(rgb);
+    assert.ok(out.every(Number.isFinite), `${rgb} -> ${out}`);
+  }
+});
+
+test("#7438 row 1: every finite texel at or below 65024 is unchanged by the guard (pixel-identical)", () => {
+  const bright = brightPass();
+  // The base maths, verbatim from before the guard, on the same shim.
+  const base = (c) => {
+    const l = Math.max(c[0], c[1], c[2]);
+    const knee = 0.75 * 0.5 + 1e-4;
+    let soft = Math.min(Math.max(l - 0.75 + knee, 0), knee * 2);
+    soft = soft * soft / (knee * 4);
+    const k = Math.max(soft, l - 0.75) / Math.max(l, 1e-4);
+    return [c[0] * k, c[1] * k, c[2] * k, 1];
+  };
+  for (const rgb of [[0, 0, 0], [0.5, 0.6, 0.7], [0.8, 0.1, 0.1], [3, 2, 1], [65024, 1, 0], [120, 0.25, 4096], [-0.01, 1.2, 0.3]]) {
+    assert.deepEqual(bright(rgb), base(rgb), String(rgb));
+  }
+  assert.ok(bright([1e6, 0, 0]).every(Number.isFinite), "past the rg11b10 max clamps, still finite");
+});
+
+test("#7438 row 7: the SSR fresnel stays finite when dot(Nr, V) rounds past 1", () => {
+  const m = /const fres = (pow\([^\n]*?)\.toVar\(\);/.exec(POST);
+  assert.ok(m, "the fresnel line is where the test reads it");
+  // pow as WGSL defines it, exp2(y * log2(x)): undefined (NaN here) for a negative base.
+  const pow = (x, y) => S.of(x).map2(y, (a, b) => 2 ** (b * Math.log2(a)));
+  const dot = () => S.of(1 + 2 ** -23);   // two unit vectors, rounded one ulp past 1
+  const fres = new Function("pow", "clamp", "max", "dot", "Nr", "V", `return ${m[1]};`)(pow, ops.clamp, ops.max, dot, {}, {});
+  assert.ok(fres.a.every(Number.isFinite), `fresnel ${fres.a}`);
+});
+
+// ---- 2. present() SSR MRT restore -----------------------------------------------------------------------------
+test("#7438 row 5: a throw from post.setMirror leaves no MRT bound and the lit/fx MRT disarmed", () => {
+  const from = TLX.indexOf("const _tag = !post.tagOn || post.tagOn();");
+  const endMark = "if (_softBlit && post.presentedTarget) _queueSoftBlit(post.presentedTarget());";
+  const to = TLX.indexOf(endMark, from);
+  assert.ok(from > 0 && to > from, "present()'s post branch is where the test reads it");
+  const block = TLX.slice(from, to + endMark.length);
+  const calls = [];
+  let mrt = null;
+  const env = {
+    post: {
+      tagOn: () => true, sceneTarget: () => "sceneRT", present() {}, discardHintOff() {},
+      setMirror() { throw new Error("setMirror boom"); },
+    },
+    lit: { setSsrMrt: (on) => calls.push(["lit", on]) },
+    fx: { setSsrMrt: (on) => calls.push(["fx", on]) },
+    TSL: { mrt: () => ({}) },
+    renderer: { setMRT: (n) => { mrt = n; }, getMRT: () => mrt, setRenderTarget() {} },
+    _ssrMrtNode: () => "SSR_MRT", wantSpatialUpscale: () => false,
+    _postF: { noEnv: false }, _mirRect: [0, 0, 1, 1], mirRT: { texture: { type: 1 } }, _mirReady: true, _mirDead: false,
+    _mirPx: () => [1, 1], presentW: 8, presentH: 8, W: 8, H: 8, THREE: { UnsignedByteType: 1009 }, _mirFlip: true,
+    _gpuLastOperation: "", opts: {}, _renderTimed() {}, scene: {}, camera: {}, _captureSource: "",
+    _postHealth: { state: "healthy", attempts: 0 }, _postStrikes: 0, _softBlit: false, _queueSoftBlit() {},
+  };
+  // Sloppy-mode `with` so the block's free names (and its assignments) resolve to env, as in present()'s closure.
+  const run = new Function("env", `with (env) { ${block} }`);
+  // What paintCanvas would see: the state right after the throw reaches present()'s outer catch.
+  let threw = null;
+  try { run(env); } catch (e) { threw = e; }
+  assert.equal(threw && threw.message, "setMirror boom");
+  assert.equal(mrt, null, "renderer.getMRT() is null before paintCanvas");
+  assert.deepEqual(calls.filter((c) => c[0] === "lit").at(-1), ["lit", false], "lit.setSsrMrt(false) ran");
+  assert.deepEqual(calls.filter((c) => c[0] === "fx").at(-1), ["fx", false], "fx.setSsrMrt(false) ran");
+
+  // And a healthy frame still arms, renders, and restores the previous MRT.
+  calls.length = 0; mrt = "PREV";
+  env.post.setMirror = () => {};
+  let seen = null;
+  env._renderTimed = () => { seen = mrt; };
+  run(env);
+  assert.equal(seen, "SSR_MRT", "the scene renders with the SSR MRT bound");
+  assert.equal(mrt, "PREV", "the finally puts the previous MRT back");
+});
+
+// ---- 3. shadow caster free ------------------------------------------------------------------------------------
+test("#7438 row 6: the stub below is three r187's geometry dispose (index + every attribute on the geometry)", () => {
+  const w = read("vendor/three-0.187.0/three.webgpu.min.js");
+  assert.ok(w.includes("const r=e.index;null!==r&&this.attributes.delete(r);for(const t of Object.values(e.attributes))this.attributes.delete(this.backend.getBufferAttribute(t))"),
+    "vendored Geometries onDispose reads index and attributes at dispose time");
+});
+
+test("#7438 row 6: freeing a caster deletes only its own instance attributes, never the lit batch's", () => {
+    const src = [fnSource(SHADOW, "function attrCaster(geo, n) {"), fnSource(SHADOW, "function casterGeo(src) {"),
+    fnSource(SHADOW, "function freeCasterGeo(m) {")].join("\n");
+  const make = new Function("THREE", "attrDepthMat", `${src}; return { attrCaster, casterGeo, freeCasterGeo };`);
+  const { attrCaster, casterGeo, freeCasterGeo } = make(THREE, () => new THREE.MeshBasicMaterial());
+
+  const batch = new THREE.BufferGeometry();
+  batch.setIndex(new THREE.BufferAttribute(new Uint16Array([0, 1, 2]), 1));
+  batch.setAttribute("position", new THREE.BufferAttribute(new Float32Array(9), 3));
+  batch.setAttribute("normal", new THREE.BufferAttribute(new Float32Array(9), 3));
+  batch.setAttribute("uv", new THREE.BufferAttribute(new Float32Array(6), 2));
+  batch.setAttribute("instanceTint", new THREE.InstancedBufferAttribute(new Float32Array(3), 3));
+  const shared = new Set([batch.index, ...Object.values(batch.attributes)]);
+
+  // three r187 Geometries.initGeometry's dispose handler, with a counting backend (getBufferAttribute: the
+  // interleaved data for an InterleavedBufferAttribute, the attribute itself otherwise).
+  const backend = (a) => (a.isInterleavedBufferAttribute ? a.data : a);
+  function track(geo, deleted) {
+    geo.addEventListener("dispose", () => {
+      if (geo.index !== null) deleted.push(geo.index);
+      for (const t of Object.values(geo.attributes)) deleted.push(backend(t));
+    });
+  }
+
+  // A-H4 attribute caster: its own iM0..3 stream lives on the clone.
+  const del1 = [];
+  const a = attrCaster(casterGeo(batch), 4);
+  track(a.geometry, del1);
+  freeCasterGeo(a);
+  assert.ok(del1.length > 0 && del1.every((x) => x === a.instanceMatrix), `only the caster's own stream: ${del1.length}`);
+  assert.ok(!del1.some((x) => shared.has(x)), "no shared batch buffer deleted (attribute caster)");
+
+  // InstancedMesh caster: nothing on the geometry is its own (instanceMatrix rides on the mesh).
+  const del2 = [];
+  const m = new THREE.InstancedMesh(casterGeo(batch), new THREE.MeshBasicMaterial(), 4);
+  track(m.geometry, del2);
+  freeCasterGeo(m);
+  assert.equal(del2.filter((x) => shared.has(x)).length, 0, "no shared batch buffer deleted (instanced caster)");
+
+  assert.ok(batch.index && batch.attributes.position && batch.attributes.normal, "the lit batch keeps its buffers");
 });
