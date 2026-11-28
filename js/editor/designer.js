@@ -274,15 +274,16 @@ const TrackDesigner = (function () {
   function applyStamp(i0, i1, kind) {
     const k = kind || tool;
     if (!TrackStamps.KINDS[k]) { message("Pick a shape tool first (STRAIGHT, CORNER, HAIRPIN, CHICANE, S-BEND)", true); return false; }
-    if (!design.pts.length || design.pts.length < 3) {
-      // A first stamp on an empty sheet: a loop from the shape itself, closed by the splice.
-      const seed = TrackRandom.generate(design.seed, { targetL: 3800 }).pts;
-      commit(Object.assign({}, design, { pts: seed }), "seed");
+    let base = design.pts;
+    if (!base.length || base.length < 3) {
+      // A first stamp on an empty sheet: a loop from the shape itself, closed by the
+      // splice. Splice the seed first and commit once, so a refused splice leaves nothing.
+      base = TrackRandom.generate(design.seed, { targetL: 3800 }).pts;
       i0 = 0; i1 = 0;
     }
     if (!(i0 >= 0)) i0 = Math.max(0, sel);
     const p = kind ? Object.assign({}, TrackStamps.KINDS[k].params, params) : stampParams();
-    const r = TrackStamps.splice(design.pts, i0, i1 == null ? i0 : i1, k, p);
+    const r = TrackStamps.splice(base, i0, i1 == null ? i0 : i1, k, p);
     if (!r.ok) { message(r.reason, true); return false; }
     sel = r.sel[1]; span = -1;
     commit(Object.assign({}, design, { pts: r.pts }), "stamp:" + k);
@@ -2061,7 +2062,9 @@ const TrackDesigner = (function () {
     if (!c || !tr || !Number.isFinite(c.sApex)) { message("Select a turn under TURNS first", true); return false; }
     const L = tr.total, LIM = CustomTracks.LIMITS, had = design.bankZones || [];
     deg = Math.round(Math.min(LIM.angleDeg, Math.max(-LIM.angleDeg, +deg || 0)));
-    const keep = had.filter((z) => !(lapDist(z.frac * L, c.sApex, L) < c.lenM / 2));
+    // The same reach pickedBank shows the angle with: a zone wider than its
+    // (reshaped) turn is still this turn's, so FLAT clears it and a new angle replaces it.
+    const keep = had.filter((z) => !(lapDist(z.frac * L, c.sApex, L) < Math.max((z.widthM || 0) / 2, c.lenM / 2)));
     if (deg && keep.length >= LIM.zones) { message("A circuit keeps " + LIM.zones + " banked corners at most — flatten one first", true); return false; }
     const next = deg ? keep.concat([{ frac: TrackZones.wrap01(c.sApex / L), angleDeg: deg, widthM: Math.round(Math.min(600, Math.max(20, c.lenM))) }]) : keep;
     if (JSON.stringify(next) === JSON.stringify(had)) return false;

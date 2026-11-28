@@ -517,8 +517,12 @@ const SceneryNature = (function () {
         }
       }
       const b = [a.r, a.u, a.t];
-      if (spotTaken(a.c[0], a.c[2])) return;   // reserve only the successful site
+      // CHECK the spot here; RESERVE it only once the trunk has landed, as
+      // pine() does (#5699): a trunk the pit guard refuses must not hold its
+      // TREE_GAP spot and block a neighbour that would have stood (#7243 3b).
+      if (spotOccupied(a.c[0], a.c[2], false)) return;
       const reserve = () => {
+        spotTaken(a.c[0], a.c[2]);
         const parts = partsAt(a).map(palmFootprint);
         const minX = Math.min(...parts.map((f) => f.c[0] - f.ex)), maxX = Math.max(...parts.map((f) => f.c[0] + f.ex));
         const minZ = Math.min(...parts.map((f) => f.c[2] - f.ez)), maxZ = Math.max(...parts.map((f) => f.c[2] + f.ez));

@@ -836,3 +836,26 @@ test("a confirmed clock step fires onClockStep (#6544 row 5)", () => {
   p.advance(3000);
   assert.ok(steps >= 1, "the step reached the handler");
 });
+
+// #7312 rows 4 and 5 (js/net hunt 2026-11-27). Binary event frames (QLIVE,
+// STRATEGY, LAP) used to build a fresh TextDecoder each; one decoder serves
+// them all now. (Row 4, the dead includes() scan in addSample, changes no
+// behaviour: the clock-sync tests above cover that path.)
+test("binary event frames share one TextDecoder across a session", () => {
+  const Real = globalThis.TextDecoder;
+  let built = 0;
+  globalThis.TextDecoder = class extends Real { constructor(...a) { super(...a); built++; } };
+  try {
+    const Session = new Function("NetSnapshot", "NetTransport", "Log",
+      fs.readFileSync(path.join(ROOT, "js/net/session.js"), "utf8") + ";return NetSession;")(NetSnapshot, NetTransport, globalThis.Log);
+    let inbound;
+    const transport = { onMessage(fn) { inbound = fn; }, onClose() {}, close() {}, send() { return true; } };
+    const session = Session.create({ transport });
+    let got = 0;
+    session.onEvent(NetWire.EV.BYE, () => { got++; });
+    const frame = new TextEncoder().encode(JSON.stringify({ t: NetWire.EV.BYE, d: {} }));
+    for (let i = 0; i < 50; i++) inbound(NetTransport.EVENT, frame, 100 + i);
+    assert.equal(got, 50, "every binary frame still decodes and reaches its handler");
+    assert.ok(built <= 1, `one decoder for 50 frames, built ${built}`);
+  } finally { globalThis.TextDecoder = Real; }
+});

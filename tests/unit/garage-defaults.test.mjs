@@ -137,6 +137,14 @@ test("an unlisted garage key is untouched (call-site default wins)", () => {
   assert.deepEqual(GameStore.store.get("parts.notateam", { x: 1 }), { x: 1 });
 });
 
+// #7313 R11: meta() had no caller; file() already carries the export metadata.
+test("GarageDefaults exports only the API its callers use", () => {
+  const { GarageDefaults } = load();
+  assert.deepEqual(Object.keys(GarageDefaults).sort(), ["file", "get", "has", "keys"]);
+  const file = GarageDefaults.file();
+  for (const k of ["exportedAt", "build", "excluded"]) assert.ok(k in file, `file() keeps ${k}`);
+});
+
 test("GarageDefaults.file() is a valid apex26-garage-v1 the loader accepts", () => {
   const { SettingsExport, GarageDefaults } = load();
   const file = GarageDefaults.file();

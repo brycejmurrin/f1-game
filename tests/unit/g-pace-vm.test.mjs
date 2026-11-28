@@ -64,3 +64,7 @@ for (const p of PACES) {
     assert.equal(g.G.pace.k, Math.max(g.G.PACE, 0.05), "the factor incident-sim and collide multiply by");
   });
 }
+
+test("one vTop fallback: PaceMath.V_FALLBACK is 80 (Bryce D3; the hud/race sites read it when G has no vTop)", () => {
+  assert.equal(g.sandbox.PaceMath.V_FALLBACK, 80);
+});

@@ -520,7 +520,7 @@ test("WATCH broadcast: the running order's speeds are the cars' own, whatever th
   // same two cars must read the same battle as at 1x (c.speed is the trace's m/s; the rate rides c.replayRate).
   const grab = (rate) => {
     let seen = null;
-    const ctx = vm.createContext({ M4: { clamp: (v, a, b) => Math.max(a, Math.min(b, v)) },
+    const ctx = vm.createContext({ M4: { clamp: (v, a, b) => Math.max(a, Math.min(b, v)) }, PaceMath: { V_FALLBACK: 80 },   // PaceMath.V_FALLBACK: the vTop() a G without one reads
       Log: { info() {}, warn() {}, debug() {} },
       CamModes: { CAM_MODES: [{ id: "cockpit" }, { id: "heli" }] },
       ReplayBroadcast: { create: () => new Proxy({}, { get: (_t, k) => (k === "tick" ? (_dt, st) => { seen = st; } : () => ({})) }) },

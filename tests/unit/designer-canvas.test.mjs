@@ -590,6 +590,27 @@ test("a pinch that starts on the closing segment hands the prior selection back,
   assert.ok(h.cv.selection().sel < N);
 });
 
+// #7316: the browser stealing an insert-drag (pointercancel on a scroll or edge
+// swipe, lostpointercapture under a dialog) left sel on the spliced index —
+// N on the closing segment — and never told the designer.
+for (const kind of ["pointercancel", "lostpointercapture"]) {
+  test(`a ${kind} during an insert-drag on the closing segment hands the prior selection back`, () => {
+    const h = boot({}, [[0, 0], [400, 0], [400, 400], [200, 500], [0, 400]]);
+    const N = h.pts.length;
+    h.cv.setSelection(2, -1);
+    const a = h.pts[N - 1], b = h.pts[0];
+    const mid = h.scr([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]);
+    h.fire("pointerdown", mid, 1, { pointerType: "touch" });
+    assert.equal(h.cv.selection().sel, N, "the insert-drag selects the spliced index while it lives");
+    const told = h.ev.selects.length;
+    h.fire(kind, mid, 1);
+    assert.deepEqual(plain(h.cv.selection()), { sel: 2, span: -1 });
+    assert.ok(h.ev.selects.length > told, "onSelect fires for the restore");
+    assert.deepEqual(plain(h.ev.selects.at(-1)), { i: 2, j: -1 });
+    assert.equal(h.ev.changes.length, 0, "the abandoned insert never commits");
+  });
+}
+
 test("a resize re-fits the loop unless the player moved the view (clean-room 67)", () => {
   const h = boot();
   h.canvas._rect = { left: 0, top: 0, right: 1280, bottom: 720, width: 1280, height: 720 };

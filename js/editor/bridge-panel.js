@@ -4,7 +4,7 @@ const DesignerBridges = (function () {
   "use strict";
   function create({ el, btn, group, onChange }) {
     const root = group("ROAD BRIDGES"); root.dataset.role = "bridges";
-    let current = null, editing = -1, listSig = "", measuredDesign = null, lapM = 0;
+    let current = null, editing = -1, listSig = "", measuredPts = null, lapM = 0;
     const intro = el("div", "td-hint", "Raise a section of road into a supported overpass. Set its span and rise, then open TEST to check slopes and crossing clearance.");
     const fields = el("div", "td-chips");
     function number(label, min, max, step, value) {
@@ -78,7 +78,9 @@ const DesignerBridges = (function () {
     function refresh(state) {
       if (!state) return;
       current = state;
-      if (measuredDesign !== state.design) { measuredDesign = state.design; lapM = measure(state.design); }
+      // Lap length depends only on the loop: a bridge or height edit keeps pts,
+      // so it must not pay a full TrackValidate.build on every commit.
+      if (measuredPts !== state.design.pts) { measuredPts = state.design.pts; lapM = measure(state.design); }
       const items = bridges();
       // `editing` is a bare index: any change to the list (remove, undo, load,
       // reorder) can leave it pointing at a different bridge, so drop it then.

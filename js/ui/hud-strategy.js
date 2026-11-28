@@ -152,7 +152,7 @@ const HudStrategy = (function () {
     if (ranked[i] !== player) i = ranked.indexOf(player);
     const a = i > 0 ? ranked[i - 1] : null;
     const behind = i >= 0 && i < ranked.length - 1 ? ranked[i + 1] : null;
-    const vFloor = Math.max(player.speed || 0, (G.vTop ? G.vTop() : 80) * 0.26);
+    const vFloor = Math.max(player.speed || 0, (G.vTop ? G.vTop() : PaceMath.V_FALLBACK) * 0.26);
     const total = G.track ? G.track.total : 0, gc = typeof HudReadouts !== "undefined" && HudReadouts.gaps;   // the chips' time-at-a-line clock (#5678)
     ctx.hasRival = !!a && !a.retired;
     if (ctx.hasRival) {

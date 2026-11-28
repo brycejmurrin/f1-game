@@ -912,6 +912,7 @@ const NetPlay = (function () {
         }
       }
       publishN = 0;
+      eventLog.length = 0;   // status().events is per race, not per page (#7312 row 3)
 
       lastPublish = -Infinity; lastStrategy = -Infinity;
       aiStrategyPhases.clear();
