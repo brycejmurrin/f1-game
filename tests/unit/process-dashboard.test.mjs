@@ -11,7 +11,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import os from "node:os";
+import { mkTmpDir } from "../helpers/tmp-dir.mjs";
 import { spawnSync } from "node:child_process";
 import {
   familyOf,
@@ -343,7 +343,7 @@ test("#7046: --check passes on the generated JSON with the merge path in it", ()
   const dash = reduceDashboard({ ...fixture, mergePath: buildMergePath6913(), generated: "2026-11-28T08:00Z" });
   assert.ok(dash.merge_path.land_to_merge);
   assert.equal(checkTimeRatchets(dash).ok, true);
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pd-7046-"));
+  const dir = mkTmpDir("pd-7046-");
   try {
     const file = path.join(dir, "process-dashboard.json");
     fs.writeFileSync(file, JSON.stringify(dash, null, 2) + "\n");
