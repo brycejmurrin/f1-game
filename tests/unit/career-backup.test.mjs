@@ -2166,7 +2166,7 @@ test("the career IMPORT card surfaces a refused restore point and keeps the save
 
 // PR #3940 race (career-hub.spec "Daily class merges…" → "Daily merge refused:
 // conflict"): the hub opened by __apex.career() builds after a lazy load and
-// its Career.objective() draw SAVES the live slot. Landing inside the
+// its Career.objective() draw SAVED the live slot (a read no longer writes, #7366). Landing inside the
 // before-import capture's IndexedDB await, that own save moved the pinned
 // revision and the import refused itself. The capture resolves a microtask
 // later, as IndexedDB does, after the live career's own save.
