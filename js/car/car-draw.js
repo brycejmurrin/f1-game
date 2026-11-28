@@ -50,51 +50,13 @@ const CarDraw = (function () {
     // ── cache-helpers ───────────────────────────────────────────────
     function invalidateCustomMeshCache(cache, order, prefix = "custom:") {
       Object.keys(cache).forEach((key) => {
-        if (key.indexOf(prefix) !== 0) return;
-        if (cache[key]) freeBodyPair(cache[key]);
-        delete cache[key];
-        if (order) {
-          const i = order.indexOf(key);
-          if (i >= 0) order.splice(i, 1);
-          const st = _lruStamp.get(order); if (st) st.delete(key);
-        }
+        if (key.indexOf(prefix) === 0) BoundedCache.drop(cache, order, key, freeBodyPair);
       });
     }
-    // Bound a key→mesh cache to `max` most-recent entries. Evicted meshes are freed
-    // via gfx.freeMesh exactly once (deleted from the map before free). `freeOne`
-    // optional — defaults to freeMesh(mesh); wheel pairs pass a custom freer.
-    // A hit promotes, the least recently used evicts — by STAMP: a hit writes one
-    // number (it was an indexOf + splice + push per drawn car per pass), and only
-    // an eviction, a miss past `max`, scans `order` for the oldest stamp.
-    // `order` stays the key list every clear (length = 0) and invalidation edits.
-    const _lruStamp = new WeakMap();   // order array -> Map(key -> last-use tick)
-    let _lruTick = 0;
+    // Bound a key→mesh cache to `max` most-recent entries (BoundedCache, js/car/bounded-cache.js).
+    // `freeOne` optional — defaults to freeBodyPair; wheel pairs pass freeWheelPair.
     function putBoundedMesh(cache, order, key, create, max, freeOne) {
-      let st = _lruStamp.get(order);
-      if (!st) { st = new Map(); _lruStamp.set(order, st); }
-      if (cache[key]) { st.set(key, ++_lruTick); return cache[key]; }
-      const mesh = create();
-      // A null create (lost context) is not cached: its key would re-push onto
-      // `order` on every miss, and the duplicates could evict a live entry (#7365).
-      if (!mesh) return mesh;
-      cache[key] = mesh;
-      order.push(key);
-      st.set(key, ++_lruTick);
-      const free = freeOne || freeBodyPair;   // freeBodyPair skips a null itself
-      while (order.length > max) {
-        let oi = 0, ot = Infinity;
-        for (let i = 0; i < order.length; i++) {
-          const t = st.get(order[i]);
-          if (t === undefined) { oi = i; break; }   // a key with no stamp is older than any stamped one
-          if (t < ot) { ot = t; oi = i; }
-        }
-        const old = order.splice(oi, 1)[0];
-        st.delete(old);
-        const victim = cache[old];
-        delete cache[old];
-        free(victim);
-      }
-      return mesh;
+      return BoundedCache.put(cache, order, key, create, max, freeOne || freeBodyPair);   // freeBodyPair skips a null itself
     }
     // ── a car's own paint (#5037) ───────────────────────────────────
     // Every car used to be painted from THIS phone's store (resolveLivery per
@@ -803,6 +765,7 @@ const CarDraw = (function () {
         return p && typeof p.then === "function" ? p : null;
       } catch (_) { return null; }
     }
+    function releaseAtlas(canvas, pinned) { if (canvas && LiveryTex.releaseAtlas) LiveryTex.releaseAtlas(canvas, pinned); }
     function closeBitmap(b) { try { if (b && typeof b.close === "function") b.close(); } catch (_) { /* already closed */ } }
     // `rival`: a near rival's own atlas key (planNearAtlases), upgraded in place the same way.
     function schedulePlayerHiRes(team, num, key, rival) {
@@ -832,11 +795,11 @@ const CarDraw = (function () {
       // `src` is the bitmap (async path) or the canvas itself (sync path / a refused bitmap).
       const finish = function (src, canvas) {
         const bitmap = src !== canvas ? src : null;
-        let keep = false;
+        let keep = false, next = null;
         try {
           if (!owns()) return;
           const transfer = !!bitmap && G.gfx.backend === "three";
-          const next = crispPlayerDecal(G.gfx.createTexture(src, transfer ? { disposeSource: closeBitmap, anisotropy: 8 } : { anisotropy: 8 }));
+          next = crispPlayerDecal(G.gfx.createTexture(src, transfer ? { disposeSource: closeBitmap, anisotropy: 8 } : { anisotropy: 8 }));
           if (!next) throw new Error("no texture");   // keep the preview rather than cache a null over it
           keep = transfer;   // TLX owns this bitmap until Texture.dispose; GLX/WGX already copied it
           const prev = _decalTexCache[key];
@@ -850,14 +813,18 @@ const CarDraw = (function () {
           fail(e);
         } finally {
           if (bitmap && !keep) closeBitmap(bitmap);
+          // The bitmap or the GPU copy owns the pixels now: free the 2048 canvas (#7516). A TLX texture whose
+          // upload has not run yet still reads it as .image (releaseTexSource swaps that after upload).
+          releaseAtlas(canvas, !bitmap && !!(next && next.tex && next.tex.image === canvas));
           done();
         }
       };
       const kick = function () {
+        let canvas = null;
         try {
           if (!owns() || G.livDraftOverride) { done(); return; }   // a kick queued before the draft opened
           if (!G.gfx || !G.gfx.createTexture) { done(); return; }
-          const canvas = LiveryTex.buildAtlas(team.id, livery, num, true, true);
+          canvas = LiveryTex.buildAtlas(team.id, livery, num, true, true);
           const bmp = liveryBitmap(canvas);
           if (!bmp) { finish(canvas, canvas); return; }
           // The kick keeps the key until finish(): a second draw must not schedule a twin.
@@ -867,6 +834,7 @@ const CarDraw = (function () {
           });
         } catch (e) {
           fail(e);
+          releaseAtlas(canvas, false);   // never reached finish(): hand the 2048 canvas back
         }
       };
       _hiResPending.set(key, kick);
@@ -1917,6 +1885,12 @@ const CarDraw = (function () {
     // factory parts, so distinct fitted combos in one race are far fewer.
     const fieldWheelOrder = [];
     const FIELD_WHEEL_CACHE_MAX = 12;
+    // The ONE wheel-pair wipe (loadCarModel, invalidateFactoryMeshCaches): clearing a cache without its
+    // order array leaves stale keys queued, so the next eviction could free a live mesh (BoundedCache.clear).
+    function freeWheelCaches() {
+      BoundedCache.clear(wheelMeshCache, wheelMeshOrder, freeWheelPair);
+      BoundedCache.clear(fieldWheelCache, fieldWheelOrder, freeWheelPair);
+    }
     let _fwTints = null;
     let _fwVt = null;   // the pending build for the hoisted factory below (no closure per car per frame)
     function getFieldWheelMeshes(team, car) {
@@ -2321,13 +2295,7 @@ const CarDraw = (function () {
         playerBodyOrder.length = teamMeshOrder.length = teamBodyOrder.length = 0;
         for (const k in cockpitBodies) { if (G.gfx.freeMesh) G.gfx.freeMesh(cockpitBodies[k]); delete cockpitBodies[k]; }
         cockpitBodyOrder.length = 0;
-        for (const k in wheelMeshCache) { freeWheelPair(wheelMeshCache[k]); delete wheelMeshCache[k]; }
-        wheelMeshOrder.length = 0;
-        for (const k in fieldWheelCache) { freeWheelPair(fieldWheelCache[k]); delete fieldWheelCache[k]; }
-        // Same putBoundedMesh contract as wheelMeshOrder: clearing the cache without
-        // the order array leaves stale keys queued, so the next eviction can free a
-        // live field-wheel mesh while a dead key still occupies a slot.
-        fieldWheelOrder.length = 0;
+        freeWheelCaches();
         return true;
       } catch (e) { return false; }
     }
@@ -2409,10 +2377,7 @@ const CarDraw = (function () {
       for (const k in playerBodies) { if (G.gfx.freeMesh) G.gfx.freeMesh(playerBodies[k]); delete playerBodies[k]; }
       for (const k in cockpitBodies) { if (G.gfx.freeMesh) G.gfx.freeMesh(cockpitBodies[k]); delete cockpitBodies[k]; }
       playerBodyOrder.length = teamMeshOrder.length = teamBodyOrder.length = cockpitBodyOrder.length = 0;
-      for (const k in wheelMeshCache) { freeWheelPair(wheelMeshCache[k]); delete wheelMeshCache[k]; }
-      wheelMeshOrder.length = 0;
-      for (const k in fieldWheelCache) { freeWheelPair(fieldWheelCache[k]); delete fieldWheelCache[k]; }
-      fieldWheelOrder.length = 0;
+      freeWheelCaches();
       freeSharedRivalBodies();
       _teamMeshKeyCache.clear();
     }

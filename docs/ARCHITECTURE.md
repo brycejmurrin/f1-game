@@ -490,6 +490,7 @@ _Module index over 34 directories, in load order. `tag` = a `<script>` in index.
 | `car-mesh.js` | `CarMesh` | tag | car mesh/decal/cockpit-instrument geometry builders for js/game.js: the shared decal-quad meshes (logo/sponsor UVs into the LiveryTex atlas), the effe… |
 | `surface-outline.js` | `GarageSurfaceOutline` | tag | A transient contour of the cover pixels controlled by one livery tint. |
 | `field-lod.js` | `FieldLod` | tag | FieldLod: distance level-of-detail for the RIVAL cars, draw-side only (nothing here reads or writes physics). |
+| `bounded-cache.js` | `BoundedCache` | tag | BoundedCache — a key→mesh cache bounded to `max` most-recent entries (#7516; lifted out of CarDraw.create so car3d / car-mesh / car-wheels can share it). |
 | `car-draw.js` | `CarDraw` | tag | CarDraw: the car-drawing seam out of js/game.js — the bounded mesh / livery-atlas caches (team, body, player, cockpit, wheel pairs), the player's resolved… |
 | `car-hero.js` | `CarHero` | LAZY_GFX_HI | CarHero: the desktop EXTREME car detail (GfxQuality feature "heroCar" and the detail-2 tessellation). |
 

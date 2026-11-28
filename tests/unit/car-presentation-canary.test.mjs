@@ -107,7 +107,7 @@ test("the draw loop draws body + planted wheels for every procedural car", () =>
   const cd = read("js/car/car-draw.js");
   assert.match(cd, /putBoundedMesh\(fieldWheelCache, fieldWheelOrder/,
     "field wheels must promote hits like every other mesh LRU");
-  assert.match(cd, /for \(const k in fieldWheelCache\)[\s\S]{0,400}?fieldWheelOrder\.length = 0/,
+  assert.match(cd, /BoundedCache\.clear\(fieldWheelCache, fieldWheelOrder, freeWheelPair\)/,
     "loadCarModel must clear fieldWheelOrder with the cache (putBoundedMesh desync frees a live mesh)");
 });
 

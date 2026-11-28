@@ -1658,6 +1658,25 @@ const LiveryTex = (function () {
     if (!scratchCanvas) scratchCanvas = document.createElement("canvas");
     return scratchCanvas;
   }
+  // ONE desktop hi-res (2048×2560, ~21 MB) canvas, reused (#7516): a fresh element per deferred build
+  // pinned its backing store until GC. Busy from build until car-draw's finish() hands it back through
+  // releaseAtlas once the bitmap / GPU copy owns the pixels; a build while it is busy gets its own element.
+  let hiResCanvas = null, hiResBusy = false;
+  function hiResAtlas() {
+    if (hiResBusy) return document.createElement("canvas");
+    if (!hiResCanvas) hiResCanvas = document.createElement("canvas");
+    hiResBusy = true;
+    return hiResCanvas;
+  }
+  // `pinned`: a texture still reads this canvas as its source (TLX before its upload) — keep its pixels
+  // and stop reusing it. Otherwise width 0 frees the backing store now; the next build re-sizes it.
+  function releaseAtlas(canvas, pinned) {
+    if (!canvas || canvas === scratchCanvas) return;
+    if (canvas === hiResCanvas) { hiResBusy = false; if (pinned) hiResCanvas = null; }
+    if (pinned) return;
+    canvas.width = 0;
+    canvas.height = 0;
+  }
 
   // ── main ─────────────────────────────────────────────────────────────────
   // hiRes: desktop player full 2048 upload. Callers that must stay off the
@@ -1673,7 +1692,7 @@ const LiveryTex = (function () {
     // hung at 180 s on every attempt, PR #1494 runs 38519977495 / 38521713487); the same bitmap path
     // from this element passes the whole group (run 38524153549), as does the element with the old
     // synchronous upload. The element's bitmap is the safe source on every adapter.
-    const canvas = mobile ? scratchAtlas() : document.createElement("canvas");
+    const canvas = mobile ? scratchAtlas() : hiRes ? hiResAtlas() : document.createElement("canvas");
     canvas.width = SIZE / div;
     canvas.height = SIZE_H / div;
     const ctx = canvas.getContext("2d");
@@ -2672,7 +2691,7 @@ const LiveryTex = (function () {
   // what ink separates it" decision buildAtlas makes for the car.
   // CREST_DISC stays internal: crestKeepsPlate / markPalette / crestExtent and
   // LiveryCrests.create consume it; nothing outside this file reads LiveryTex.CREST_DISC.
-  return { SIZE, SIZE_H, atlasDiv, liveryHi, liveryHiUsed: () => _livHi, playerHiResDeferred, IS_MOBILE, IS_PHONE, atlasMobile, REGIONS, SPONSORS, SPONSOR_PACKS, buildAtlas, drawCrest, markBase, markPalette,
+  return { SIZE, SIZE_H, atlasDiv, liveryHi, liveryHiUsed: () => _livHi, playerHiResDeferred, IS_MOBILE, IS_PHONE, atlasMobile, REGIONS, SPONSORS, SPONSOR_PACKS, buildAtlas, releaseAtlas, drawCrest, markBase, markPalette,
            MARK_FLOOR, numCrestBox, paintTeamMark, paintSwatch, swatchCanvas, swatchStats,
            drawLogoImage, contrast, inkOn, onMarkChange, markSlots, setTeamLogo, LOGOS,
            markOnField, ALT_INSIDE, sunColour, FLANK, FLANK_H, FLANK_MARK, flankMarkStation, FLANK_SEEN,
