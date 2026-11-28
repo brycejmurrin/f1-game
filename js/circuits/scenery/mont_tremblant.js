@@ -379,7 +379,8 @@
           const s = ES0 + ((i + 0.5) / 7) * (ES1 - ES0);
           const k = K(s);
           const a = anchor(k, side, 26);
-          ridge(a.c[0], a.c[2], terrainYAt(a.c[0], a.c[2]) - 1.4,
+          const gy = terrainYAt(a.c[0], a.c[2]);   // null off the ribbon (#7292)
+          ridge(a.c[0], a.c[2], (gy == null ? a.c[1] : gy) - 1.4,
                 heading(k, side, 26), 34, 14, 4.2 + hash(i * 71) * 1.8, DIRT);
         }
         // The cut is through Laurentian granite: blasted rock steps out of the
@@ -450,12 +451,15 @@
       // before Turn 1 and shows again above the treeline off the back straight.
       // The massif is not a cone — a summit, a lower north shoulder, and the
       // foothills STEPPED in front of it so the eye reads the distance.
+      // terrainYAt is null this far out; the bare call put these bases at
+      // 0 - 30 instead of the ground under them (#7292). Same floor as ridgeAt.
+      const groundOr = (p, k) => { const y = terrainYAt(p[0], p[2]); return y === null ? anchor(k, 1, 0).c[1] : y; };
       const mk = K(0.150);
       const mfar = anchor(mk, 1, 1450).c;
-      mountain(mfar[0], mfar[2], terrainYAt(mfar[0], mfar[2]) - 30, 2300, 690, {});
+      mountain(mfar[0], mfar[2], groundOr(mfar, mk) - 30, 2300, 690, {});
       const mk2 = K(0.105);
       const mf2 = anchor(mk2, 1, 2100).c;
-      mountain(mf2[0], mf2[2], terrainYAt(mf2[0], mf2[2]) - 25, 1500, 430, {});
+      mountain(mf2[0], mf2[2], groundOr(mf2, mk2) - 25, 1500, 430, {});
       // The shoulder: a broader, lower mass set beside the summit so the
       // silhouette has a saddle in it instead of a single peak.
       massifAt(K(0.196), 1, 2000, 1850, 470, -28);
@@ -478,7 +482,7 @@
       // trees pull back and the lap finally breathes.
       const bk = K(0.323);
       const bfar = anchor(bk, -1, 1600).c;
-      mountain(bfar[0], bfar[2], terrainYAt(bfar[0], bfar[2]) - 25, 1700, 470, {});
+      mountain(bfar[0], bfar[2], groundOr(bfar, bk) - 25, 1700, 470, {});
       for (let i = 0; i < 5; i++) {
         const k = K(0.297 + i * 0.020);
         const h = hash(i * 617);
