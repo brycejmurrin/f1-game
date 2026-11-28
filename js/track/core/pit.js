@@ -109,8 +109,7 @@ const TrackPit = (function () {
   // limiter has no room to dodge, so the exit may not deliver it into a bend —
   // see window(), which buys this out of the bay row's own slack.
   const MERGE_RUN = 40;
-  const LIMIT_KPH = 80, LIMIT_KPH_STREET = 60;   // F1 SR 2026 B1.6.3(a); Monaco
-  // The row starts past POLE's grid slot (14 m before the line, TrackMesh.gridSlot)
+  const LIMIT_KPH = 80, LIMIT_KPH_STREET = 60;   // F1 SR 2026 B1.6.3(a); Monaco  // The row starts past POLE's grid slot (14 m before the line, TrackMesh.gridSlot)
   // plus the run-up a commitment needs, and ends ROW_END short of the exit line.
   // Race control stands ROW_TAIL past the last bay (SceneryPits), inside the
   // same keep-out.
@@ -151,7 +150,12 @@ const TrackPit = (function () {
     const p = (def && def.pit) || {};
     const street = !!(def && def.street);
     const mode = p.mode === "narrow" || p.mode === "full" || p.mode === "street" ? p.mode : (street ? "street" : "full");
-    const b = Object.assign({}, mode === "narrow" ? NARROW : mode === "street" ? STREET : BANDS, p.bands || {});
+    const preset = mode === "narrow" ? NARROW : mode === "street" ? STREET : BANDS;
+    // An authored band overrides its preset key only when it is a finite,
+    // non-negative width: a NaN one made every `off` NaN and `openBoundary`
+    // wrote NaN into the wall bar (#7367).
+    const b = Object.assign({}, preset), a = p.bands || {};
+    for (const k in preset) if (Number.isFinite(a[k]) && a[k] >= 0) b[k] = a[k];
     const off = {
       fastIn: b.verge + b.platform,
       fastOut: b.verge + b.platform + b.fast,
@@ -169,7 +173,9 @@ const TrackPit = (function () {
     return {
       side: p.side === -1 ? -1 : 1,
       mode,
-      limitKph: Number.isFinite(p.limitKph) ? p.limitKph : (painted ? LIMIT_KPH_STREET : LIMIT_KPH),
+      // A zero or negative limit froze or reversed the limiter (#7367).
+      limitKph: p.limitKph > 0 && p.limitKph < 1 / 0 ? Math.min(300, Math.max(20, p.limitKph))
+        : (painted ? LIMIT_KPH_STREET : LIMIT_KPH),
       bands: b, off,
       painted,
       hasWall: !painted && b.platform > 0,
