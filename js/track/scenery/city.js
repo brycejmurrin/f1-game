@@ -655,7 +655,7 @@ const SceneryCity = (function () {
     };
     const neonSign = (k, side, dist, h, neon) => {
       const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
-      if (onTrack(a.c[0], a.c[2], 2)) return;
+      if (SceneryGuards.refuseOnRoad(ctx, "neonSign", a.c[0], a.c[2], 2, () => `neonSign SUPPRESSED at k=${k} side=${side}: dist=${dist}`)) return;
       addBox(out, vadd(a.c, a.u, h * 0.5), [0.6, h, 0.6], [0.10, 0.10, 0.12], b);          // mast
       const col = NIGHT ? neon : [neon[0] * 0.4 + 0.3, neon[1] * 0.4 + 0.3, neon[2] * 0.4 + 0.3];
       addBox(out, vadd(a.c, a.u, h * 0.62), [0.9, h * 0.6, 0.35], col, b);                  // vertical blade
@@ -663,7 +663,7 @@ const SceneryCity = (function () {
     };
     const streetLamp = (k, side, dist, head, h, lstyle) => {
       const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
-      if (onTrack(a.c[0], a.c[2], 2)) return;
+      if (SceneryGuards.refuseOnRoad(ctx, "streetLamp", a.c[0], a.c[2], 2, () => `streetLamp SUPPRESSED at k=${k} side=${side}: dist=${dist}`)) return;
       const pole = [0.13, 0.13, 0.15];
       const lit = NIGHT ? [head[0] * 1.4, head[1] * 1.4, head[2] * 1.4]
                         : [head[0] * 0.72, head[1] * 0.72, head[2] * 0.70];
