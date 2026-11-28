@@ -412,6 +412,7 @@
     "tests/unit/dom-id-literals.test.mjs",
     "tests/unit/dom-is-desktop.test.mjs",
     "tests/unit/drill-grip.test.mjs",
+    "tests/unit/drill-host-hardening.test.mjs",
     "tests/unit/drill-registry.test.mjs",
     "tests/unit/drill-telemetry.test.mjs",
     "// Decorrelated DriverRatings.BASE + skill()/overall personality pins.",
