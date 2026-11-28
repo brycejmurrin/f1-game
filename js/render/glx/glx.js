@@ -336,7 +336,7 @@ const GLXBackend = (function () {
       if (litU.uBakeAtlas) uf2(litU.uBakeAtlas, _litUf, "bakeAtlas", lb.atlasW, lb.atlasH * 2);
     } else {
       // Bake off for ~2 s (120 frames): free the light atlas + indirection.
-      if (_bakeTex && ++_bakeOffN > 120) {
+      if (_bakeTex && ((_bakeSrc && _bakeSrc.retired) || ++_bakeOffN > 120)) {   // retired: a circuit switch (#7464)
         gl.deleteTexture(_bakeTex); _bakeTex = null; _bakeSrc = null;
         if (_bakeIdxTex) { gl.deleteTexture(_bakeIdxTex); _bakeIdxTex = null; }
       }

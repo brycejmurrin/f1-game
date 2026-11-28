@@ -599,3 +599,45 @@ test("a sliced forTrack bake retires a pending menu prebake, so older lights nev
   assert.equal(stepOld(1000), true, "the stale prebake reports done");
   assert.equal(LB.gen(), gen, "…and installs nothing over the newer bake");
 });
+
+// #7464 (Metal heap snapshots, run 46114816668): after a circuit switch the picker stops drawing, so anything
+// only "the next frame" releases stays resident. Two holders made a 16.7 MB step on monaco: the previous
+// circuit's atlas, pinned by the renderer's last-drawn bake, and a draw-frame job the menu pre-bake overtook.
+test("a menu pre-bake that lands drops the draw-frame job it overtook (no frame may ever come to do it)", () => {
+  const LB = load({ Tracks: { terrainY: () => 0 }, performance });
+  const trk = {}, lights = [];
+  for (let i = 0; i < 60; i++) lights.push(...LAMP_A.map((v, k) => k === 0 ? i * 9 : k === 2 ? (i % 12) * 40 : v));
+  assert.equal(LB.pending(), false);
+  assert.equal(LB.forTrack(trk, lights, 4.0, 0, false, 300000), null, "a warm frame starts the sliced first bake");
+  assert.equal(LB.pending(), true, "the job holds its working arrays");
+  const step = LB.prebake(trk, lights.slice(), 4.0, 300000);   // applyLightTune rebuilt the set: a new key
+  let n = 0;
+  while (!step(1000) && n++ < 50);
+  assert.equal(LB.gen(), 1, "the pre-bake installed");
+  assert.equal(LB.pending(), false, "…and the overtaken job is gone without another forTrack call");
+});
+
+test("a bake the module stops serving is marked retired: reset() at a circuit switch, and a replacing install", () => {
+  const LB = load({ Tracks: { terrainY: () => 0 }, performance });
+  const trk = {}, a = [], b = [];
+  for (let i = 0; i < 30; i++) { a.push(...LAMP_A.map((v, k) => k === 0 ? i * 9 : v)); b.push(...LAMP_A.map((v, k) => k === 0 ? i * 9 + 3 : v)); }
+  const first = LB.forTrack(trk, a, 4.0, 0, true, 300000);
+  assert.ok(first && !first.retired, "the serving bake is live");
+  assert.equal(LB.forTrack(trk, a, 4.0, 0, true, 300000), first);
+  assert.ok(!first.retired, "a cache hit retires nothing");
+  const second = LB.forTrack(trk, b, 4.0, 0, true, 300000);
+  assert.notEqual(second, first);
+  assert.equal(first.retired, true, "replaced -> retired");
+  assert.ok(!second.retired);
+  LB.reset();
+  assert.equal(second.retired, true, "reset (loadTrack / dropTrackWorld) -> retired");
+  assert.equal(LB.gen(), 0);
+});
+
+test("every renderer frees a retired bake at its next unbaked frame, not after 120 of them", () => {
+  // The paused picker draws a handful of warm frames and stops: a frame count alone never came due.
+  const src = (f) => readFileSync(path.join(ROOT, f), "utf8");
+  assert.match(src("js/render/three/tsl-lit.js"), /\(_bakeSrc && _bakeSrc\.retired\) \|\| \+\+_bakeOffN > 120/);
+  assert.match(src("js/render/glx/glx.js"), /\(_bakeSrc && _bakeSrc\.retired\) \|\| \+\+_bakeOffN > 120/);
+  assert.match(src("js/render/webgpu/wgx.js"), /\(_bakeSrcW && _bakeSrcW\.retired\) \|\| \+\+_bakeOffW > 120/);
+});
