@@ -8,7 +8,7 @@ All in `ai-drive.js` / `ai-corridor.js`; state in game.js's per-car AI update (f
   `runExtra` / `latchLate`; lane look-ahead is `AiCorridor`.
 - **Attack roll** per zone: `attemptRoll`, never `simRnd`.
 - **Level pair**: the car on the outside of the next corner yields; commit-or-yield after
-  `sbsCommitT`. Any flip → `repassLock`, and the passer becomes a wide blocker.
+  `sbsLimits`. Any flip → `repassLock`, and the passer becomes a wide blocker.
 - **Defending** mid-train / adjacent lane / predicted side: `defendPull`. Opening calm: `startCalm`
   (full while launching, then fades to 0 over the tail of `START_CALM` after the launch ends).
 - **Human blocker**: judged by `paceVmax` (`paceSample` profile); a held line arms `humanYieldT`
@@ -30,7 +30,7 @@ still sees an intruding lean) scales `defendPull` down and returns 0 past its cu
 so `defendOnce` does not spend the one-move-per-straight on a lost cover —
 a pair at `CONCEDE_EDGE_FULL` zeros cover (pinned by `tests/unit/ai-pass-complete.test.mjs`). Hunger
 does not raise `otFireRate`, `otShouldFire` or `latchLate` (a reverted bump raised contact). Instead: more `towGain`
-slipstream, and a conceding defender tucks sooner (`sbsCommitT`, `sbsEase`). ERS `wantBoost` catch also arms on the same pace edge when
+slipstream, and a conceding defender tucks sooner (`sbsLimits`). ERS `wantBoost` catch also arms on the same pace edge when
 live speeds are queue-levelled. Streets ignore every knob above. Unit pins:
 `tests/unit/ai-pass-complete.test.mjs`.
 
@@ -43,7 +43,7 @@ race-incidents-control. "Dive-bombs" (late lunges into a corner, esp. turn 1) ar
    (it does NOT touch `otFireRate`), plus `passReach` (half alongside by the turn-in?).
 2. game.js's lunge rule abandons a move still not half alongside near the turn-in (`toTurnIn`).
 3. `brakeTarget` late-brake and optimism (`references/brake-target.md`) — how deep the dive goes.
-4. `startGapT` headway, the tight follow gap (`followGap`), `passSideBonus`, `sbsCommitT`.
+4. `startGapT` headway, the tight follow gap (`followGap`), `passSideBonus`, `sbsLimits`.
 Measure BEFORE and after, same seeds:
 `node tools/check/ai-race.mjs tactics --track monza --laps 3 --runs 5` (background, log to
 `artifacts/logs/`; the console prints run 1 only, `--json` or `--out artifacts/<f>.json` holds every run) — `byLap` holds interval stats only (bunching: within05,

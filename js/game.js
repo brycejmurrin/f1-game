@@ -5539,7 +5539,7 @@ function updateCarBrakePlan(c, dt, ranked, S) {
     // SQUEEZED (AiDrive.squeezeEase / squeezeBrake): touching a car we must
     // yield to, with no lane to yield into — back out under its speed, brake
     // dabbed, until we are clear. The pass latch below reads it too.
-    if (alongO && c.sbsT > AiDrive.SBS_COMMIT_MIN) {   // sbsCommitT's floor: below it no bag is filled
+    if (alongO && c.sbsT > AiDrive.SBS_COMMIT_MIN) {   // sbsLimits' commitT floor: below it no bag is filled
       const sb = AiDrive.sbsArgs(!!track.street, aiT, vT, alongO, S.pvA, scriptPace(c), paceVmax(alongO), scriptPace(alongO)), sbl = AiDrive.sbsLimits(sb);   // pooled; one concede feeds commitT and ease
       if (c.sbsT > sbl.commitT && c.passOf !== alongO && alongO._snapSpeed >= c.speed - 0.5 * vT / VMAX) vmax = Math.min(vmax, alongO._snapSpeed * sbl.ease);   // COMMIT OR YIELD: tuck in behind
     }
