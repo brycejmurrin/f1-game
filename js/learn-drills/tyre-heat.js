@@ -92,11 +92,21 @@ const TyreHeatDrill = (function () {
     };
   }
 
-  /** Tyre wear REAL for the drill's race (TyreModel runs temperatures only when wear is on); the undo restores it. */
+  /** Run `apply` (a G.raceTyreWear write, whose setter persists) without changing the SAVED tyreWear option: a tab
+   *  closed mid-drill must not leave the player's setting at "real" (LobbySettings.roomOnly's pattern). */
+  function keepSaved(G, apply) {
+    const st = G.store, had = st && st.get ? st.get("tyreWear", undefined) : undefined;
+    apply();
+    if (!st) return;
+    if (had === undefined) { if (st.rawDel) st.rawDel("tyreWear"); } else if (st.set) st.set("tyreWear", had);
+  }
+
+  /** Tyre wear REAL for the drill's race (TyreModel runs temperatures only when wear is on), live only, never
+   *  saved; the undo restores it. */
   function stage(G) {
     const previous = G.raceTyreWear;
-    if (previous !== "real") G.raceTyreWear = "real";
-    return () => { if (G.raceTyreWear !== previous) G.raceTyreWear = previous; };
+    if (previous !== "real") keepSaved(G, () => { G.raceTyreWear = "real"; });
+    return () => { if (G.raceTyreWear !== previous) keepSaved(G, () => { G.raceTyreWear = previous; }); };
   }
 
   function begin(G) {
