@@ -967,7 +967,9 @@ test("the menu background goes through GameStore's raw lane and reads back the s
 
 test("menu background has separate landscape and portrait slots (#7157)", () => {
   const b = boot(), L = "data:image/jpeg;base64,TEFORA==", P = "data:image/jpeg;base64,UE9SVA==";
-  for (const PS of [b.PS, b.Body]) {
+  // One home since #7444: the stub owns the slots; the body re-exports none of them.
+  for (const k of ["background", "setBackground", "slotFor", "crop", "filename"]) assert.equal(b.Body[k], undefined, k);
+  for (const PS of [b.PS]) {
     b.storage.clear();
     b.PS.setBackground(L, "landscape"); PS.setBackground(P, "portrait");
     assert.equal(PS.background("landscape"), L); assert.equal(PS.background("portrait"), P);

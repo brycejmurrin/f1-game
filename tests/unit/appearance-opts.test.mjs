@@ -16,6 +16,12 @@ import { cssRules } from "../helpers/css-rules.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = fs.readFileSync(path.join(ROOT, "js/ui/appearance-opts.js"), "utf8").replace(/^const\b/gm, "var");
+// The real CvdPalette.srgbToLinear (manifest loads cvd-palette first; its other members stay absent here) (#7444).
+const CVD_LIN = (() => {
+  const c = vm.createContext({ Math, Number, String });
+  vm.runInContext(fs.readFileSync(new URL("../../js/ui/cvd-palette.js", import.meta.url), "utf8").replace(/^const\b/gm, "var"), c, { filename: absSrc("js/ui/cvd-palette.js") });
+  return Object.freeze({ srgbToLinear: c.CvdPalette.srgbToLinear });
+})();
 const SHELL = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
 const TOKENS = fs.readFileSync(path.join(ROOT, "css/tokens.css"), "utf8");
 const EXPORT = fs.readFileSync(path.join(ROOT, "js/ui/settings-export.js"), "utf8");
@@ -212,6 +218,7 @@ function load({
     }),
   };
   sb.window = sb;
+  sb.CvdPalette = CVD_LIN;
   sb.window.matchMedia = (q) => ({
     matches: mq.light && String(q).includes("light"),
     media: q,

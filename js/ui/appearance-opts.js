@@ -103,7 +103,7 @@ const AppearanceOpts = (function () {
     return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
   }
   function relLum(c) {
-    const f = (v) => (v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4));
+    const f = CvdPalette.srgbToLinear;   // the IEC knee, not WCAG 2.0's older one: no 8-bit input moves (Bryce, #7444)
     return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]);
   }
   function wcag(a, b) {
