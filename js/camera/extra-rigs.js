@@ -294,6 +294,7 @@ const ExtraRigs = (function () {
     if (modes !== _pitModes) { _pitModes = modes; _pitIdx = modes.findIndex(_isPitwall); }
     const pitIdx = _pitIdx;
     if (!enabled) tickPitEntry(G, store);
+    else peEnd(G);   // PIT WALL auto on mid-shot owns the lane (#7350)
     if (pitIdx < 0) { _wasInPit = nowIn; return null; }
     if (!enabled) {
       if (_autoOn) { _autoOn = false; _autoPrev = -1; }
