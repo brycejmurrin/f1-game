@@ -82,6 +82,42 @@ VM census (game ↔ backend contract, 6 circuits x 2 cycles, 3000 steps each): m
 None of the three makes a later map slower than an earlier one: CPU time per frame is flat (2.6 → 2.7 ms task,
 1.19 → 0.91 ms script in run A) and no per-frame list, listener or timer count rises.
 
+## Real GPU: a two-state swing in ArrayBuffer storage (Metal, run 46109757702)
+
+`tests/specs/track-switch-memory.spec.js` on `macos-latest` (Metal, three's WebGPU path) failed its first attempt
+on PR #7480's head `5d120c54` and passed the retry. Its per-visit census (artifact `playwright-artifacts-renderer-macos`,
+`test-results-track-switch-memory/headless-0-retry{0,1}.json`) splits the heap reading into V8's own heap and
+ArrayBuffer backing storage (`Runtime.getHeapUsage`):
+
+| attempt | circuit | backing storage MB, visits 1-5 | V8 heap MB, visits 1-5 | three attributes + index MB |
+|---|---|---|---|---|
+| 1 (failed) | monza | 89.8, 90.1, **114.7**, 90.1, **116.5** | 32.3, 35.9, 37.3, 37.5, 38.1 | 15.3 + 3.5 |
+| 1 (failed) | monaco | 75.4, **92.2**, 75.5, **92.2**, **92.2** | 56.8, 58.3, 59.1, 59.9, 60.4 | 14.1 + 2.6 |
+| 2 (passed) | monza | 90.0, 90.2, 90.2, 90.2, 90.2 | 35.3, 38.6, 39.4, 40.1, 40.8 | 15.3 + 3.5 |
+| 2 (passed) | monaco | 75.5, 75.6, **92.4**, **92.4**, **92.4** | 59.9, 60.8, 61.8, 62.3, 62.8 | 14.1 + 2.6 |
+
+- It is not growth: each circuit has exactly two levels and the high one never rises (monza 114.7 / 116.5, monaco
+  92.2 / 92.4). The spec's median-of-intervals policy reads the flips on monza as +26 MB a visit.
+- It is not the JS object graph: V8's heap, geometries (91 / 55), render objects (137 / 101), three's attribute
+  count (340 / 186), uniform buffers and `nodeBuilderCache` are identical in the low and the high visits, and one
+  built track is reachable at every reading.
+- Monaco's step is 16.7-16.8 MB, which is three's own attribute + index byte count for monaco (14.1 + 2.6): in the
+  high state one extra copy of the current world's vertex and index data is alive as ArrayBuffers. Monza's step
+  (24.5-26.4 MB) is larger than its 18.8 MB, so that reading is not exact for monza.
+- The picker path builds on the main thread (`js/game.js:1925` sends only an in-race switch to the build worker), so
+  worker transfer is not the source.
+- On this box the same route on software WebGPU sits on one level for all ten visits (monza backing 99.4 MB x4,
+  monaco 84.8 MB x4), and a snapshot diff of monza visit 3 against visit 9 is +2.1 MB, 1.98 MB of it compiled
+  code, ArrayBuffers +5 objects / +5 kB. The swing does not reproduce without a real GPU.
+
+Not named: who holds the extra copy. Unproven candidates, in the order I would test them: the WebGPU backend's
+`mappedAtCreation` staging ranges for a build whose buffers were created in a frame that was never presented;
+CPU arrays a release-after-upload step frees in one state and not the other. The probe that settles it is a heap
+snapshot in a HIGH monaco visit and a LOW one on Metal (class `system / JSArrayBufferData`, the 1-4 MB buffers,
+`get_heapsnapshot_retaining_paths`); the spec already holds a CDP session, so it is a temporary spec edit on a
+branch run on `macos-latest`, as TRACK-SWITCH-METAL-2026-10-17 did. 17-26 MB per world matters on a phone whether
+or not it ever grows.
+
 ## Not covered here
 
 - A real GPU and a real phone. This box has no GPU: frame times here are relative only, and iOS memory pressure,
