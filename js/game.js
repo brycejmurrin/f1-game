@@ -3471,7 +3471,7 @@ setupTrialSession = SetupTrialSession.create(G);
 let raceRadio = RaceRadio.create(G);   // LAZY_RACE_SESSION — radio
 const daily = DailyChallenge.create(G);   // the day's time-trial plan (js/race/daily-challenge.js)
 const realRace = RealRace.create(G);      // a real Grand Prix replayed from its timing script: the FULL stub (js/race/real-race-boot.js) until LAZY_REAL_RACE lands
-function flyingStartDeps() { return { realRace: () => realRace.isActive() || setupTrialSession?.pending() || setupTrialSession?.active(), setPaused }; }   // setPaused: its RETRY LAP (js/race/lap-retry.js, #6965)
+function flyingStartDeps() { return { realRace: () => realRace.isActive() || setupTrialSession?.pending() || setupTrialSession?.active() || !!drills?.active(), setPaused }; }   // setPaused: its RETRY LAP (js/race/lap-retry.js, #6965)
 let flyingStart = FlyingStart.create(G, flyingStartDeps());   // LAZY_RACE_SESSION; re-created in onRaceSessionReady
 var jumpStartPenalty = JumpStartPenalty.create(G, {
   autoThrottle, inputOf, launchT0: () => launchT0, soundOn: () => soundOn, isQuali, isTimeTrial,

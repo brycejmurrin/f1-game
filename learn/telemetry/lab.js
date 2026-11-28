@@ -338,3 +338,5 @@
   LearnAppearance.mount(reduced => { replay.reduced(reduced); draw(); });
   new ResizeObserver(draw).observe(chart);
 })();
+// TRY IT IN THE CAR: Telemetry Detective (js/learn-drills/telemetry.js); BACK TO LESSON posts its last run beside the button.
+if (typeof LearnAppearance !== "undefined") LearnAppearance.drill?.("telemetry", "Telemetry Detective");

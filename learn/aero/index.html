@@ -95,6 +95,8 @@
 <p id="pressure-ratio">0.80² = 0.64 of the clean-air pressure and force.</p>
 <p>Disturbed flow can also change the effective lift coefficient. Changes in flow angle and turbulence alter the way air follows the wing and floor, including where it separates. A loss of downforce leaves the tyres with less vertical load for cornering.</p>
 </section>
+<button type="button" id="launch-aero-drill" hidden>Try it in the car: Aero Drill</button>
+<p id="aero-drill-result" role="status" hidden></p>
 <details>
   <summary>In Apex 26</summary>
   <p><strong>Slipstream and dirty air.</strong> Apex estimates the wake from the gap and sideways offset to the car ahead. In Classic, its centerline reach is 34 m. Lining up behind a rival gives you a tow when the steering is nearly straight and the brake is released. The same wake reduces aerodynamic grip when you turn.</p>
@@ -103,8 +105,6 @@
   <h3>Monza Aero Drill</h3>
   <p>Start at speed on the pit straight, closing on one rival, with ambient wind and Classic Dirty Air enabled. The translucent guide car with the gold marker shows how to tuck in, open Active Aero, ease off and brake for Turn 1. Follow the moving cyan airflow behind the rival and compare it with the paler clean air to the side. The strands use Apex’s live wind and wake values. Your own Aero prompt and the striped braking marker tell you when to act.</p>
   <p>Ease off early to keep the guide car in view. Use <strong>Pause → Practice → Try Again</strong> to return to the start and try its line yourself. Keep the same throttle and Aero inputs on a second run, and move out of the wake to compare how quickly you close.</p>
-  <button type="button" id="launch-aero-drill" hidden>Launch Aero Drill</button>
-  <p id="aero-drill-result" role="status" hidden></p>
 </details>
 <details><summary>Model and sources</summary><p>Apex’s classic wake model uses forward gap and lateral offset. Grip is the wake multiplier relative to clean air at the same speed. Both presets hold speed at the game reference of 72 m/s (259 km/h). The lab holds speed, gap and offset constant when you switch track sections. On the straight the tow is eligible. In the corner, the game’s tow condition is treated as unmet. The wake and grip formulas stay the same in both cases.</p><p>Car positions and flow lines are schematic. The lines illustrate the game’s estimated wake. Clean air here means outside car A’s wake. The 34 m centreline cutoff is an Apex setting. Usable tow shows a percentage of the game’s maximum tow strength.</p><p><a href="https://doi.org/10.4271/2017-01-1546" target="_blank" rel="noopener">Wake-flow research</a> · <a href="https://www.fia.com/regulations/category/110" target="_blank" rel="noopener">FIA regulations</a></p></details>
 </main>

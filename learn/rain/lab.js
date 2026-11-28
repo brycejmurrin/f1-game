@@ -119,3 +119,5 @@
     }
   });
 })();
+// TRY IT IN THE CAR: Wet Weather Lines (js/learn-drills/rain-groove.js); BACK TO LESSON posts its last run beside the button.
+if (typeof LearnAppearance !== "undefined") LearnAppearance.drill?.("rain", "Wet Weather Lines");
