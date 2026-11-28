@@ -180,6 +180,9 @@ const TrackBuildProps = (function () {
       emitted: [], suppressed: [], invalid: [], unsafe: [],
       suppressedCounts: _suppressed,   // per-kind guard drops (tests/unit/scenery-guards)
       supersededByPit: _superseded,    // per-kind drops the pit complex caused (js/track/core/pit.js)
+      // groundAt() calls whose every sample fell off the ribbon (#7333): a foot
+      // that took its fallback, OR a caller that skips on null (its test missed).
+      groundFallback: 0,
     };
 
     // Everything buildProps places goes straight into vertex buffers and is then
@@ -654,6 +657,47 @@ const TrackBuildProps = (function () {
       frustum: (o, foot, r0, r1, h, col, seg, b) => addFrustum(o, foot, r0, r1, h, col, seg, b),
     };
 
+    // groundAt(): THE height a foot stands at (#7333). One sample at (x, z) by
+    // default; with `size` [w, d] (+ `basis`, as foundation) the 3x3 footprint
+    // corners, edge midpoints and centre, reduced by `pick` (read only with `size`): "lo" (lowest, for
+    // a fill that must reach the ground), "hi" (highest, for a lift that must
+    // clear it) or "mid" (the centre sample; the mean of the finite samples when
+    // the centre is off the ribbon). When EVERY sample is off the rendered
+    // ribbon it returns `fallback` and counts the miss on
+    // diagnostics.groundFallback: the explicit, audited form of the 106
+    // hand-written `gy != null ? gy : a.c[1]` fallbacks (#7332).
+    const FOOT9 = [-0.5, 0, 0.5];
+    const sampleFootprint = (cx, cz, size, basis, fn) => {
+      const b = basis || [[1, 0, 0], UPV, [0, 0, 1]];
+      const r = b[0], f = b[2];
+      for (const sx of FOOT9) for (const sf of FOOT9) {
+        const x = cx + r[0] * sx * size[0] + f[0] * sf * size[1];
+        const z = cz + r[2] * sx * size[0] + f[2] * sf * size[1];
+        const y = terrainYAt(x, z);
+        if (y != null && Number.isFinite(y)) fn(y, sx === 0 && sf === 0);
+      }
+    };
+    const groundAt = (x, z, opts) => {
+      const o = opts || {};
+      const fallback = o.fallback !== undefined ? o.fallback : null;
+      if (!o.size) {
+        const y = terrainYAt(x, z);
+        if (y != null && Number.isFinite(y)) return y;
+        diagnostics.groundFallback++;
+        return fallback;
+      }
+      const pick = o.pick || "mid";
+      let lo = Infinity, hi = -Infinity, sum = 0, cnt = 0, mid = null;
+      sampleFootprint(x, z, o.size, o.basis, (y, centre) => {
+        if (y < lo) lo = y;
+        if (y > hi) hi = y;
+        sum += y; cnt++;
+        if (centre) mid = y;
+      });
+      if (!cnt) { diagnostics.groundFallback++; return fallback; }
+      return pick === "lo" ? lo : pick === "hi" ? hi : mid != null ? mid : sum / cnt;
+    };
+
     // foundation(): fill from `top` down to the LOWEST ground under the
     // footprint. Samples corners AND centre, because a single groundYAt() reuse
     // across a wide model assumes flat ground (Imola's village stood 47 m clear
@@ -668,14 +712,8 @@ const TrackBuildProps = (function () {
         return false;
       }
       const b = spec.basis || [[1, 0, 0], UPV, [0, 0, 1]];
-      const r = b[0], f = b[2];
       let lo = Infinity;
-      for (const sx of [-0.5, 0, 0.5]) for (const sf of [-0.5, 0, 0.5]) {
-        const x = c[0] + r[0] * sx * size[0] + f[0] * sf * size[1];
-        const z = c[2] + r[2] * sx * size[0] + f[2] * sf * size[1];
-        const y = terrainYAt(x, z);
-        if (y != null && y < lo) lo = y;
-      }
+      sampleFootprint(c[0], c[2], size, b, (y) => { if (y < lo) lo = y; });
       if (!Number.isFinite(lo)) lo = Number.isFinite(spec.ground) ? spec.ground : NaN;
       if (!Number.isFinite(lo)) return false;
       const embed = spec.embed != null ? spec.embed : 0.6;
@@ -1329,7 +1367,7 @@ const TrackBuildProps = (function () {
       // guard / grounding / boundary core
       markBarrier, blockAt, post, recordBarrier, indexBarrier, clearTreeDist,
       indexSolid, indexSolidAt, barrierClear, massBlocked, massAdd, reserveEmittedSolid, bankOffsetAt,
-      seat, foundation, cantilever, groundYAt, terrainYAt, onTrack,
+      seat, foundation, cantilever, groundYAt, terrainYAt, groundAt, onTrack,
       frameAt, overheadSpan, models, bakedModel,
       // placement primitives + math helpers
       place, prop, backdrop, groundPlane, every,
@@ -2067,6 +2105,9 @@ const TrackBuildProps = (function () {
         // across tens of metres of slope. Returns null off the rendered
         // ribbon; callers fall back to whatever they were using before.
         terrainYAt,
+        // groundAt is the FOOT query: footprint sampling, lo/hi/mid, an explicit
+        // counted fallback. A raw terrainYAt is for a test, never a foot (#7333).
+        groundAt,
         groundUnder, frameAt,
         addBox, every, onTrack,
         modelGroup, overheadSpan, lampPost, waterSurface, waterField, waterBand, groundPatch, groundedSegments,

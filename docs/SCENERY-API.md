@@ -340,7 +340,8 @@ authored planting, distance is still the fix.
 | `every(metres, fn)` | call `fn(k)` every ~`metres` around the lap |
 | `onTrack(x, z, margin)` | true if `(x,z)` is on any tarmac — guard distant props |
 | `groundYAt(k, dist)` | terrain height `dist` beyond the edge (engine frame, like `px/py/pz`: not the render-frame world y) |
-| `terrainYAt(x, z)` | terrain height at a WORLD XZ point, or `null` off the rendered ribbon. It IS `Tracks.terrainY(track, x, z)`, the one terrain sampler (#7132): call it, never `Tracks.terrainY`, from a circuit file. Reach for this the moment a placement walks away from the centreline: `groundYAt` is a NODE query, and its absence is what makes Trap B in docs/SCENERY-API.md so easy to write — Spa's old-road ribbon reused one anchor's height for 248 m and left its treeline 17 m in the air |
+| `groundAt(x, z, opts?)` | THE foot query (#7333): ground height at a WORLD XZ point. `opts.size` `[w, d]` + `opts.basis` sample foundation's 3x3 footprint, reduced by `opts.pick` (only with `size`) `"lo"` (a fill reaching the ground) / `"hi"` (a lift clearing it) / `"mid"` (default: the centre sample). Off the ribbon it returns `opts.fallback` (default `null`) and counts the miss on `modelDiagnostics.groundFallback`. Seat every foot with it; `tests/unit/scenery-terrainyat-ratchet.test.mjs` lets raw `terrainYAt(` per circuit file only fall |
+| `terrainYAt(x, z)` | (raw; for a TEST such as "is this pad below grade?", never a foot — use `groundAt`) terrain height at a WORLD XZ point, or `null` off the rendered ribbon. It IS `Tracks.terrainY(track, x, z)`, the one terrain sampler (#7132): call it, never `Tracks.terrainY`, from a circuit file. Reach for this the moment a placement walks away from the centreline: `groundYAt` is a NODE query, and its absence is what makes Trap B in docs/SCENERY-API.md so easy to write — Spa's old-road ribbon reused one anchor's height for 248 m and left its treeline 17 m in the air |
 | `hash(i)` | deterministic 0–1 pseudo-random |
 | `ATM` / `COL` | named atmosphere & colour packs from `scenery/data.js` (see below) |
 
@@ -692,6 +693,12 @@ for (const [extra, wMin, hMin, count, col] of [
 > "race"` after `race()`.
 
 ## Grounding — how props seat on the terrain
+
+**Today's rule (#7333):** a foot's height comes from `groundAt(x, z, { size, basis, pick, fallback })`,
+never a hand-rolled `gy != null ? gy : a.c[1]` or a copied 3x3 sampler. Its fallback is explicit and
+every off-ribbon miss is counted (`modelDiagnostics.groundFallback`). Raw `terrainYAt` stays for a
+TEST only; the ratchet `tests/unit/scenery-terrainyat-ratchet.test.mjs` (baseline
+`tests/data/scenery-terrainyat-baseline.json`) lets the per-file count only fall.
 
 Written after an exhaustive float audit of all 40 circuits (see
 `tools/track/float-audit.cjs`). It records *why* floating scenery kept recurring and
