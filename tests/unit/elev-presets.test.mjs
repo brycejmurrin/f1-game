@@ -151,3 +151,24 @@ test("preset chord grade stays under the validator's red 15 % over 50 seeds on t
     }
   }
 });
+
+test("the 0.25 m re-quantise after the grade rescale never leaves a chord over the preset cap (#7317 row 7)", () => {
+  const E = load();
+  // A 1 m-chord loop: one quarter-metre step is a 25 % chord, so a single
+  // rescale + re-quantise used to leave 70/1200 seeds above the 15 % wall.
+  const gradeRed = 0.15;
+  for (const [n, r] of [[600, 96], [300, 143]]) {
+    const pts = [];
+    for (let i = 0; i < n; i++) { const a = (i / n) * Math.PI * 2; pts.push([Math.cos(a) * r, Math.sin(a) * r]); }
+    for (let seed = 1; seed <= 60; seed++) {
+      const h = E.apply("hilly", pts, { seed }).heights;
+      let worst = 0;
+      for (let i = 0; i < n; i++) {
+        const A = pts[i], B = pts[(i + 1) % n];
+        worst = Math.max(worst, Math.abs(h[(i + 1) % n] - h[i]) / Math.hypot(B[0] - A[0], B[1] - A[1]));
+      }
+      assert.equal(h[0], 0, "start pinned");
+      assert.ok(worst <= gradeRed, "n=" + n + " seed " + seed + ": " + (worst * 100).toFixed(1) + " %");
+    }
+  }
+});
