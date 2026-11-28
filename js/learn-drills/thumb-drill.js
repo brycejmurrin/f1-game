@@ -193,8 +193,11 @@ const ThumbDrill = (function () {
       if (e.key === "ArrowLeft") keys.left = e.type === "keydown";
       if (e.key === "ArrowRight") keys.right = e.type === "keydown";
     }
+    // A keyup lost to a blur (alt-tab, a system sheet) must not leave an arrow held (#7414).
+    function onBlur() { keys.left = keys.right = false; }
     window.addEventListener("keydown", onKey);
     window.addEventListener("keyup", onKey);
+    window.addEventListener("blur", onBlur);
 
     function sample(c) {
       const lv = Input.touchLevels ? Input.touchLevels() : { left: 0, right: 0 };
@@ -273,6 +276,7 @@ const ThumbDrill = (function () {
       cancelAnimationFrame(raf);
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("keyup", onKey);
+      window.removeEventListener("blur", onBlur);
       root.remove(); card.remove();
       live = null;
       if (typeof DrillRegistry !== "undefined") DrillRegistry.hold(false);
@@ -280,7 +284,7 @@ const ThumbDrill = (function () {
       Log.info("ui", "ThumbDrill closed");
     }
     raf = requestAnimationFrame(tick);
-    return { stop, fail, state: () => ({ cue: cue.textContent, sub: sub.textContent, lap: !card.hidden, marked, scored: scorer ? scorer.results().size : 0 }) };
+    return { stop, fail, state: () => ({ cue: cue.textContent, sub: sub.textContent, lap: !card.hidden, marked, arrow: (keys.right ? 1 : 0) - (keys.left ? 1 : 0), scored: scorer ? scorer.results().size : 0 }) };
   }
 
   return Object.freeze({ launch, stop: () => live?.stop(), state: () => live?.state() || null, apexes, createScorer, cueAt });

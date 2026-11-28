@@ -1424,3 +1424,23 @@ test("XrSession.probe keeps a seeded supported answer until isSessionSupported r
   assert.equal(await pending, false);
   assert.equal(ctx.XrSession.isSupported(), false, "the resolved answer wins");
 });
+
+// #7414 (ledger #7346 row 14): mapFrame ran every XR frame (72-120 Hz) and built a fresh result, sample and events
+// array each time. It now reuses one scratch, so every field must be rewritten on each call, nothing carried over.
+test("XrInput.mapFrame reuses one result per call and rewrites every field (no per-frame garbage, no stale edge)", () => {
+  const { XrInput } = bootXr();
+  const pad = (b4, sx) => ({ handedness: "right", targetRayMode: "tracked-pointer",
+    gamepad: { axes: [0, 0, sx, 0], buttons: [{ value: .9 }, {}, {}, {}, { value: b4 }, {}] } });
+  const latch = {};
+  const a = XrInput.mapFrame([pad(1, .8)], latch, { menuOpen: true, overlay: true });
+  assert.deepEqual(Array.from(a.events), ["navSelect", "navRight"]);
+  assert.equal(a.driving, true);
+  const b = XrInput.mapFrame([], latch, { driving: false });
+  assert.equal(b, a, "the same scratch object");
+  assert.equal(b.sample, a.sample); assert.equal(b.events, a.events);
+  assert.equal(b.events.length, 0, "last frame's edges are gone");
+  assert.equal(b.driving, false); assert.equal(b.sample.roll, null); assert.equal(b.sample.thr, 0);
+  assert.equal(b.latch, latch, "the caller's latch is still the one handed back");
+  b.driving = false;   // xr-session.js pollInput writes this field; the next call must rewrite it
+  assert.equal(XrInput.mapFrame([pad(0, 0)], {}).driving, true);
+});
