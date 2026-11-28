@@ -720,6 +720,7 @@ test("publishing a changed top-control zoom requests one subsequent full fit", (
       document: { body: { classList: { contains: () => false } }, documentElement: ctx.root },
       _hudTop: {}, _hudBottom: {}, _fitStamped: false, _fitClearSeq: 0,
       pickDocks() {}, els: {}, phonePaintedClash: () => false, radioPaintedKey: () => "", _stampKey: "", _stampWait: 0,
+      _stampClashKey: "", _stampClashRun: 0, FIT_CLASH_TRIES: 5,
       hStyle(root, key, value) { styles.set(key, value); },
     });
     vm.runInContext(source.slice(stampStart, stampEnd), ctx);
@@ -826,4 +827,48 @@ test("fitHud: a steady same-key full fit writes no root custom property (#2797)"
   } finally { st.setProperty = set; st.removeProperty = rm; }
   assert.equal(h.root.style.getPropertyValue("--hud-z-top"), "", "precondition: the band is uncapped at HUD SIZE 100");
   assert.deepEqual(writes, [], "a re-fit of an unchanged layout must not touch <html>'s style");
+});
+
+// #7239 member 1: a clash phoneFitStampSync cannot clear re-ran up to 8 probe passes (rect reads, offsetHeight,
+// getComputedStyle) on every 10 Hz tick, because a voided stamp never matched the skip key. fitHud bounds the same
+// case with FIT_CLASH_TRIES; the stamp probe now does too, and probes again on a changed key or the 3 s backstop.
+test("phoneFitStampSync: a clash it cannot clear is probed a bounded number of times per key, the stamp stays voided (#7239)", () => {
+  const source = read("js/ui/hud.js");
+  const start = source.indexOf("function phoneFitStampSync(");
+  const end = source.indexOf("\nfunction fitHud()", start);
+  assert.ok(start >= 0 && end > start);
+  const triesM = /const FIT_CLASH_TRIES = (\d+);/.exec(source);
+  assert.ok(triesM, "FIT_CLASH_TRIES is the shared bound");
+  let rects = 0, gapMirWrites = 0, radio = "a";
+  const styles = new Map();
+  const dataset = {};
+  const root = { style: { getPropertyValue: () => "" }, dataset };
+  const ctx = vm.createContext({
+    Math, document: { documentElement: root }, Dom: { isDesktop: () => false },
+    _hudTop: {}, _hudBottom: {}, _fitStamped: false, _fitClearSeq: 0, _fitPending: false, _fitKey: "k",
+    _stampKey: "", _stampWait: 0, _stampClashKey: "", _stampClashRun: 0, FIT_CLASH_TRIES: +triesM[1],
+    pickDocks() {}, els: {}, radioPaintedKey: () => radio, _boostOnRightHalf: () => null,
+    gapPaintedDrop: () => { gapMirWrites++; dataset.gapMir = "1"; return false; }, gapMirrorDrop: () => false,
+    nudgeAero() {},
+    // One probe reads the painted boxes; the clash never clears.
+    phonePaintedClash: () => { rects += 4; return true; },
+    hStyle(el, key, value) { styles.set(key, value); },
+  });
+  vm.runInContext(source.slice(start, end), ctx, { filename: absSrc("js/ui/hud.js") });
+  const ticks = (n) => { const r0 = rects; for (let i = 0; i < n; i++) vm.runInContext("phoneFitStampSync(1)", ctx); return rects - r0; };
+  const perProbe = 4 * 9;   // the first probe and 8 passes
+  const first = ticks(20);
+  assert.ok(first <= (+triesM[1] + 1) * perProbe, `20 ticks of one unclearable clash read ${first} rects (cap ${(+triesM[1] + 1) * perProbe})`);
+  assert.equal(styles.get("--hud-fit-stamp"), "", "the clash keeps the stamp voided");
+  assert.equal(ticks(5), 0, "past the bound a steady clash reads nothing");
+  const mir = gapMirWrites;
+  ticks(5);
+  assert.equal(gapMirWrites, mir, "an unchanged verdict leaves gapMir alone");
+  assert.equal(dataset.gapMir, "1");
+  radio = "b";
+  assert.ok(ticks(1) > 0, "a changed key probes again");
+  ticks(20);   // spend the new key's tries
+  const backstop = ticks(60);   // ~6 s: the 30-tick backstop probes once or twice
+  assert.ok(backstop > 0 && backstop <= 2 * perProbe, `the 3 s backstop still re-probes, bounded (${backstop})`);
+  assert.ok(vm.runInContext("phoneFitStampSync(1, true), _stampClashRun", ctx) >= 1, "a forced sync always probes");
 });

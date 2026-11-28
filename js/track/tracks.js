@@ -100,7 +100,7 @@ const Tracks = (function () {
       const iOld = Math.round(TrackSpace.wrap01(def.sceneryStartFrac) * N) % N;
       // The old origin's control point, renumbered into THIS lap's ordering.
       const j = (((def.reverse ? offNew - iOld : iOld - offNew) % N) + N) % N;
-      def._sceneryShift = total ? dlen[j * SUB] / total : 0;
+      def._sceneryShift = dlen[j * SUB] / total;
     }
 
     const n = Math.max(200, Math.round(total / 4));

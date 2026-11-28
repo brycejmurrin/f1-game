@@ -41,6 +41,7 @@ function boot(file, global, device, stored = {}, shape = "wide") {
     matchMedia: (q) => ({ matches: q === "(pointer: coarse)" && d.coarse, addEventListener() {}, addListener() {} }),
   };
   sb.window = sb;
+  vm.runInContext(read("js/ui/ui-shape.js"), vm.createContext(sb), { filename: absSrc("js/ui/ui-shape.js") });
   vm.runInContext(read(file).replace(/^const\b/gm, "var"), vm.createContext(sb), { filename: absSrc(file) });
   return { M: sb[global], data, writes, html: dom.documentElement };
 }

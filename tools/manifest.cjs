@@ -322,6 +322,7 @@ const FULL = [
   "js/ui/survey-hud.js",   // APEX_SURVEY_HUD=1: cockpit HUD fixture without race/scenery warm
   "js/ui/scroll-fade.js",
   "js/ui/css-zoom.js",
+  "js/ui/ui-shape.js",       // UiShape: the one phone / screen-shape answer (scale, hud-layout, screen-placement, sheet-shape read it)
   "js/ui/sheet-shape.js",
   "js/ui/layers.js",
   "js/ui/modal.js",
@@ -1591,6 +1592,7 @@ const CONTROLLER = [
   "js/input/phone-pad.js",
   "js/career/save-migrate.js",
   "js/core/store.js",
+  "js/ui/ui-shape.js",   // UiShape: screen-placement reads it at eval (the phone / screen-shape answer)
   "js/ui/screen-regions.js",
   "js/ui/screen-placement.js",
   "js/ui/screen-arranger.js",
@@ -2161,6 +2163,7 @@ const FULL_TIERS = {
     "js/ui/survey-hud.js": "race",
     "js/ui/scroll-fade.js": "menu",
     "js/ui/css-zoom.js": "menu",
+    "js/ui/ui-shape.js": "menu",
     "js/ui/sheet-shape.js": "menu",
     "js/ui/layers.js": "menu",
     "js/ui/modal.js": "menu",
