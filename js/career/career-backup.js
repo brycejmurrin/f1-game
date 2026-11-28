@@ -353,13 +353,12 @@ const CareerBackup = (function () {
     // slot; restoring it as a standalone championship would mix the two modes.
     const careerAlias = isObj(careerSeason) && sameSeasonValue(careerSeason, clone.season);
     if (clone.season != null && !careerAlias) {
-      const keys = ["round", "you", "pts", "teamPts", "driverCodes", "finishes", "roundPts", "config", "stage", "lastFl", "seed", "qualiOrder", "qualiTrack", "qualiMode", "qualiSeat"];
-      if (Object.keys(clone.season).some((k) => !keys.includes(k))) return { ok: false, reason: "unsupported-season" };
+      // The allowlist is SaveMigrate.SEASON_FIELDS' standalone backup rows (#7337).
+      if (Object.keys(clone.season).some((k) => !SaveMigrate.SEASON_BACKUP_KEYS.includes(k))) return { ok: false, reason: "unsupported-season" };
       if (clone.season.round != null && (!Number.isInteger(clone.season.round) || clone.season.round < 0 || clone.season.round > 200)) return { ok: false, reason: "season-invalid" };
       if (clone.season.config != null) {
         const config = clone.season.config;
-        const configKeys = ["trackIds", "quali", "sprint", "sprintIds", "laps", "points", "flPoint", "drop"];
-        if (!isObj(config) || Object.keys(config).some((k) => !configKeys.includes(k))) return { ok: false, reason: "unsupported-calendar" };
+        if (!isObj(config) || Object.keys(config).some((k) => !own(SaveMigrate.SEASON_CONFIG, k))) return { ok: false, reason: "unsupported-calendar" };
         const clean = cleanSeasonConfig(config);
         if (Object.keys(config).some((k) => JSON.stringify(config[k]) !== JSON.stringify(clean[k]))) return { ok: false, reason: "unsupported-calendar" };
       }
@@ -422,23 +421,18 @@ const CareerBackup = (function () {
   }
   // SeasonCal.normalize resets any lap count or drop rule outside its option
   // lists, so the cleaner must too: a file claiming drop:1 must not pass the
-  // recovery equality check and then load under drop:0 (#7309). Mirrors
-  // season-cal.js LAP_OPTS / DROP_OPTS (the unit test pins them equal).
-  const SEASON_LAP_OPTS = [3, 5, 10, 25, 57], SEASON_DROP_OPTS = [0, 2, 3];
+  // recovery equality check and then load under drop:0 (#7309). Both read the
+  // option sets from SaveMigrate.SEASON_CONFIG (#7337); an unknown value
+  // becomes the set's first option, as normalize does.
   function cleanSeasonConfig(raw) {
     const c = plain(raw);
     if (!c) return undefined;
     const ids = (a) => (Array.isArray(a) ? a.filter((id, i) => typeof id === "string" && ID_RE.test(id) && a.indexOf(id) === i).slice(0, 64) : []);
-    return {
-      trackIds: ids(c.trackIds),
-      quali: c.quali !== false,
-      sprint: c.sprint === true ? true : c.sprint === "rounds" ? "rounds" : false,
-      sprintIds: ids(c.sprintIds),
-      laps: SEASON_LAP_OPTS.indexOf(c.laps) >= 0 ? c.laps : 3,
-      points: c.points === "classic" ? "classic" : "modern",
-      flPoint: c.flPoint === true,
-      drop: SEASON_DROP_OPTS.indexOf(c.drop) >= 0 ? c.drop : 0,
-    };
+    const out = {};
+    for (const [key, spec] of Object.entries(SaveMigrate.SEASON_CONFIG)) {
+      out[key] = spec.ids ? ids(c[key]) : spec.opts.includes(c[key]) ? c[key] : spec.opts[0];
+    }
+    return out;
   }
   function cleanQualifying(raw, out) {
     if (raw.qualiOrder == null) return;
@@ -493,12 +487,15 @@ const CareerBackup = (function () {
     };
     const cfg = cleanSeasonConfig(r.config);
     if (cfg) out.config = cfg;
-    // The player's seat: SeasonCal.seatPlayer moves points by it, so dropping
-    // it strands the player's points on an AI seat after a seat change (#7309).
-    if (typeof r.you === "string" && ID_RE.test(r.you)) out.you = r.you;
-    if (r.stage === "race") out.stage = "race";
-    if (typeof r.lastFl === "string" && ID_RE.test(r.lastFl)) out.lastFl = r.lastFl;
-    if (Number.isInteger(r.seed) && r.seed > 0 && r.seed <= 0xFFFFFFFF) out.seed = r.seed;
+    // Every other backup field cleans through its SaveMigrate.SEASON_FIELDS row
+    // (#7337): `you` among them, whose loss stranded the player's points on an
+    // AI seat after a seat change (#7309). Rows with no `clean` own a cleaner
+    // here (the maps above, the config, the qualifying grid below).
+    for (const [key, field] of Object.entries(SaveMigrate.SEASON_FIELDS)) {
+      if (!field.backup || field.scope === "career" || !field.clean) continue;
+      const v = field.clean(r[key]);
+      if (v !== undefined) out[key] = v;
+    }
     cleanQualifying(r, out);
     return out;
   }
@@ -689,6 +686,8 @@ const CareerBackup = (function () {
     }
     return ids.size === count;
   }
+  // The qualifying grid and its stamps, from SaveMigrate.SEASON_FIELDS (#7337).
+  function qualiKeys() { return Object.keys(SaveMigrate.SEASON_FIELDS).filter((k) => SaveMigrate.SEASON_FIELDS[k].group === "quali"); }
   function qualifyingAhead(local, incoming) {
     // Qualifying adds progress without changing the round or points. Only
     // protect an intact, stamped grid for the same championship/weekend;
@@ -701,7 +700,7 @@ const CareerBackup = (function () {
         || !mine.config || !mine.config.quali || mine.qualiTrack !== mine.config.trackIds[mine.round]) return false;
     const seat = mine.qualiSeat.split("|");
     if (!completeSeasonGrid(order, seat)) return false;
-    for (const key of ["qualiTrack", "qualiMode", "qualiSeat"]) {
+    for (const key of qualiKeys().filter((k) => k !== "qualiOrder")) {
       if (incoming[key] != null && incoming[key] !== mine[key]) return false;
     }
     // A first racing draw stamps the seed after a pre-weekend export. Once
@@ -709,7 +708,7 @@ const CareerBackup = (function () {
     if (incoming.seed != null && incoming.seed !== mine.seed) return false;
     if (local.seed != null && local.seed !== mine.seed) return false;
     // `you` is the seat, not progress: an older backup has none (#7309).
-    for (const key of ["qualiOrder", "qualiTrack", "qualiMode", "qualiSeat", "seed", "you"]) {
+    for (const key of [...qualiKeys(), "seed", "you"]) {
       delete mine[key]; delete theirs[key];
     }
     return sameSeasonValue(mine, theirs);
@@ -748,7 +747,7 @@ const CareerBackup = (function () {
       delete mine[key]; delete theirs[key];
     }
     for (const id of Object.keys(theirs.driverCodes)) if (mine.driverCodes[id] !== theirs.driverCodes[id]) return false;
-    for (const key of ["stage", "seed", "driverCodes", "qualiOrder", "qualiTrack", "qualiMode", "qualiSeat", "you"]) {
+    for (const key of ["stage", "seed", "driverCodes", ...qualiKeys(), "you"]) {
       delete mine[key]; delete theirs[key];
     }
     return sameSeasonValue(mine, theirs);

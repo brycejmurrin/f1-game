@@ -11,7 +11,9 @@ const SPRINT_POINTS = [8, 7, 6, 5, 4, 3, 2, 1];
 const CLASSIC_POINTS = [10, 6, 4, 3, 2, 1];   // 1991–2002 table
 // Dropped scores: until 1990 only a driver's best N results counted (best 11
 // of 16 in 1990). `drop` is how many of the season's rounds do NOT count.
-const DROP_OPTS = [0, 2, 3];
+// The option sets live in SaveMigrate.SEASON_CONFIG (#7337), read at call
+// time: VM harnesses load this file without save-migrate.js.
+function opts(key) { return SaveMigrate.SEASON_CONFIG[key].opts; }
 
 const SPRINT_FRAC = 1 / 3;
 const SPRINT_MIN = 2;
@@ -21,7 +23,6 @@ const SPRINT_MIN = 2;
 // a file this one must not depend on, and a mismatch is harmless (it is a
 // PRESELECTION for the #rs-laps chips, never an override of them).
 const DEFAULT_LAPS = 3;
-const LAP_OPTS = [3, 5, 10, 25, 57];
 
 // Circuits are named by ID, never by index. `apex26.track` is a positional index
 // into Tracks.LIST and tools/manifest.cjs carries a standing warning about what
@@ -78,10 +79,10 @@ function normalize(raw) {
     quali: c.quali !== false,
     sprint,
     sprintIds: trackIds.filter((id) => marked.indexOf(id) >= 0),
-    laps: LAP_OPTS.indexOf(c.laps) >= 0 ? c.laps : def.laps,
+    laps: opts("laps").indexOf(c.laps) >= 0 ? c.laps : def.laps,
     points: c.points === "classic" ? "classic" : "modern",
     flPoint: c.flPoint === true,
-    drop: DROP_OPTS.indexOf(c.drop) >= 0 ? c.drop : 0,
+    drop: opts("drop").indexOf(c.drop) >= 0 ? c.drop : 0,
   };
 }
 
@@ -750,7 +751,8 @@ function shuffled(ids, seed) {
 
 // SHORT_POINTS / resetWeekend stay module-local (payTable / restart / applyConfig).
 return {
-  SPRINT_POINTS, CLASSIC_POINTS, payTable, DROP_OPTS, LAP_OPTS, PRESETS, DEFAULT_LAPS, REAL_2026,
+  get DROP_OPTS() { return opts("drop"); }, get LAP_OPTS() { return opts("laps"); },
+  SPRINT_POINTS, CLASSIC_POINTS, payTable, PRESETS, DEFAULT_LAPS, REAL_2026,
   config, setConfig, applyConfig, matchesConfig, fresh, normalize,
   engage, list, rounds, track, trackIndex,
   load, lastLoadLossy, save, clear, conflicted, saveStatus,
