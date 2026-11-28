@@ -583,8 +583,7 @@ const GLXPost = (function () {
     // invalidate into an ANGLE no-op). Device A/B: patch
     // WebGL2RenderingContext.prototype.invalidateFramebuffer from Web Inspector
     // (docs/notes/PERF-HUNT-8-2026-10-30.md).
-    const _ua = (typeof navigator !== "undefined" && navigator.userAgent) || "";
-    const _webkit = /CriOS|FxiOS|EdgiOS/.test(_ua) || (/Safari\//.test(_ua) && !/Chrome\/|Chromium\/|Edg\//.test(_ua));
+    const _webkit = typeof GLX !== "undefined" && !!GLX.isWebKit;   // the one sniff: js/render/shared/glx-facade.js
     const _invFbo = _canInvalidate;
     const _invDefault = _invFbo && !_webkit;
     // COVER MODE CLEARS INSTEAD (iPhone GLX black canvas, perf hunt 9): a phone's

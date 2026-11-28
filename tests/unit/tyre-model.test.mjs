@@ -27,6 +27,7 @@ import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { gameSource } from "../helpers/game-source.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -370,7 +371,7 @@ test("updateCar's shared trMul is the model's tractionMul exactly", () => {
   // equation updateCar evaluates once per car (tyreGrip shared after the tyre
   // and pit updates) against TyreModel.tractionMul over the wear/temperature/
   // defect grid, so the shared value cannot drift from the model's own.
-  const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
+  const all = gameSource(), src = all.slice(0, all.indexOf("\n// ==== ", 1));   // game.js's own section, not the carves
   const init = src.match(/\btyreGrip = ([^,;]+), trMul = ([^,;]+)/);
   assert.ok(init, "the production traction initializer is available");
   const traction = new Function("tyres", "TyreModel", "c", `const tyreGrip = ${init[1]}; return ${init[2]};`);
@@ -884,7 +885,7 @@ test("the SHIPPED default turns the pit feature on", () => {
   // driving model rather than the current default. That pin is right, and it
   // means no spec would notice this default silently going back to OFF. This is
   // what notices.
-  const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
+  const all = gameSource(), src = all.slice(0, all.indexOf("\n// ==== ", 1));   // game.js's own section, not the carves
   const m = src.match(/raceTyreWear = store\.get\("tyreWear",\s*"([a-z]+)"\)/);
   assert.ok(m, "could not find the shipped TYRE WEAR default in js/game.js");
   assert.ok(T.isLevel(m[1]), `the shipped default "${m[1]}" is not a TyreModel level`);
@@ -976,7 +977,7 @@ test("the TYRE WEAR setting reaches the live model, not just the store", () => {
   // must also seed from G.raceTyreWear. Without create sync, a fresh boot kept
   // the model at "off" until the next write or gridUp — STRATEGY previewed
   // "NO STOP" while the UI said wear was on.
-  const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
+  const all = gameSource(), src = all.slice(0, all.indexOf("\n// ==== ", 1));   // game.js's own section, not the carves
   const setter = src.match(/set raceTyreWear\(v\) \{[\s\S]*?\n  \},/);
   assert.ok(setter, "could not find the raceTyreWear setter in js/game.js");
   assert.match(setter[0], /tyres\.setLevel\(/,
@@ -1417,4 +1418,21 @@ test("tyre care (#1566): an AI's style scales its tyre load symmetrically; the h
   assert.equal(T.aiLoad({ ...base, tyreCare: NaN }, 7), mid, "a bad value is neutral");
   const h = { human: true, speed: 50, yawRateCur: 0.3, axFrac: 0.2 };
   assert.equal(T.humanLoad({ ...h, tyreCare: 1 }, 40), T.humanLoad(h, 40), "never the player");
+});
+
+// #7434 (#7147 row 8): one home for the wet ladder. The values are the hand-typed copies' on the base.
+test("wet ladder: TyreModel exports WET_ROAD 0.25 and RAIN 0.72; treadFor and AQUA_WET read them", () => {
+  assert.equal(T.WET_ROAD, 0.25);
+  assert.equal(T.RAIN, 0.72);
+  assert.equal(T.AQUA_WET, T.RAIN, "standing water starts on the full-wet line");
+  const cases = [[0, 0], [0.2499, 0], [0.25, 1], [0.5, 1], [0.7199, 1], [0.72, 2], [1, 2]];
+  for (const [w, tread] of cases) assert.equal(T.treadFor(null, w), tread, `treadFor(${w})`);
+  assert.equal(T.treadFor("rain"), 2); assert.equal(T.treadFor("wet"), 1); assert.equal(T.treadFor("dry"), 0);
+});
+
+test("wet ladder: js/game.js types no 0.25 / 0.72 threshold by hand", () => {
+  const all = gameSource(), src = all.slice(0, all.indexOf("\n// ==== ", 1));   // game.js's own section, not the carves
+  assert.equal((src.match(/>=\s*0\.72\b/g) || []).length, 0, ">= 0.72 in game.js: read TyreModel.RAIN");
+  assert.equal((src.match(/>=\s*0\.25\b/g) || []).length, 0, ">= 0.25 in game.js: read TyreModel.WET_ROAD");
+  assert.equal((src.match(/TyreModel\.(WET_ROAD|RAIN)\b/g) || []).length, 4, "the four predicates read the exports");
 });
