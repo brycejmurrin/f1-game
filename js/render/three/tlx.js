@@ -3487,9 +3487,9 @@ const TLX = (function () {
             await compileWarmProbe(probe.geo, mat);
           } else {
             ensureStream(stream, 1);
-            // A·W50 (#3673): the line draws INDEXED, and three keys a pipeline on the geometry's index too ("index,"
-            // in getGeometryCacheKey), so an unindexed probe warmed a pipeline the race never used: the first race
-            // frame built it synchronously (lavapipe census after the pin).
+            // A·W50 (#3673): the line draws INDEXED. r186 keyed a pipeline on the index ("index," in
+            // getGeometryCacheKey); r187 keys attributes and morphs only (vendor/three-0.187.0/PATCHES.md), so the
+            // probe's index no longer splits the key. It still gets the race's index: the warm draws what the race draws.
             if (stream === lineStream) lineIndex(stream);
             await compileWarmProbe(stream.geo, mat);
           }
@@ -3534,8 +3534,10 @@ const TLX = (function () {
         { roughness: 1, specular: 0, noAlphaWrite: true, alpha: 1 }];
       let _lateFxGeo = null;   // one tiny HDR quad for every entry warm, like the mirror-glass probe
       const _lateFxOn = () => typeof FieldLod === "undefined" || FieldLod.on;
+      // The vertex-layout half of three r187's getGeometryCacheKey: attributes only, no index term (#7510), so a
+      // Uint16- and a Uint32-indexed geometry with the same attributes share one warm pipeline, as they do in three.
       function _layoutKey(g) {
-        let k = g.index ? g.index.array.constructor.name : "-";
+        let k = "";
         for (const n of Object.keys(g.attributes).sort()) {
           const a = g.attributes[n];
           k += "|" + n + ":" + (a.array ? a.array.constructor.name : "?") + a.itemSize + (a.normalized ? "n" : "");

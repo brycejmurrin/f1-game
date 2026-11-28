@@ -111,3 +111,26 @@ test("tlx.js wiring: drawDrivingLine and the fx warm share lineIndex; the per-re
   assert.ok(idx > 0 && idx < probe, "the line probe is indexed before it compiles");
   assert.ok(warm.includes("for (const sx of [1, -1]) await compileWarmProbe(getFxQuad(), fx.shadowMat, sx);"), "blob on both signs");
 });
+
+// #7510 (hunt #7459 row 15): warmLateLit dedupes the pool by _layoutKey, one compile per key. r187's
+// getGeometryCacheKey has no index term, so an index term in _layoutKey split one three pipeline into two warm entries.
+const layoutKey = new Function(`"use strict";
+  ${tslice("      function _layoutKey(g) {", "      // Minted BEFORE startProgramWarm")}
+  return _layoutKey;`)();
+
+test("#7510: _layoutKey gives Uint16- and Uint32-indexed geometries with the same attributes one key, as three does", () => {
+  const geo = (IndexArray) => {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(9), 3));
+    g.setAttribute("normal", new THREE.BufferAttribute(new Int8Array(9), 3, true));
+    g.setIndex(new THREE.BufferAttribute(new IndexArray([0, 1, 2]), 1));
+    return g;
+  };
+  const g16 = geo(Uint16Array), g32 = geo(Uint32Array);
+  assert.equal(layoutKey(g16), layoutKey(g32), "the index array type is not part of the layout key");
+  const bare = new THREE.BufferGeometry();
+  bare.setAttribute("position", g16.attributes.position); bare.setAttribute("normal", g16.attributes.normal);
+  assert.equal(layoutKey(bare), layoutKey(g16), "an unindexed geometry shares the key too");
+  const other = geo(Uint16Array); other.setAttribute("normal", new THREE.BufferAttribute(new Float32Array(9), 3));
+  assert.notEqual(layoutKey(other), layoutKey(g16), "a different attribute format still splits the key");
+});
