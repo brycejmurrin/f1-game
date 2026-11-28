@@ -297,7 +297,7 @@ const DataResults = (function () {
         tr.appendChild(el("td", "dh-td-time", status || time || "—"));
         // A lapped finisher has no duration but a "+1 LAP" label: the label
         // is the whole gap, so it must not wait on the time.
-        const gap = typeof r.gap === "string" && r.gap && !status ? r.gap : (time && Dom.fmtGap(r.gap)) || "—";
+        const gap = status ? "—" : (typeof r.gap === "string" && r.gap) ? r.gap : (time && Dom.fmtGap(r.gap)) || "—";
         tr.appendChild(el("td", "dh-td-time", gap));
         if (kind === "race") tr.appendChild(el("td", "dh-td-pts", r.points !== null ? r.points : ""));
         tbody.appendChild(tr);
