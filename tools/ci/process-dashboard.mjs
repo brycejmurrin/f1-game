@@ -13,12 +13,17 @@
  *   node tools/ci/process-dashboard.mjs --runs 60 --out process-dashboard.json --md note.md
  *   node tools/ci/process-dashboard.mjs --fixture tests/unit/fixtures/process-dashboard/runs.json --json
  *   node tools/ci/process-dashboard.mjs --check process-dashboard.json
+ *
+ * Merge path (#7046, #6913 phase 1; #7517 phase 0): land→merge by route, merges/h, red-tip minutes, land.yml runs
+ * and `Land retry` dispatches per merge, train red rate, and the land chain per hour. --no-merge-path skips the read.
  */
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { githubToken, NO_TOKEN_HINT } from "./github-token.mjs";
 import { proxyFetch } from "../lib/proxy-fetch.mjs";
+import { tipState } from "./lib/deploy-tip.mjs";
+import { TRAIN_PREFIX, trainManifest, trainResult } from "./merge-train.mjs";
 
 export const REPO = "brycejmurrin/f1-game";
 export const DEPLOY_BRANCH = "claude/f1-game-project-26h3ng";
@@ -339,7 +344,182 @@ export function reduceDashboard(input) {
       change_fail_pct: attempts ? oneDecimal(100 * pageFail / attempts) : null,
       mttr_p50_s: mttr.p50_s,
     },
+    ...(input.mergePath ? { merge_path: input.mergePath.error ? { error: input.mergePath.error } : reduceMergePath(input.mergePath) } : {}),
     notes: ["cancelled runs may hide a real failure — a killed job runs no always() step"],
+  };
+}
+
+// ---- merge path (#7046, #6913 phase 1; #7517 phase 0) ----------------------------------------------------
+//
+// Input (slim, see fetchMergePath): `window {from,to}`; `prs` closed into the deploy branch, each
+// `{number, head_ref, created_at, merged_at, closed_at, land_at, cars?, outcome?}` (land_at = the LAST
+// `labeled: land` event; cars/outcome only on train PRs, from merge-train's manifest and result marks);
+// `landRuns` land.yml runs `{id, created_at, updated_at, conclusion, title, event, jobs?}`; `pagesRuns` pages.yml
+// runs on the deploy branch (failed ones carry `jobs`), starting before the window so the opening state is known.
+
+/** The land.yml job whose presence marks a run that evaluated a PR (`land-gate (#N)`). */
+export const GATE_JOB = /^land-gate\b/;
+/** A `Land retry` dispatch, by land.yml's run-name. */
+export const RETRY_TITLE = /^Land retry\b/;
+/** pages.yml conclusions that say nothing about the tip (deploy-tip.mjs SILENT_RUN): the state carries over. */
+const PAGES_SILENT = new Set(["cancelled", "skipped", "neutral", "stale"]);
+
+const ms = (t) => { const v = Date.parse(t || ""); return Number.isFinite(v) ? v : null; };
+const minutes = (a, b) => (a != null && b != null && b >= a ? Math.round((b - a) / 6000) / 10 : null);
+const hourKey = (t) => new Date(t).toISOString().slice(0, 13) + "Z";
+const isTrainRef = (ref) => String(ref || "").startsWith(TRAIN_PREFIX);
+
+function minStats(samples) {
+  const s = stats(samples.filter((x) => x != null));
+  return { n: s.n, p50_min: s.p50_s, p90_min: s.p90_s, max_min: s.max_s };
+}
+
+/** Red-tip intervals inside [from, to]: the newest non-silent pages.yml run is code-red (deploy-tip's tipState, the
+ *  `base` row's own exclusions: a Pages-side publish failure and cancelled runs are not code red). Pure. */
+export function redTipIntervals(pagesRuns, fromMs, toMs) {
+  const ordered = [...(pagesRuns || [])].filter((r) => ms(r.updated_at) != null)
+    .sort((a, b) => ms(a.updated_at) - ms(b.updated_at) || (a.id - b.id));
+  const out = [];
+  let open = null;
+  const close = (at) => {
+    const a = Math.max(open.at, fromMs), b = Math.min(at, toMs);
+    if (b > a) out.push({ from: new Date(a).toISOString().slice(0, 16) + "Z", to: new Date(b).toISOString().slice(0, 16) + "Z", min: minutes(a, b), sha: open.sha, run: open.run });
+    open = null;
+  };
+  for (const run of ordered) {
+    if (PAGES_SILENT.has(run.conclusion)) continue;
+    const at = ms(run.updated_at);
+    const red = tipState(run, run.jobs || null).state === "code-red";
+    if (red && !open) open = { at, sha: String(run.head_sha || "").slice(0, 8), run: run.id ?? null };
+    else if (!red && open) close(at);
+  }
+  if (open) close(toMs);
+  return out;
+}
+
+/** The merge-path rows. Pure. */
+export function reduceMergePath(input) {
+  const fromMs = ms(input?.window?.from), toMs = ms(input?.window?.to);
+  if (fromMs == null || toMs == null || toMs <= fromMs) return { error: "merge path: no window {from, to}" };
+  const hours = (toMs - fromMs) / 3_600_000;
+  const inWin = (t) => t != null && t >= fromMs && t <= toMs;
+  const prs = input.prs || [];
+
+  // Routes. A car is a PR named in the manifest of a MERGED train; its merge is the train's.
+  const trains = prs.filter((p) => isTrainRef(p.head_ref));
+  const carTrain = new Map();
+  for (const t of trains) if (t.merged_at) for (const c of t.cars || []) carTrain.set(Number(c), t);
+  const direct = [], car = [], train = [];
+  const mergeTimes = []; // merge commits on the deploy branch: direct PRs and train PRs
+  const mergeEvents = []; // every PR GitHub marks merged: direct, car (at its train's merge) and train PRs
+  let prsMerged = 0;
+  for (const p of prs) {
+    if (isTrainRef(p.head_ref)) {
+      if (!inWin(ms(p.merged_at))) continue;
+      mergeTimes.push(ms(p.merged_at));
+      mergeEvents.push(ms(p.merged_at));
+      train.push(minutes(ms(p.created_at), ms(p.merged_at)));
+      continue;
+    }
+    const t = carTrain.get(p.number);
+    const mergedAt = t ? ms(t.merged_at) : ms(p.merged_at);
+    if (!inWin(mergedAt)) continue;
+    prsMerged++;
+    mergeEvents.push(mergedAt);
+    if (!t) mergeTimes.push(mergedAt);
+    (t ? car : direct).push(minutes(ms(p.land_at), mergedAt));
+  }
+  // A "merge" in the per-merge rows is a merged PR of any route, as #6913 counted (2833 runs / 343 PRs ≈ 8.3).
+  const merges = mergeEvents.length;
+
+  // Longest no-merge gap and empty clock-hours (a parked gate that nobody re-evaluates shows here).
+  const times = [fromMs, ...mergeTimes.sort((a, b) => a - b), toMs];
+  let gap = { min: 0, from: null, to: null };
+  for (let i = 1; i < times.length; i++) {
+    const m = minutes(times[i - 1], times[i]);
+    if (m > gap.min) gap = { min: m, from: new Date(times[i - 1]).toISOString().slice(0, 16) + "Z", to: new Date(times[i]).toISOString().slice(0, 16) + "Z" };
+  }
+  const mergedHours = new Set(mergeTimes.map(hourKey));
+  let emptyHours = 0;
+  for (let h = Math.ceil(fromMs / 3_600_000) * 3_600_000; h + 3_600_000 <= toMs; h += 3_600_000) if (!mergedHours.has(hourKey(h))) emptyHours++;
+
+  // Red tip.
+  const red = redTipIntervals(input.pagesRuns, fromMs, toMs);
+  const redMin = Math.round(red.reduce((s, r) => s + r.min, 0) * 10) / 10;
+
+  // land.yml churn.
+  const landRuns = (input.landRuns || []).filter((r) => inWin(ms(r.created_at)));
+  const skipped = landRuns.filter((r) => r.conclusion === "skipped").length;
+  const ranRuns = landRuns.filter((r) => r.conclusion !== "skipped");
+  const retries = landRuns.filter((r) => RETRY_TITLE.test(String(r.title || ""))).length;
+  const per = (n) => (merges ? oneDecimal(n / merges) : null);
+
+  // Trains closed in the window: merged, red (the bisect halved the next), stale, unknown (no result mark).
+  const closed = trains.filter((t) => inWin(ms(t.closed_at || t.merged_at)));
+  const outcome = (t) => (t.merged_at ? "merged" : t.outcome === "red" || t.outcome === "stale" ? t.outcome : "unknown");
+  const count = (o) => closed.filter((t) => outcome(t) === o).length;
+  const redTrains = closed.filter((t) => outcome(t) === "red");
+
+  // #7517 phase 0: the gate chain per hour (runs that reached land-gate): wall vs work, queue entries.
+  const byHour = new Map();
+  const row = (k) => byHour.get(k) || byHour.set(k, { ran: 0, merges: 0, wall: [], work: [], entries: [], wait: [] }).get(k);
+  for (const r of ranRuns) row(hourKey(ms(r.created_at))).ran++;
+  for (const t of mergeEvents) row(hourKey(t)).merges++;
+  for (const r of ranRuns) {
+    const jobs = (r.jobs || []).filter((j) => j.conclusion !== "skipped" && ms(j.started_at) != null && ms(j.completed_at) != null);
+    if (!jobs.some((j) => GATE_JOB.test(j.name || ""))) continue;
+    const h = row(hourKey(ms(r.created_at)));
+    h.wall.push(minutes(ms(r.created_at), ms(r.updated_at)));
+    h.work.push(Math.round(jobs.reduce((s, j) => s + (ms(j.completed_at) - ms(j.started_at)), 0) / 6000) / 10);
+    h.entries.push(jobs.length);
+    for (const j of jobs) if (ms(j.created_at) != null) h.wait.push(minutes(ms(j.created_at), ms(j.started_at)));
+  }
+  const hourly = {};
+  for (const k of [...byHour.keys()].sort()) {
+    const h = byHour.get(k), wall = minStats(h.wall), work = minStats(h.work), wait = minStats(h.wait);
+    hourly[k] = {
+      merges: h.merges,
+      land_runs: h.ran,
+      land_runs_per_merge: h.merges ? oneDecimal(h.ran / h.merges) : null,
+      gate_n: wall.n,
+      gate_wall_p50_min: wall.p50_min,
+      gate_wall_p90_min: wall.p90_min,
+      gate_work_p50_min: work.p50_min,
+      queue_entries_p50: percentile([...h.entries].sort((a, b) => a - b), 0.5),
+      job_wait_p50_min: wait.p50_min,
+      job_wait_p90_min: wait.p90_min,
+    };
+  }
+
+  return {
+    window: { from: input.window.from, to: input.window.to, hours: oneDecimal(hours) },
+    land_to_merge: { direct: minStats(direct), car: minStats(car), train: minStats(train) },
+    prs_merged: prsMerged,
+    merges,
+    merge_commits: mergeTimes.length,
+    merges_per_hour: Math.round((prsMerged / hours) * 100) / 100,
+    longest_no_merge: gap,
+    zero_merge_hours: emptyHours,
+    red_tip: { minutes: redMin, pct: oneDecimal((100 * redMin) / (hours * 60)), intervals: red },
+    land: {
+      started: landRuns.length,
+      skipped,
+      ran: ranRuns.length,
+      cancelled: ranRuns.filter((r) => r.conclusion === "cancelled").length,
+      retry_dispatches: retries,
+      runs_per_merge: per(ranRuns.length),
+      retries_per_merge: per(retries),
+    },
+    trains: {
+      closed: closed.length,
+      merged: count("merged"),
+      red: redTrains.length,
+      stale: count("stale"),
+      unknown: count("unknown"),
+      red_pct: closed.length ? oneDecimal((100 * redTrains.length) / closed.length) : null,
+      red_prs: redTrains.map((t) => t.number).sort((a, b) => a - b),
+    },
+    hourly,
   };
 }
 
@@ -371,6 +551,42 @@ export function checkTimeRatchets(dash, ratchets = TIME_RATCHETS) {
 function minLabel(sec) {
   if (sec == null) return "n/a";
   return `${(sec / 60).toFixed(1)} min`;
+}
+
+const mins = (v) => (v == null ? "n/a" : `${v} min`);
+
+/** The merge-path section of the markdown twin. Pure. */
+export function formatMergePath(mp) {
+  const lines = ["## Merge path", ""];
+  if (mp.error) return [...lines, `Not measured: ${mp.error}`, ""];
+  const l = mp.land_to_merge, t = mp.trains, land = mp.land;
+  lines.push(`Window ${mp.window.from} → ${mp.window.to} (${mp.window.hours} h). Land → merge is the last \`labeled: land\` event to the merge; a train car's merge is its train's; a train PR's is created → merged.`);
+  lines.push("");
+  lines.push("| Route | n | p50 | p90 | max |");
+  lines.push("|---|---:|---:|---:|---:|");
+  for (const [name, r] of [["Direct PR", l.direct], ["Train car", l.car], ["Train PR", l.train]]) {
+    lines.push(`| ${name} | ${r.n} | ${mins(r.p50_min)} | ${mins(r.p90_min)} | ${mins(r.max_min)} |`);
+  }
+  lines.push("");
+  lines.push(`- Merges: ${mp.prs_merged} PRs (${mp.merges_per_hour}/h) plus ${mp.merges - mp.prs_merged} train PRs, in ${mp.merge_commits} merge commits; ${mp.zero_merge_hours} clock-hours with none; longest gap ${mins(mp.longest_no_merge.min)} (${mp.longest_no_merge.from} → ${mp.longest_no_merge.to}).`);
+  lines.push(`- Red tip (newest pages.yml run code-red; publish-platform failures and cancelled runs excluded, as the \`base\` row): ${mins(mp.red_tip.minutes)}, ${mp.red_tip.pct}% of the window, ${mp.red_tip.intervals.length} interval(s)${mp.red_tip.intervals.length ? ": " + mp.red_tip.intervals.map((r) => `${r.from}→${r.to} ${r.sha}`).join(", ") : ""}.`);
+  lines.push(`- land.yml: ${land.started} started, ${land.skipped} skipped, ${land.ran} ran (${land.runs_per_merge} per merge), ${land.cancelled} cancelled, ${land.retry_dispatches} \`Land retry\` dispatches (${land.retries_per_merge} per merge).`);
+  lines.push(`- Trains closed: ${t.closed}: ${t.merged} merged, ${t.red} red and halved (${t.red_pct ?? "n/a"}%), ${t.stale} stale, ${t.unknown} unknown${t.red_prs.length ? ` (red: ${t.red_prs.map((n) => `#${n}`).join(", ")})` : ""}.`);
+  lines.push("");
+  const hours = Object.entries(mp.hourly);
+  if (hours.length) {
+    lines.push("### Land chain by hour (#7517 phase 0)");
+    lines.push("");
+    lines.push("Gate runs are land.yml runs that started a `land-gate` job: wall is created → updated, work is the sum of their jobs' run time, queue entries are the jobs that ran.");
+    lines.push("");
+    lines.push("| Hour | merges | land runs | per merge | gate runs | gate wall p50 / p90 | work p50 | queue entries | job wait p50 / p90 |");
+    lines.push("|---|---:|---:|---:|---:|---:|---:|---:|---:|");
+    for (const [k, h] of hours) {
+      lines.push(`| ${k} | ${h.merges} | ${h.land_runs} | ${h.land_runs_per_merge ?? "n/a"} | ${h.gate_n} | ${mins(h.gate_wall_p50_min)} / ${mins(h.gate_wall_p90_min)} | ${mins(h.gate_work_p50_min)} | ${h.queue_entries_p50 ?? "n/a"} | ${mins(h.job_wait_p50_min)} / ${mins(h.job_wait_p90_min)} |`);
+    }
+    lines.push("");
+  }
+  return lines;
 }
 
 /** Markdown twin of the JSON, plus the 2026-09-16 comparison when `baseline` is set. */
@@ -409,6 +625,7 @@ export function formatMarkdown(dash, { baseline = false } = {}) {
   lines.push(`- Deploy push→live (successful pages.yml on ${DEPLOY_BRANCH}): n=${d.n}, p50 ${minLabel(d.push_to_live_p50_s)}, p90 ${minLabel(d.p90_s)}; superseded (cancelled) ${d.superseded}.`);
   lines.push(`- DORA: deploy freq ${dash.dora.deploy_freq_per_day}/day, lead time p50 ${minLabel(dash.dora.lead_time_p50_s)}, change-fail ${dash.dora.change_fail_pct}%, MTTR p50 ${minLabel(dash.dora.mttr_p50_s)}.`);
   lines.push("");
+  if (dash.merge_path) lines.push(...formatMergePath(dash.merge_path));
   if (baseline) {
     const node = dash.families["Pure-node unit suites"];
     const smoke = dash.families["Smoke (page boots, __apex responds)"];
@@ -544,11 +761,91 @@ export async function attachJobs(token, runs) {
   return runs;
 }
 
-export async function fetchDashboard({ runs = 60, token, generated } = {}) {
+/** Merge-path window (hours) and how many of the newest land.yml runs that ran get their jobs read (#7517 phase 0).
+ *  The nightly's GITHUB_TOKEN has 1000 requests an hour: ≈1 per merged PR (its events), ≈1 per 100 land runs,
+ *  1 per land run read here, plus the ci.yml jobs above, so the cap keeps the whole job under that. */
+export const MERGE_PATH_HOURS = 72;
+export const LAND_JOB_RUNS = 200;
+
+async function pagedRuns(token, workflow, params, maxPages) {
+  const out = [];
+  for (let page = 1; page <= maxPages; page++) {
+    const q = new URLSearchParams({ per_page: "100", page: String(page), ...params });
+    const batch = (await ghJson(`${API}/actions/workflows/${workflow}/runs?${q}`, token)).workflow_runs || [];
+    out.push(...batch);
+    if (batch.length < 100) break;
+  }
+  return out;
+}
+
+/** The last `labeled: land` event of a PR (issue events are oldest first). */
+async function lastLandAt(token, number) {
+  let at = null;
+  for (let page = 1; page <= 3; page++) {
+    const batch = await ghJson(`${API}/issues/${number}/events?per_page=100&page=${page}`, token);
+    for (const e of batch || []) if (e?.event === "labeled" && e?.label?.name === "land") at = e.created_at;
+    if (!Array.isArray(batch) || batch.length < 100) break;
+  }
+  return at;
+}
+
+/** Read the merge-path input for the last `hours`. Network; the reducer is reduceMergePath. */
+export async function fetchMergePath(token, { hours = MERGE_PATH_HOURS, landJobRuns = LAND_JOB_RUNS, now = Date.now() } = {}) {
+  const fromMs = now - hours * 3_600_000;
+  const window = { from: new Date(fromMs).toISOString(), to: new Date(now).toISOString() };
+  const prs = [];
+  for (let page = 1; page <= 15; page++) {
+    const q = new URLSearchParams({ state: "closed", base: DEPLOY_BRANCH, sort: "updated", direction: "desc", per_page: "100", page: String(page) });
+    const batch = await ghJson(`${API}/pulls?${q}`, token);
+    for (const p of batch || []) {
+      if (ms(p.closed_at) < fromMs) continue;
+      const train = isTrainRef(p.head?.ref);
+      const slim = { number: p.number, head_ref: p.head?.ref || "", created_at: p.created_at, merged_at: p.merged_at, closed_at: p.closed_at, land_at: null };
+      if (train) {
+        slim.cars = (trainManifest(p.body)?.cars || []).map((c) => c.pr);
+        slim.outcome = trainResult(p.body)?.outcome || null;
+      }
+      prs.push(slim);
+    }
+    if (!Array.isArray(batch) || batch.length < 100 || ms(batch[batch.length - 1]?.updated_at) < fromMs) break;
+  }
+  for (const p of prs) if (p.merged_at && !isTrainRef(p.head_ref)) p.land_at = await lastLandAt(token, p.number);
+
+  const created = `>=${new Date(fromMs).toISOString().slice(0, 19)}Z`;
+  const landRuns = (await pagedRuns(token, "land.yml", { created }, 60)).map((r) => ({
+    id: r.id, created_at: r.created_at, updated_at: r.updated_at, conclusion: r.conclusion, title: r.display_title || r.name || "", event: r.event,
+  }));
+  const reading = landRuns.filter((r) => r.conclusion && r.conclusion !== "skipped")
+    .sort((a, b) => ms(b.created_at) - ms(a.created_at)).slice(0, landJobRuns);
+  for (const run of reading) {
+    const data = await ghJson(`${API}/actions/runs/${run.id}/jobs?filter=latest&per_page=${JOBS_PAGE}`, token);
+    run.jobs = (data.jobs || []).map((j) => ({ name: j.name, created_at: j.created_at, started_at: j.started_at, completed_at: j.completed_at, conclusion: j.conclusion }));
+  }
+
+  // A day before the window, so the state at its start is known.
+  const pagesFrom = `>=${new Date(fromMs - 86_400_000).toISOString().slice(0, 19)}Z`;
+  const pagesRuns = (await pagedRuns(token, "pages.yml", { branch: DEPLOY_BRANCH, status: "completed", created: pagesFrom }, 5)).map((r) => ({
+    id: r.id, head_sha: r.head_sha, created_at: r.created_at, updated_at: r.updated_at, conclusion: r.conclusion,
+  }));
+  for (const run of pagesRuns) {
+    if (!["failure", "timed_out", "startup_failure"].includes(run.conclusion)) continue;
+    const data = await ghJson(`${API}/actions/runs/${run.id}/jobs?filter=latest&per_page=100`, token);
+    run.jobs = (data.jobs || []).map((j) => ({ name: j.name, conclusion: j.conclusion, steps: (j.steps || []).map((s) => ({ name: s.name, conclusion: s.conclusion })) }));
+  }
+  return { window, prs, landRuns, pagesRuns };
+}
+
+export async function fetchDashboard({ runs = 60, token, generated, mergePath = true } = {}) {
   const ciRuns = await listRuns(token, "ci.yml", { limit: runs });
   await attachJobs(token, ciRuns);
   const pagesRuns = await listRuns(token, "pages.yml", { limit: runs, branch: DEPLOY_BRANCH });
-  return reduceDashboard({ ciRuns, pagesRuns, generated });
+  // The merge path is a second read; its failure (a 403 on a missing scope, the hourly limit) leaves the
+  // CI rows standing and names itself in merge_path.error.
+  let mp;
+  if (mergePath) {
+    try { mp = await fetchMergePath(token); } catch (e) { mp = { error: `merge path not read: ${String(e?.message || e).slice(0, 200)}` }; }
+  }
+  return reduceDashboard({ ciRuns, pagesRuns, generated, mergePath: mp });
 }
 
 function arg(name, argv) {
@@ -580,7 +877,7 @@ async function main(argv) {
       process.exit(2);
     }
     const runs = Number(arg("--runs", argv) || 60);
-    dash = await fetchDashboard({ runs, token });
+    dash = await fetchDashboard({ runs, token, mergePath: !argv.includes("--no-merge-path") });
   }
   const text = JSON.stringify(dash, null, 2) + "\n";
   const out = arg("--out", argv);
