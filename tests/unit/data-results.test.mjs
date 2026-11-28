@@ -322,6 +322,22 @@ test("a lapped finisher shows its +1 LAP label in the GAP column", async () => {
   assert.deepEqual(r[2].slice(4, 6), ["DNF", "—"], "a retirement keeps an empty gap");
 });
 
+// A DSQ keeps the duration the car completed; the status row's gap stays
+// empty either way (#7315), numeric or a lap label.
+test("a disqualified row shows no gap, with a duration or a lap label", async () => {
+  const tree = await render(
+    { sessionKey: 9591, name: "Race", type: "Race" },
+    [
+      { pos: 1, num: 1, laps: 53, points: 25, dnf: false, dns: false, dsq: false, duration: 5387.7, gap: 0 },
+      { pos: null, num: 63, laps: 53, points: 0, dnf: false, dns: false, dsq: true, duration: 5400, gap: 12.3 },
+      { pos: null, num: 16, laps: 52, points: 0, dnf: false, dns: false, dsq: true, duration: 5401, gap: "+1 LAP" }
+    ]
+  );
+  const r = rows(tree);
+  assert.deepEqual(r[1].slice(4, 6), ["DSQ", "—"]);
+  assert.deepEqual(r[2].slice(4, 6), ["DSQ", "—"]);
+});
+
 // A sprint arrives as session_name "Sprint" with session_type "Race". Reading
 // the TYPE alone is right here by luck; reading the NAME alone puts it in the
 // practice branch and loses the points column, which is the whole reason a
