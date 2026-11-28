@@ -1401,12 +1401,13 @@ const Input = (function () {
   }
   // innerWidth/innerHeight force a synchronous style + layout when the tree is dirty, and this ran on
   // every touchmove (touchCmd and updateDragAnchor) before the frame (B·H11 trace). The long edge only
-  // changes on resize / rotation, so read it then.
+  // changes on resize / rotation, so read it then. A 0×0 (hidden) frame's fallback is never cached (#7368).
   let _viewLong = 0;
   function viewLong() {
     if (!_viewLong) {
-      const win = typeof window !== "undefined" ? window : null;
-      _viewLong = Math.max((win && win.innerWidth) || 844, (win && win.innerHeight) || 390);
+      const win = typeof window !== "undefined" ? window : null, w = win && win.innerWidth, h = win && win.innerHeight;
+      if (!(w && h)) return Math.max(w || 844, h || 390);
+      _viewLong = Math.max(w, h);
     }
     return _viewLong;
   }
