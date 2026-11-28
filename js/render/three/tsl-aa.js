@@ -346,12 +346,24 @@
       jitter, resolve,
       copyLast(dest) {
         // Warm draws can rebind outT, but only a live resolve advances cur.
+        if (!hist) return;
         outT.value = hist[cur].texture;
         ctx.runPass(outMat, dest);
       },
       // A frame presented without the TAA (viz, upscale, warm): the next TAA frame starts fresh.
       skipped() { curT.value = ctx.ldrTex; lastOk = false; },
       reset() { reset = true; },
+      // TAA idle past the host's shed window: free the history pair (two post-size RGBA16F). The next
+      // resolve() re-ensures and starts from reset, exactly as the first TAA frame of a session.
+      release() {
+        if (!hist) return;
+        curT.value = ctx.ldrTex; histT.value = histInit; outT.value = outInit;
+        for (const rt of hist) {
+          if (ctx.dropRT) ctx.dropRT(rt);
+          else try { rt.dispose(); } catch (_) { /* device dying */ }
+        }
+        hist = null; W = 0; H = 0; reset = true; lastOk = false;
+      },
       state: () => ({ frames, resets, size: [W, H], jitter: [_jit[0], _jit[1]], held: !!hist, velocity: !!velT }),
       dispose() { try { histInit.dispose(); outInit.dispose(); } catch (_) { /* device dying */ } },
     };

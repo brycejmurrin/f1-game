@@ -193,6 +193,53 @@ for (const language of ["WGSL", "GLSL"]) test(`TRAA resolve and copy compile (${
   }
 });
 
+test("#7386 A1: TAA idle for SHED_FRAMES presents releases both history targets; the next resolve re-allocates and resets", async () => {
+  const post = fs.readFileSync(new URL("../../js/render/three/tlx-post.js", import.meta.url), "utf8");
+  const SHED_FRAMES = Number(/const SHED_FRAMES = (\d+)/.exec(post)[1]);
+  // tlx-post.js's shedIdle, which it runs on !!_last.taa with AA.release after every present.
+  const shedIdle = (live, idle, release) => {
+    if (live) return 0;
+    if (++idle >= SHED_FRAMES) { release(); return 0; }
+    return idle;
+  };
+  const fake = makeFakeGL(64, 32);
+  const renderer = new THREE.WebGPURenderer({ canvas: fake.canvas, context: fake.gl, forceWebGL: true });
+  const materials = [], targets = [], dropped = [];
+  try {
+    await renderer.init();
+    const ldr = new THREE.RenderTarget(64, 32); targets.push(ldr);
+    const aa = A.taa(THREE, THREE.TSL, {
+      runPass() {}, ownRT: (rt) => { targets.push(rt); return rt; }, dropRT: (rt) => { dropped.push(rt); rt.dispose(); },
+      trackMaterial: (m) => materials.push(m), ldrTex: ldr.texture, depthTex: new THREE.DepthTexture(64, 32),
+    });
+    const P = persp(1, 2, 0.1, 1000), v = viewProj([0, 2, 0], [0, 2, -10], P);
+    const F = { invVP: v.inv, viewProj: v.vp, eye: [0, 2, 0] };
+    aa.resolve(F, 64, 32, null, true); aa.resolve(F, 64, 32, null, true);
+    const held = targets.slice(1);
+    assert.equal(held.length, 2, "one history pair");
+    assert.equal(aa.state().resets, 1);
+    let idle = shedIdle(true, 0, aa.release);
+    for (let i = 0; i < SHED_FRAMES - 1; i++) { aa.skipped(); idle = shedIdle(false, idle, aa.release); }
+    assert.ok(aa.state().held, "a gate flicker under SHED_FRAMES keeps the pair");
+    aa.skipped(); idle = shedIdle(false, idle, aa.release);
+    assert.equal(aa.state().held, false, "the SHED_FRAMES-th idle present frees the history");
+    assert.deepEqual(dropped, held, "both targets went through the host's dropRT");
+    assert.deepEqual(aa.state().size, [0, 0]);
+    aa.release();
+    assert.equal(dropped.length, 2, "release is idempotent");
+    aa.copyLast(null);   // a stray copy after a release is a no-op, not a throw
+    aa.resolve(F, 64, 32, null, true);
+    assert.equal(targets.length, 5, "the next resolve re-allocates the pair");
+    assert.ok(aa.state().held);
+    assert.equal(aa.state().resets, 2, "and starts from a reset, as the session's first TAA frame does");
+    aa.dispose();
+  } finally {
+    for (const m of materials) m.dispose();
+    for (const rt of targets) rt.dispose();
+    renderer.dispose();
+  }
+});
+
 test("hdrOut: the hdrPeak uniform exists only on a confirmed HDR build, and that composite compiles", async () => {
   const fake = makeFakeGL(64, 32);
   const renderer = new THREE.WebGPURenderer({ canvas: fake.canvas, context: fake.gl, forceWebGL: true });
