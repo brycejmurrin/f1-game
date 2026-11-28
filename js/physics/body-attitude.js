@@ -204,7 +204,7 @@ function reset(c) {
 function offsets(c) {
   c = c || (G && G.player);
   if (!c) return { pitch: 0, roll: 0, heave: 0, enabled };
-  return { pitch: c.baPitch || 0, roll: c.baRoll || 0, heave: c.baHeave || 0, scrape: c.baScrape || 0, clear: c.baClear ?? PLANK_Y, enabled };
+  return { pitch: c.baPitch || 0, roll: c.baRoll || 0, heave: c.baHeave || 0, scrape: c.baScrape || 0, enabled };
 }
 
 function setEnabled(v) {

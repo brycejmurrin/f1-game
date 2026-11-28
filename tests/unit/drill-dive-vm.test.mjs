@@ -100,7 +100,8 @@ test("the card: an A | B table, a gold for a correct prediction and a repeat, me
   assert.equal(low.r.medal, null, "a lower run alone earns nothing");
   assert.equal(high.r.medal, "gold", "both clean, predicted same, same stop");
   assert.equal(high.r.metrics.length, 6);
-  assert.match(high.r.metrics[0][1], /^\d+ \| \d+$/);
+  assert.equal(high.r.metrics[0][1], low.r.run.moved.toFixed(0) + " | " + high.r.run.moved.toFixed(0));
+  assert.ok(high.r.metrics.slice(0, 5).every(([label]) => label.endsWith("(lower | higher)")), "both columns named on every A | B row");
   assert.match(high.r.verdict, /shown on the body and floor/);
   assert.ok(high.r.run.moved > 10, "a stop from 80 % of top speed moves the front load: " + high.r.run.moved);
 });

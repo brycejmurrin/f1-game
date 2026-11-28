@@ -5,9 +5,9 @@
     }
   },
   "tree": {
-    "assertPins": 2,
-    "assertPinsAll": 2,
-    "eagerCodeBytes": 390,
+    "assertPins": 1,
+    "assertPinsAll": 1,
+    "eagerCodeBytes": 365,
     "typeofGuards": 2
   }
 }

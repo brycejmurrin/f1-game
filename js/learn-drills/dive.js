@@ -30,6 +30,7 @@ const DiveDrill = (function () {
   ]);
   const PREDICT = Object.freeze([["less", "Less"], ["same", "Same"], ["more", "More"]]);
   let prediction = null;     // this launch's front-load prediction for the higher run (the guide's chips)
+  let braked = false;        // this run's first firm brake is in: a pick now would not count, so the chips go
 
   /** The front axle's load share the grip model uses this frame: game.js's own term, from the measured axEstSm. */
   function frontShare(c) {
@@ -44,8 +45,8 @@ const DiveDrill = (function () {
     if (!c) return;
     const dt = acc.t == null ? 0 : Math.max(0, G.raceT - acc.t);
     acc.t = G.raceT;
-    if (acc.decel == null) Object.assign(acc, { decel: 0, front: PhysicsConsts.FRONT_WEIGHT, pitch: 0, clear: Infinity, scrapeM: 0, vBrake: null, guess: null });
-    if (acc.vBrake == null && (c.brakeDemand || 0) > FIRM) { acc.vBrake = Math.abs(c.speed); acc.guess = prediction; }
+    if (acc.decel == null) { braked = false; Object.assign(acc, { decel: 0, front: PhysicsConsts.FRONT_WEIGHT, pitch: 0, clear: Infinity, scrapeM: 0, vBrake: null, guess: null }); }
+    if (acc.vBrake == null && (c.brakeDemand || 0) > FIRM) { acc.vBrake = Math.abs(c.speed); acc.guess = prediction; braked = true; }
     if (acc.vBrake == null) return;
     acc.decel = Math.max(acc.decel, -(c.axEstSm || 0));
     acc.front = Math.max(acc.front, frontShare(c));
@@ -105,11 +106,11 @@ const DiveDrill = (function () {
     const pair = (x, y, f) => f(x) + " | " + f(y);
     const fix = n => v => (v == null ? "—" : Number(v).toFixed(n));
     r.metrics = [
-      ["Front load moved, lower | higher", pair(a.moved, b.moved, fix(0)), "%"],
-      ["Nose dip", pair(a.pitchDeg, b.pitchDeg, fix(2)), "°"],
-      ["Lowest floor clearance", pair(a.clearMm, b.clearMm, fix(0)), "mm"],
-      ["Peak deceleration", pair(a.decelG, b.decelG, fix(2)), "g"],
-      ["Stop (from 50 m/s)", pair(a.stop, b.stop, fix(1)), "m"],
+      ["Front load moved (lower | higher)", pair(a.moved, b.moved, fix(0)), "%"],
+      ["Nose dip (lower | higher)", pair(a.pitchDeg, b.pitchDeg, fix(2)), "°"],
+      ["Lowest floor clearance (lower | higher)", pair(a.clearMm, b.clearMm, fix(0)), "mm"],
+      ["Peak deceleration (lower | higher)", pair(a.decelG, b.decelG, fix(2)), "g"],
+      ["Stop (from 50 m/s) (lower | higher)", pair(a.stop, b.stop, fix(1)), "m"],
       ["Your prediction", b.guess ? b.guess + (b.guess === "same" ? " ✓" : " ✗") : "none", ""],
     ];
     r.verdict = "Front load moved " + a.moved.toFixed(0) + " % both times" + (Math.abs(a.moved - b.moved) >= 1 ? " (" + b.moved.toFixed(0) + " % the second)" : "")
@@ -228,9 +229,9 @@ const DiveDrill = (function () {
       paint(c, share);
       root.hidden = false;
       const high = port.variant() === "high", moving = Math.abs(c.speed) * PhysicsConsts.VMAX / Math.max(1e-6, G.vTop()) > 1;   // standard-pace m/s
-      chips.hidden = !(high && prediction == null && moving);
+      chips.hidden = !(high && prediction == null && moving && !braked);
       task.textContent = !moving ? "Stopped: compare the dip and the load"
-        : high && prediction == null ? "Higher anti-dive: predict the front load, then brake"
+        : high && prediction == null && !braked ? "Higher anti-dive: predict the front load, then brake"
         : (high ? "Higher anti-dive" : "Lower anti-dive") + ": brake hard and hold it to a stop";
       const status = "Front " + Math.round(100 * share) + " % · nose " + deg(c.baPitch || 0).toFixed(1) + "°" + (prediction && high ? " · you said " + prediction : "");
       if (readout.textContent !== status) readout.textContent = status;
