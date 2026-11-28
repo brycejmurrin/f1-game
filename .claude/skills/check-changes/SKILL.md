@@ -71,7 +71,7 @@ Output levels, saved evidence and `--read`: [the common contract](../../../docs/
 verdict, required/not-run groups and log paths; a partial or truncated result never proves a pass. Handoff snapshot:
 `node tools/ci/session-status.mjs --summary` (`--pr <n>` adds live PR/CI state).
 
-Pinned flags without re-learning CLIs (Cloud has no `.mcp.json` catalog):
+Pinned flags without re-learning CLIs (in a cloud session the same wraps are the deferred `mcp__apex-tools__apex_*` tools: load one with ToolSearch `select:<name>`; the floor stays the raw loop command):
 
 ```sh
 ./tools/mcp/apex-tools-mcp.sh call apex_verify_change_fast '{"dryRun":true}'
