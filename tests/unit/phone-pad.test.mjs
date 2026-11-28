@@ -162,43 +162,43 @@ function lcd() {
 // ---------------------------------------------------------------------------
 
 test("a sample round-trips, and junk / a foreign protocol / an out-of-range pedal never reach Input", () => {
-  const s = PhonePad.decodeSample(PhonePad.encodeSample({ seq: 41, roll: -12.346, thr: 0.5, brk: 0, held: 1 }));
+  const s = PhonePadCodec.decodeSample(PhonePadCodec.encodeSample({ seq: 41, roll: -12.346, thr: 0.5, brk: 0, held: 1 }));
   assert.deepEqual(s, { seq: 41, roll: -12.35, thr: 0.5, brk: 0, held: 1 }, "two decimals is the wire's precision");
-  assert.equal(PhonePad.decodeSample(PhonePad.encodeSample({ seq: 1, roll: null, thr: 1, brk: 1, held: 0 })).roll, null,
+  assert.equal(PhonePadCodec.decodeSample(PhonePadCodec.encodeSample({ seq: 1, roll: null, thr: 1, brk: 1, held: 0 })).roll, null,
     "a phone with no sensor sends a null roll, which decodes as null (pedals only)");
   for (const bad of ["", "nope", "{}", "[]", JSON.stringify([2, 1, 0, 0, 0, 0]), JSON.stringify([1, 1, 0, 0, 0]), 42, null]) {
-    assert.equal(PhonePad.decodeSample(bad), null, `accepted ${JSON.stringify(bad)}`);
+    assert.equal(PhonePadCodec.decodeSample(bad), null, `accepted ${JSON.stringify(bad)}`);
   }
-  const clamped = PhonePad.decodeSample(JSON.stringify([1, 3, 720, 7, -3, 0]));
+  const clamped = PhonePadCodec.decodeSample(JSON.stringify([1, 3, 720, 7, -3, 0]));
   assert.equal(clamped.thr, 1); assert.equal(clamped.brk, 0);
   assert.equal(clamped.roll, 180, "a roll beyond half a turn is clamped, never NaN");
-  assert.equal(PhonePad.decodeSample(JSON.stringify([1, 3, "12", 0, 0, 0])).roll, null, "a string roll is no roll");
+  assert.equal(PhonePadCodec.decodeSample(JSON.stringify([1, 3, "12", 0, 0, 0])).roll, null, "a string roll is no roll");
 });
 
 test("events: only the named edges decode, haptics are bounded, the rest is dropped", () => {
-  for (const k of PhonePad.EVENTS) assert.deepEqual(PhonePad.decodeEvent(PhonePad.encodeEvent(k)), { t: "ev", k });
-  assert.equal(PhonePad.decodeEvent(JSON.stringify({ t: "ev", k: "__proto__" })), null);
-  assert.equal(PhonePad.decodeEvent(JSON.stringify({ t: "ev", k: "eval" })), null);
-  assert.deepEqual(PhonePad.decodeEvent(PhonePad.encodeHaptic(5000)), { t: "hap", ms: 1000 }, "a buzz is capped at a second");
-  assert.equal(PhonePad.decodeEvent("[1,2,3]"), null);
-  assert.equal(PhonePad.decodeEvent(JSON.stringify({ t: "state" })), null);
+  for (const k of PhonePadCodec.EVENTS) assert.deepEqual(PhonePadCodec.decodeEvent(PhonePadCodec.encodeEvent(k)), { t: "ev", k });
+  assert.equal(PhonePadCodec.decodeEvent(JSON.stringify({ t: "ev", k: "__proto__" })), null);
+  assert.equal(PhonePadCodec.decodeEvent(JSON.stringify({ t: "ev", k: "eval" })), null);
+  assert.deepEqual(PhonePadCodec.decodeEvent(PhonePadCodec.encodeHaptic(5000)), { t: "hap", ms: 1000 }, "a buzz is capped at a second");
+  assert.equal(PhonePadCodec.decodeEvent("[1,2,3]"), null);
+  assert.equal(PhonePadCodec.decodeEvent(JSON.stringify({ t: "state" })), null);
 });
 
 test("the dash round-trips, is refused by the sample decoder, and clamps every field", () => {
   const h = { gear: 6, kmh: 287.6, rpm: 0.912, lap: 3, laps: 12, pos: 4, cars: 20, ers: 0.55, flags: PhonePad.DASH.otArmed | PhonePad.DASH.redline,
     caution: 1, lastLapMs: 91234, state: "race", team: "#00b4ab" };
-  const back = PhonePad.decodeHud(PhonePad.encodeHud(h));
+  const back = PhonePadCodec.decodeHud(PhonePadCodec.encodeHud(h));
   assert.deepEqual(back, { gear: 6, kmh: 288, rpm: 0.91, lap: 3, laps: 12, pos: 4, cars: 20, ers: 0.55,
     flags: PhonePad.DASH.otArmed | PhonePad.DASH.redline, caution: 1, lastLapMs: 91234, state: "race", team: "#00b4ab" });
-  assert.equal(PhonePad.decodeSample(PhonePad.encodeHud(h)), null, "a dash is not a sample");
-  assert.equal(PhonePad.decodeHud(PhonePad.encodeSample({ seq: 1, roll: 0, thr: 0, brk: 0, held: 0 })), null, "a sample is not a dash");
-  assert.equal(PhonePad.encodeHud(null), null, "nothing to show sends nothing");
-  const wild = PhonePad.decodeHud(JSON.stringify(["H", 40, 5000, 7, -3, 9999, 200, 0, 2, -1, 9, 1e9, "x".repeat(40), "javascript:alert(1)"]));
+  assert.equal(PhonePadCodec.decodeSample(PhonePadCodec.encodeHud(h)), null, "a dash is not a sample");
+  assert.equal(PhonePadCodec.decodeHud(PhonePadCodec.encodeSample({ seq: 1, roll: 0, thr: 0, brk: 0, held: 0 })), null, "a sample is not a dash");
+  assert.equal(PhonePadCodec.encodeHud(null), null, "nothing to show sends nothing");
+  const wild = PhonePadCodec.decodeHud(JSON.stringify(["H", 40, 5000, 7, -3, 9999, 200, 0, 2, -1, 9, 1e9, "x".repeat(40), "javascript:alert(1)"]));
   assert.deepEqual(wild, { gear: 9, kmh: 999, rpm: 1, lap: 0, laps: 999, pos: 99, cars: 0, ers: 1, flags: 0, caution: 4,
     lastLapMs: 3600000, state: "xxxxxxxx", team: "" }, "every field is clamped and the team colour must be a hex");
   assert.equal(PhonePad.teamHex([0.0, 0.706, 0.671]), "#00b4ab", "a TeamDef colour becomes the CSS hex");
   assert.equal(PhonePad.teamHex(null), "");
-  assert.equal(PhonePad.fmtLap(91234), "1:31.234"); assert.equal(PhonePad.fmtLap(0), "");
+  assert.equal(PhonePadCodec.fmtLap(91234), "1:31.234"); assert.equal(PhonePadCodec.fmtLap(0), "");
 });
 
 test("the pairing URL lands on controller.html beside the game with the code in the FRAGMENT", () => {
@@ -206,9 +206,9 @@ test("the pairing URL lands on controller.html beside the game with the code in 
     "https://brycejmurrin.github.io/f1-game/controller.html#pad=ABC234");
   assert.equal(PhonePad.padUrl("ABC234", "https://brycejmurrin.github.io/f1-game/"),
     "https://brycejmurrin.github.io/f1-game/controller.html#pad=ABC234", "a directory URL gets the same page");
-  assert.equal(PhonePad.codeFromUrl("https://x.test/f1-game/controller.html#pad=ABC234"), "ABC234");
-  assert.equal(PhonePad.codeFromUrl("https://x.test/f1-game/controller.html?x=1#other=1&pad=ABC234"), "ABC234");
-  assert.equal(PhonePad.codeFromUrl("https://x.test/f1-game/controller.html"), null);
+  assert.equal(PhonePadCodec.codeFromUrl("https://x.test/f1-game/controller.html#pad=ABC234"), "ABC234");
+  assert.equal(PhonePadCodec.codeFromUrl("https://x.test/f1-game/controller.html?x=1#other=1&pad=ABC234"), "ABC234");
+  assert.equal(PhonePadCodec.codeFromUrl("https://x.test/f1-game/controller.html"), null);
 });
 
 // ---------------------------------------------------------------------------
@@ -362,7 +362,7 @@ test("current phone pedals keep the configured pressure at the host", () => {
   phone.brk = 0.05; frame();
   assert.equal(Input.braking(), true);
   assert.equal(Input.brakeLevel(), 0.05);
-  phone.brk = 0; phone.held = PhonePad.HELD.lookBack; frame();
+  phone.brk = 0; phone.held = PhonePadPage.HELD.lookBack; frame();
   assert.equal(Input.lookingBack(), true, "LOOK BACK is held, not edged");
   phone.held = 0; frame();
   assert.equal(Input.lookingBack(), false);
@@ -391,15 +391,15 @@ test("a phone negotiates calibrated pedals and versioned camera input independen
   const session = PhonePad.padSession(transport, { roll: () => 30, steer: () => -0.4, thr: () => 0.2, brk: () => 0.05, held: () => 0, camera: () => camera }, { heartbeat: false });
   receive(NetTransport.EVENT, '{"t":"hi","side":"host","p":1,"steer":true,"ack":true}');
   session.sample(true);
-  receive(NetTransport.EVENT, PhonePad.encodeHello("host", false, true));
+  receive(NetTransport.EVENT, PhonePadCodec.encodeHello("host", false, true));
   session.sample(true);
   receive(NetTransport.EVENT, '{"t":"hi","side":"host","p":1,"steer":true,"camera":true,"calibratedPedals":true}');
   session.sample(true);
-  const hello = PhonePad.encodeHello("host", false, true, undefined, true);
+  const hello = PhonePadCodec.encodeHello("host", false, true, undefined, true);
   assert.equal(JSON.parse(hello).camera, 4);
   receive(NetTransport.EVENT, hello);
   session.sample(true);
-  assert.deepEqual(PhonePad.decodeSample(JSON.stringify(wire[3])).camera, camera);
+  assert.deepEqual(PhonePadCodec.decodeSample(JSON.stringify(wire[3])).camera, camera);
   camera = null;
   session.sample(true);
   assert.deepEqual(wire, [
@@ -409,9 +409,9 @@ test("a phone negotiates calibrated pedals and versioned camera input independen
     [4, 3, 0.2, -0.1, 0.3, -0.4, 1],
     [3, 4, null, 0.2, 0.05, 0, -0.4],
   ]);
-  assert.equal(PhonePad.decodeSample(JSON.stringify(wire[1])).calibratedPedals, true);
-  assert.equal(PhonePad.decodeSample("[3,0,0.2,-0.1,0.3,-0.4,1]"), null, "old camera samples cannot become pedals");
-  assert.equal(PhonePad.decodeSample('[3,0,null,0,0,0,"invalid"]'), null);
+  assert.equal(PhonePadCodec.decodeSample(JSON.stringify(wire[1])).calibratedPedals, true);
+  assert.equal(PhonePadCodec.decodeSample("[3,0,0.2,-0.1,0.3,-0.4,1]"), null, "old camera samples cannot become pedals");
+  assert.equal(PhonePadCodec.decodeSample('[3,0,null,0,0,0,"invalid"]'), null);
 });
 
 test("a button edge crosses on the reliable channel exactly once, and PAUSE reaches the game's callback", () => {
@@ -437,7 +437,7 @@ test("an OLDER sample arriving after a newer one is dropped, never applied", () 
   for (let i = 0; i < 60; i++) frame();
   const before = Input.steer();
   // Replay a stale sample straight into the desktop's inbox: seq 0, roll -30.
-  hostEnd._emit("message", NetTransport.STATE, PhonePad.encodeSample({ seq: 0, roll: -30, thr: 0, brk: 0, held: 0 }));
+  hostEnd._emit("message", NetTransport.STATE, PhonePadCodec.encodeSample({ seq: 0, roll: -30, thr: 0, brk: 0, held: 0 }));
   frame(false);
   assert.ok(Input.steer() >= before - 0.02, "the stale left-roll must not pull the wheel back");
   assert.equal(link.stats().stale, 1);
@@ -636,11 +636,11 @@ test("a phone without HUD ordering keeps the previous packet shape", () => {
   const link = PhonePad.link(hostEnd, { input: Input, pump: false, now: () => 0,
     hud: () => ({ state: "race", surface: "camera" }) });
   try {
-    padEnd.send(NetTransport.EVENT, PhonePad.encodeHello("pad", false, true, undefined, true));
+    padEnd.send(NetTransport.EVENT, PhonePadCodec.encodeHello("pad", false, true, undefined, true));
     link.pump();
     padEnd.pump(0);
     assert.equal(received[0].length, 16, "a camera-compatible legacy peer still gets the original surface frame");
-    assert.equal(PhonePad.decodeHud(JSON.stringify(received[0])).surface, "camera");
+    assert.equal(PhonePadCodec.decodeHud(JSON.stringify(received[0])).surface, "camera");
   } finally { link.close(); }
 });
 
@@ -655,7 +655,7 @@ test("the LCD says Q / PRAC where the race HUD does, not a race position (R2-08)
   assert.equal(el.pos.textContent, "PRAC");
   PhonePad.paintHud(el, { ...base, flags: D.quali | D.retired });
   assert.equal(el.pos.textContent, "DNF", "a retirement outranks the session tag, as on the HUD");
-  const back = PhonePad.decodeHud(PhonePad.encodeHud({ ...base, flags: D.quali | D.practice }));
+  const back = PhonePadCodec.decodeHud(PhonePadCodec.encodeHud({ ...base, flags: D.quali | D.practice }));
   assert.equal(back.flags, D.quali | D.practice, "the session bits survive the wire");
   const D2 = PhonePad.DASH;
   assert.equal(phonePadDash({ player, session: "quali" }, manual).flags & (D2.quali | D2.practice), D2.quali, "the sampler tags quali from the game's own state");
@@ -679,7 +679,7 @@ test("the control modes reach the wheel's layout: no paddles on AUTO gears, no G
   PhonePad.paintHud(el, { ...base, flags: D.aeroNone | D.xArmed });
   assert.deepEqual([...el.body.classes].sort(), ["aero-none"]);
   assert.equal(el.aero.textContent, "NO ZONES", "a circuit with no zones says so whatever the arming");
-  const back = PhonePad.decodeHud(PhonePad.encodeHud({ ...base, flags: D.gearsAuto | D.throttleAuto | D.aeroAuto | D.aeroNone }));
+  const back = PhonePadCodec.decodeHud(PhonePadCodec.encodeHud({ ...base, flags: D.gearsAuto | D.throttleAuto | D.aeroAuto | D.aeroNone }));
   assert.equal(back.flags, D.gearsAuto | D.throttleAuto | D.aeroAuto | D.aeroNone, "the mode bits survive the wire");
   const page = read("controller.html");
   for (const rule of ["body.gears-auto .shift", "body.gears-auto .tap { display: flex; }", "body.throttle-auto #gas", "body.aero-auto #b-aero, body.aero-none #b-aero"]) {
@@ -745,8 +745,8 @@ test("the registered blur reset releases phone tilt until a fresh axis sample ar
   assert.equal(Input.throttle(), false);
 
   const seq = link.stats().lastSeq;
-  hostEnd._emit("message", NetTransport.STATE, PhonePad.encodeSample({ seq, roll: -30, thr: 1, brk: 0, held: 0 }));
-  hostEnd._emit("message", NetTransport.STATE, PhonePad.encodeSample({ seq: seq - 1, roll: -30, thr: 1, brk: 0, held: 0 }));
+  hostEnd._emit("message", NetTransport.STATE, PhonePadCodec.encodeSample({ seq, roll: -30, thr: 1, brk: 0, held: 0 }));
+  hostEnd._emit("message", NetTransport.STATE, PhonePadCodec.encodeSample({ seq: seq - 1, roll: -30, thr: 1, brk: 0, held: 0 }));
   assert.equal(Input.remoteActive(), false, "duplicate and older packets stay rejected after reset");
   assert.equal(Input.steer(), 0);
   assert.equal(Input.throttle(), false);
@@ -896,9 +896,9 @@ test("phone pedals use the selected response independently, and carry it across 
 test("paired phones receive grip feedback only on the pedal reported by the host", () => {
   const dom = { gas: fakeEl(), brake: fakeEl() };
   const state = { state: "race", flags: 0, grip: "spin" };
-  assert.equal(JSON.parse(PhonePad.encodeHud(state)).length, 14, "legacy phones keep the original dash format");
+  assert.equal(JSON.parse(PhonePadCodec.encodeHud(state)).length, 14, "legacy phones keep the original dash format");
   for (const grip of ["spin", "slip", "lock", ""]) {
-    const packet = PhonePad.decodeHud(PhonePad.encodeHud({ ...state, grip }, true));
+    const packet = PhonePadCodec.decodeHud(PhonePadCodec.encodeHud({ ...state, grip }, true));
     PhonePad.paintHud(dom, packet);
     assert.equal(dom.gas.classes.has("grip-cue"), grip === "spin" || grip === "slip");
     assert.equal(dom.brake.classes.has("grip-cue"), grip === "lock");
@@ -1018,7 +1018,7 @@ test("pad(): the page's pedals, paddles and LCD are wired through to the wire an
   const dash = { value: { gear: 7, kmh: 301, rpm: 0.95, lap: 9, laps: 9, pos: 1, cars: 20, ers: 0.1, flags: PhonePad.DASH.redline, caution: 0, lastLapMs: 0, state: "race", team: "#0b0e10" } };
   const link = PhonePad.link(hostEnd, { input: desk.Input, pump: false, now: () => clock.t, hud: () => dash.value });
   const dom = { body: fakeEl(), status: fakeEl(), codeIn: fakeEl(), connect: fakeEl(), gas: fakeEl(), brake: fakeEl(), lookBack: fakeEl(),
-    center: fakeEl(), rim: fakeEl(), buttons: Object.fromEntries(PhonePad.EVENTS.map((k) => [k, fakeEl()])), hud: lcd() };
+    center: fakeEl(), rim: fakeEl(), buttons: Object.fromEntries(PhonePadCodec.EVENTS.map((k) => [k, fakeEl()])), hud: lcd() };
   dom.buttons.overtake = [fakeEl(), fakeEl()];   // OT lives on the grip AND the face
   dom.stick = fakeEl(); dom.nub = fakeEl();
   dom.arrows = { navUp: fakeEl(), navDown: fakeEl(), navLeft: fakeEl(), navRight: fakeEl() };
@@ -1182,7 +1182,7 @@ test("#6372 × #6334: a HOLD button held into Pause is switched off on Resume, a
     caution: 0, lastLapMs: 0, state: "race", surface: layers.open ? "menu" : "drive", team: "" });
   const link = PhonePad.link(hostEnd, { input: desk.Input, pump: false, now: () => clock.t, hud });
   const dom = { body: fakeEl(), status: fakeEl(), codeIn: fakeEl(), connect: fakeEl(), gas: fakeEl(), brake: fakeEl(), lookBack: fakeEl(),
-    center: fakeEl(), rim: fakeEl(), buttons: Object.fromEntries(PhonePad.EVENTS.map((k) => [k, fakeEl()])), hud: lcd() };
+    center: fakeEl(), rim: fakeEl(), buttons: Object.fromEntries(PhonePadCodec.EVENTS.map((k) => [k, fakeEl()])), hud: lcd() };
   PedalTravel.setButtonProfile("boost", { latch: "hold" });
   let ctl;
   try {
@@ -1233,7 +1233,7 @@ test("pad(): a lost lift on the menu stick or a held arrow is caught by the all-
   };
   try {
     const dom = { body: fakeEl(), status: fakeEl(), codeIn: fakeEl(), connect: fakeEl(), gas: fakeEl(), brake: fakeEl(), lookBack: fakeEl(),
-      center: fakeEl(), rim: fakeEl(), buttons: Object.fromEntries(PhonePad.EVENTS.map((k) => [k, fakeEl()])), hud: lcd() };
+      center: fakeEl(), rim: fakeEl(), buttons: Object.fromEntries(PhonePadCodec.EVENTS.map((k) => [k, fakeEl()])), hud: lcd() };
     dom.stick = fakeEl(); dom.nub = fakeEl();
     dom.arrows = { navUp: fakeEl(), navDown: fakeEl(), navLeft: fakeEl(), navRight: fakeEl() };
     const timers = fakeTimers();
@@ -1287,7 +1287,7 @@ test("pad(): a second finger on a held D-pad arrow does not stop the first (hunt
   globalThis.document = { hidden: false, visibilityState: "visible", addEventListener() {} };
   try {
     const dom = { body: fakeEl(), status: fakeEl(), codeIn: fakeEl(), connect: fakeEl(),
-      buttons: Object.fromEntries(PhonePad.EVENTS.map((k) => [k, fakeEl()])) };
+      buttons: Object.fromEntries(PhonePadCodec.EVENTS.map((k) => [k, fakeEl()])) };
     const timers = fakeTimers();
     const ctl = PhonePad.pad(dom, { now: () => clock.t, timers, deps: {
       rtc: () => padEnd, prefetchIce: async () => null, normalise: (c) => String(c).toUpperCase(), valid: (c) => c.length === 6,
@@ -1706,8 +1706,8 @@ test('closed phone sessions ignore late packets and open callbacks', () => {
       : PhonePad.padSession(transport,{roll:()=>0,thr:()=>0,brk:()=>0,held:()=>0},
           {heartbeat:false,onOpen(){calls.push('open');},onHud(){calls.push('hud');},vibrate(){calls.push('buzz');}});
     session.close(); cb.open();
-    cb.message(NetTransport.STATE,side === 'host' ? PhonePad.encodeSample({seq:1,roll:10,thr:1,brk:0,held:0}) : PhonePad.encodeHud({state:'race'}));
-    cb.message(NetTransport.EVENT,PhonePad.encodeHaptic(50));
+    cb.message(NetTransport.STATE,side === 'host' ? PhonePadCodec.encodeSample({seq:1,roll:10,thr:1,brk:0,held:0}) : PhonePadCodec.encodeHud({state:'race'}));
+    cb.message(NetTransport.EVENT,PhonePadCodec.encodeHaptic(50));
     assert.deepEqual(calls,[],side);
   }
 });
@@ -1748,7 +1748,7 @@ test("PlatformSession: out of a race (no player) the dash still goes out, so the
     G.state = state; G.paused = paused;
     const h = sample();
     assert.ok(h, why + ": a dash, not null");
-    const back = PhonePad.decodeHud(PhonePad.encodeHud(h));
+    const back = PhonePadCodec.decodeHud(PhonePadCodec.encodeHud(h));
     assert.ok(back && back.state === state, why + ": it survives the wire");
     const el = lcd();
     PhonePad.paintHud(el, back);
@@ -1932,11 +1932,11 @@ test("host(): private relay swaps one offer/answer and the linked phone can driv
   assert.equal(h.ctl.state().phase, "linked"); assert.equal(h.ui.linkedN, 1);
   assert.ok(request.token.cancelled, "linking stops the rendezvous");
   h.clock.t = 100;
-  const wire = PhonePad.encodeSample({ seq: 0, thr: 0.8, brk: 0, roll: 0, held: 0 });
+  const wire = PhonePadCodec.encodeSample({ seq: 0, thr: 0.8, brk: 0, roll: 0, held: 0 });
   h.padEnd.send(NetTransport.STATE, wire);
   h.hostEnd.pump(100);
   // The exact remote pedal: the wire's throttle past the 0.1 travel threshold, rescaled (W26 row 8).
-  assert.equal(h.Input.throttleLevel(), (PhonePad.decodeSample(wire).thr - 0.1) / 0.9, "the accepted answer installs the real Input link");
+  assert.equal(h.Input.throttleLevel(), (PhonePadCodec.decodeSample(wire).thr - 0.1) / 0.9, "the accepted answer installs the real Input link");
   h.ctl.cancel(); assert.equal(h.hostEnd.status, "closed"); assert.equal(h.Input.remoteActive(), false);
 });
 
@@ -2282,7 +2282,7 @@ test("requestSensor attaches deviceorientation once across arm + connect (D·W18
     assert.equal(ctl.state().sensorOn, false, "sensorOn waits for a real reading");
     await ctl.connect("ABC234");
     assert.equal(orient.length, 1, "connect after arm must not stack another listener");
-    receive("event", PhonePad.encodeHello("host", false, true));
+    receive("event", PhonePadCodec.encodeHello("host", false, true));
     orient[0]({ beta: 0, gamma: -20 });
     assert.equal(ctl.state().sensorOn, true);
     assert.equal(orient.length, 1, "a live reading does not re-attach");
@@ -2304,7 +2304,7 @@ test("phone touch steering restores the remaining held arrow and ignores old-key
   } });
   try {
     await ctl.connect("ABC234");
-    receive("event", PhonePad.encodeHello("host", false, true));
+    receive("event", PhonePadCodec.encodeHello("host", false, true));
     assert.equal(ctl.setSteeringMode("touch"), true);
     dom.steer.dispatch("pointerdown", { pointerId: 41, pointerType: "mouse", button: 2, clientX: 10 });
     dom.steer.dispatch("pointermove", { pointerId: 41, clientX: 100 });
@@ -2342,13 +2342,13 @@ test("last-touch fallback releases fingers while preserving keyboard pedals and 
   const [transport, host] = NetTransport.loopback({ latencyMs: 0 });
   transport.pump(0); host.pump(0);
   const samples = [];
-  host.onMessage((channel, data) => { if (channel === NetTransport.STATE) samples.push(PhonePad.decodeSample(data)); });
+  host.onMessage((channel, data) => { if (channel === NetTransport.STATE) samples.push(PhonePadCodec.decodeSample(data)); });
   const dom = { gas: fakeEl(), brake: fakeEl(), lookBack: fakeEl(), steer: fakeEl() };
   const documentEvent = (type, event) => { for (const fn of listeners[type] || []) fn(event); };
   try {
     ctl = PhonePad.pad(dom, { now: () => 0, deps: { rtc: () => transport, prefetchIce: async () => null, normalise: (c) => c, valid: () => true, privateRelay: () => false, swap: async () => ({ ok: true }) } });
     await ctl.connect("ABC234");
-    host.send(NetTransport.EVENT, PhonePad.encodeHello("host", false, true));
+    host.send(NetTransport.EVENT, PhonePadCodec.encodeHello("host", false, true));
     ctl.pump();
     for (const type of ["touchend", "touchcancel"]) documentEvent(type, { touches: [] });
     host.pump(0);
@@ -2534,7 +2534,7 @@ test("continuous input keeps the 15 ms cap: slides coalesce into the next pump, 
   assert.equal(sent.length, 1, "ten slide moves inside 15 ms send nothing yet");
   clock.t += 6; sess.pump();
   assert.equal(sent.length, 2, "the next pump past the gap sends ONE coalesced sample");
-  const dec = PhonePad.decodeSample(sent[1]);
+  const dec = PhonePadCodec.decodeSample(sent[1]);
   assert.ok(dec && Math.abs(dec.thr - 0.45) < 1e-6, "the coalesced sample carries the LATEST travel, got " + (dec && dec.thr));
   clock.t += 20; sess.pump();
   assert.equal(sent.length, 2, "nothing pending: a pump sends nothing");
@@ -2555,7 +2555,7 @@ test("touch steering: strip width read once per gesture, aria-valuenow an intege
   } });
   try {
     await ctl.connect("ABC234");
-    receive("event", PhonePad.encodeHello("host", false, true));
+    receive("event", PhonePadCodec.encodeHello("host", false, true));
     assert.equal(ctl.setSteeringMode("touch"), true);
     steer.dispatch("pointerdown", { pointerId: 5, pointerType: "touch", button: 0, clientX: 100 });
     const r0 = rects;
@@ -2603,15 +2603,15 @@ test("host(): an answered phone is DEAF until ALLOW on the game screen; REJECT c
   assert.equal(h.ui.said.at(-1), "A phone connected — tap ALLOW on this screen to let it steer, or REJECT.");
   assert.equal(h.room.stopped, 1, "one phone per room: the room closes while it asks");
   h.clock.t = 100;
-  h.padEnd.send(NetTransport.STATE, PhonePad.encodeSample({ seq: 0, thr: 1, brk: 0, roll: 25, held: 0 }));
-  h.padEnd.send(NetTransport.EVENT, PhonePad.encodeEvent("navSelect"));
+  h.padEnd.send(NetTransport.STATE, PhonePadCodec.encodeSample({ seq: 0, thr: 1, brk: 0, roll: 25, held: 0 }));
+  h.padEnd.send(NetTransport.EVENT, PhonePadCodec.encodeEvent("navSelect"));
   h.hostEnd.pump(50);
   assert.equal(h.Input.remoteActive(), false, "its samples do not reach Input");
   assert.equal(h.Input.throttle(), false);
   assert.ok(h.ctl.state().stats.gated >= 2 && h.ctl.state().stats.admitted === false, JSON.stringify(h.ctl.state().stats));
   c.asks[0].answer(true); await settle();
   assert.equal(h.ctl.state().phase, "linked"); assert.equal(h.ui.linkedN, 1);
-  h.padEnd.send(NetTransport.STATE, PhonePad.encodeSample({ seq: 1, thr: 0.8, brk: 0, roll: 0, held: 0 }));
+  h.padEnd.send(NetTransport.STATE, PhonePadCodec.encodeSample({ seq: 1, thr: 0.8, brk: 0, roll: 0, held: 0 }));
   h.hostEnd.pump(100);
   assert.ok(h.Input.throttle() && h.Input.throttleLevel() > 0.7, "ALLOWed: the phone drives");
   h.ctl.cancel();
@@ -2643,7 +2643,7 @@ test("host(): a re-link from the ALLOWed phone is let back in; another peer on t
   const pairs = [];
   const rtc = () => { const p = NetTransport.loopback({ latencyMs: 1, rnd: NetTransport.seededRnd(40 + pairs.length) }); p[0].pump(0); p[1].pump(0); pairs.push(p); return p[1]; };
   const drop = ([padEnd, hostEnd]) => { padEnd.status = hostEnd.status = "closed"; hostEnd._emit("close", "failed"); padEnd._emit("close", "failed"); };
-  const hello = (p, id) => { p[0].send(NetTransport.EVENT, PhonePad.encodeHello("pad", false, true, id)); p[1].pump(10); };
+  const hello = (p, id) => { p[0].send(NetTransport.EVENT, PhonePadCodec.encodeHello("pad", false, true, id)); p[1].pump(10); };
   const h = hostHarness({ rtc, confirm: c.confirm });
   await settle(); await h.room.onJoiner(null, "ANSWER"); await settle();
   assert.equal(c.asks.length, 0, "decision B: the first phone on the code this screen just minted is not asked");
@@ -2661,7 +2661,7 @@ test("host(): a re-link from the ALLOWed phone is let back in; another peer on t
   assert.equal(h.ctl.state().phase, "confirming", "a different peer answering the re-hosted code is asked, fresh or not");
   assert.equal(c.asks.length, 1);
   h.clock.t = 100;
-  pairs[2][0].send(NetTransport.STATE, PhonePad.encodeSample({ seq: 0, thr: 1, brk: 0, roll: 0, held: 0 }));
+  pairs[2][0].send(NetTransport.STATE, PhonePadCodec.encodeSample({ seq: 0, thr: 1, brk: 0, roll: 0, held: 0 }));
   pairs[2][1].pump(20);
   assert.equal(h.Input.remoteActive(), false, "and it cannot drive while asked");
   h.ctl.cancel();
@@ -2673,7 +2673,7 @@ test("#6621: a stranger on a re-link is REJECTed or times out, the SAME code is 
   let minted = 0;
   const rtc = () => { const p = NetTransport.loopback({ latencyMs: 1, rnd: NetTransport.seededRnd(70 + pairs.length) }); p[0].pump(0); p[1].pump(0); pairs.push(p); return p[1]; };
   const drop = ([padEnd, hostEnd]) => { padEnd.status = hostEnd.status = "closed"; hostEnd._emit("close", "wire"); padEnd._emit("close", "wire"); };
-  const hello = (p, id) => { p[0].send(NetTransport.EVENT, PhonePad.encodeHello("pad", false, true, id)); p[1].pump(10); };
+  const hello = (p, id) => { p[0].send(NetTransport.EVENT, PhonePadCodec.encodeHello("pad", false, true, id)); p[1].pump(10); };
   const join = async (h, id) => { await h.room.onJoiner(null, "ANSWER"); await settle(); hello(pairs.at(-1), id); await settle(); };
   const h = hostHarness({ rtc, confirm: c.confirm, askMs: 30, makeCode: () => { minted++; return "ABC234"; } });
   await settle(); await join(h, PEER_A);
@@ -2719,10 +2719,10 @@ test("the codec carries the page's peer id in its hello, hex only (W26 row 11b)"
   assert.equal(id.length, 32);
   assert.equal(Buffer.from(id, "hex").toString("hex"), id, "128 bits of lowercase hex: it survives a hex round-trip");
   assert.notEqual(PhonePadCodec.makePeerId(), id);
-  assert.equal(PhonePad.decodeEvent(PhonePad.encodeHello("pad", false, true, id)).id, id);
-  assert.equal(PhonePad.decodeEvent(PhonePad.encodeHello("pad", false, true, "<script>")).id, undefined, "a junk id is dropped at encode");
-  assert.equal(PhonePad.decodeEvent(JSON.stringify({ t: "hi", side: "pad", p: 1, id: "zz" })).id, undefined, "and at decode");
-  assert.deepEqual(PhonePad.decodeEvent(PhonePad.encodeHello("host", false, true)), { t: "hi", side: "host", p: 1, haptics: false, steer: true, ack: true, calibratedPedals: true }, "the host advertises calibrated pedals without a peer id");
+  assert.equal(PhonePadCodec.decodeEvent(PhonePadCodec.encodeHello("pad", false, true, id)).id, id);
+  assert.equal(PhonePadCodec.decodeEvent(PhonePadCodec.encodeHello("pad", false, true, "<script>")).id, undefined, "a junk id is dropped at encode");
+  assert.equal(PhonePadCodec.decodeEvent(JSON.stringify({ t: "hi", side: "pad", p: 1, id: "zz" })).id, undefined, "and at decode");
+  assert.deepEqual(PhonePadCodec.decodeEvent(PhonePadCodec.encodeHello("host", false, true)), { t: "hi", side: "host", p: 1, haptics: false, steer: true, ack: true, calibratedPedals: true }, "the host advertises calibrated pedals without a peer id");
 });
 
 test("link(): with admit() the channel is open but deaf, its haptics and dash wait, and a refusal closes it as 'rejected' (W26 row 11a)", async () => {
@@ -2738,7 +2738,7 @@ test("link(): with admit() the channel is open but deaf, its haptics and dash wa
   const link = PhonePad.link(hostEnd, { input: desk.Input, pump: false, now: () => desk.clock.t, doc: null, hud: () => ({ gear: 3, kmh: 100, state: "race" }),
     admit: (p) => { seenPeer = p; return new Promise((r) => { verdict = r; }); },
     onAdmitted: () => { admitted++; }, onClose: (why) => { closedWhy = why; } });
-  padEnd.send(NetTransport.EVENT, PhonePad.encodeHello("pad", true, true, PEER_A));
+  padEnd.send(NetTransport.EVENT, PhonePadCodec.encodeHello("pad", true, true, PEER_A));
   desk.clock.t = 100; hostEnd.pump(10); link.pump(); padEnd.pump(100);
   assert.equal(seenPeer.id, PEER_A, "the hello names the peer"); assert.equal(seenPeer.fp, null, "a loopback has no DTLS fingerprint");
   assert.equal(desk.Input.remoteHaptics(), null, "no buzzing a phone nobody allowed");
@@ -2840,7 +2840,7 @@ test("pad(): a re-dial passes reanswer and answers a NEWER offer on a FRESH tran
     assert.equal(ctl.state().linked, true, "the session moved to the fresh transport");
     made[1].status = "open"; made[1].handlers.open();
     assert.ok(dom.body.classes.has("awaiting"), "and it opens there");
-    made[1].handlers.message(NetTransport.STATE, PhonePad.encodeHud({ gear: 0, kmh: 0, rpm: 0, lap: 0, laps: 0, pos: 0, cars: 0, ers: 0, flags: 0, caution: 0, lastLapMs: 0, state: "menu", team: "" }));
+    made[1].handlers.message(NetTransport.STATE, PhonePadCodec.encodeHud({ gear: 0, kmh: 0, rpm: 0, lap: 0, laps: 0, pos: 0, cars: 0, ers: 0, flags: 0, caution: 0, lastLapMs: 0, state: "menu", team: "" }));
     assert.ok(dom.body.classes.has("linked") && !dom.body.classes.has("awaiting"), "the game's first dash shows its surface");
     assert.equal(JSON.parse(made[1].sent[0]).id, PEER_A, "its hello names the page");
     assert.equal(swapOpts.token.cancelled, true, "a link that is up stops the rendezvous");
@@ -2912,7 +2912,7 @@ test("#5739 row 4: a pad that SUSPENDS (page going away) is re-hosted on the sam
   assert.equal(h.ctl.state().code, "ABC234");
   assert.equal(h.ui.relinkN, 1); assert.equal(h.ui.lostN, 0);
   assert.equal(pairs.length, 2, "a fresh transport for the re-dial");
-  assert.deepEqual(PhonePad.decodeEvent(PhonePadCodec.encodeSuspend()), { t: "sus" });
+  assert.deepEqual(PhonePadCodec.decodeEvent(PhonePadCodec.encodeSuspend()), { t: "sus" });
   await h.room.onJoiner(null, "ANSWER-2"); await settle();
   assert.equal(h.ctl.state().phase, "linked");
   pairs[1][0].close(); pairs[1][1].pump(1e6); await settle();
@@ -2933,7 +2933,7 @@ test("#5739 row 4: pagehide on a LINKED controller sends suspend, and pageshow r
   });
   await h.ctl.connect("ABC234");
   assert.equal(h.ctl.state().linked, true);
-  const hello = PhonePad.encodeHello("host", false, true);
+  const hello = PhonePadCodec.encodeHello("host", false, true);
   wires[0].receive(NetTransport.EVENT, hello);
   assert.equal(h.ctl.setSteeringMode("touch"), true);
   h.fire("pagehide");
@@ -2957,13 +2957,13 @@ test("returning to tilt after touch steering waits for a fresh sensor reading", 
   const h = wakePad({ rtc: () => ({
     status: "open", pump() {}, close() {}, onClose() {}, onMessage(fn) { receive = fn; },
     send(channel, data) {
-      if (channel === NetTransport.STATE) samples.push(PhonePad.decodeSample(data));
+      if (channel === NetTransport.STATE) samples.push(PhonePadCodec.decodeSample(data));
       return true;
     },
   }) }, { sensor: true, interval(fn) { heartbeat = fn; return 1; } });
   try {
     await h.ctl.connect("ABC234");
-    receive("event", PhonePad.encodeHello("host", false, true));
+    receive("event", PhonePadCodec.encodeHello("host", false, true));
     h.fire("deviceorientation", { beta: 0, gamma: 35 });
     assert.equal(h.ctl.setSteeringMode("tilt"), true);
     heartbeat();
@@ -2992,7 +2992,7 @@ test("the phone heartbeat releases tilt on background and redial until a fresh r
     streams.push(samples);
     return { status: "open", pump() {}, onMessage() {}, onClose(fn) { close = fn; },
       send(channel, data) {
-        if (channel === NetTransport.STATE) samples.push(PhonePad.decodeSample(data));
+        if (channel === NetTransport.STATE) samples.push(PhonePadCodec.decodeSample(data));
         return true;
       },
       close() { this.status = "closed"; close("local"); } };
@@ -3220,7 +3220,7 @@ test("the phone's surface follows the game's screen from the first frame it is a
     assert.deepEqual(desk.Input.remoteCamera(), { moveX: 1, moveY: 0, lookX: 0, lookY: -1, lift: 1 });
     assert.ok(ctl.state().hud.hudSeq > drivingHud.hudSeq, "the negotiated host numbers its HUD packets");
     for (const sequence of [drivingHud.hudSeq, undefined]) {
-      const lateDash = PhonePad.encodeHud(drivingHud, true, true, sequence);
+      const lateDash = PhonePadCodec.encodeHud(drivingHud, true, true, sequence);
       padEnd._emit("message", NetTransport.STATE, lateDash);
       assert.ok(dom.hud.body.classes.has("camera-pad"), "an older or pre-negotiation dash cannot switch away from the camera");
     }
@@ -3274,7 +3274,7 @@ test("host(): decision B — the first phone on a code this screen just minted s
   assert.equal(c.asks.length, 0, "no ALLOW card for the pairing the player just started");
   assert.equal(h.ctl.state().phase, "linked"); assert.equal(h.ui.linkedN, 1);
   h.clock.t = 100;
-  h.padEnd.send(NetTransport.STATE, PhonePad.encodeSample({ seq: 0, thr: 1, brk: 0, roll: 0, held: 0 }));
+  h.padEnd.send(NetTransport.STATE, PhonePadCodec.encodeSample({ seq: 0, thr: 1, brk: 0, roll: 0, held: 0 }));
   h.hostEnd.pump(50);
   assert.ok(h.Input.remoteActive() && h.Input.throttle(), "its inputs are accepted at once");
   await h.room.onJoiner(null, "SECOND-ANSWER"); await settle();
@@ -3348,7 +3348,7 @@ test("phone pressure feedback matches the encoded sample at a half-percent midpo
     dom.brake.dispatch("pointermove", { pointerId: 8, clientX: 50, clientY: 50 });
     const brk = ctl.state().brk;
     assert.equal(brk, 0.175, "display rounding does not alter the local response");
-    const sent = PhonePad.decodeSample(PhonePad.encodeSample({ seq: 1, brk, thr: 0, held: 0 }));
+    const sent = PhonePadCodec.decodeSample(PhonePadCodec.encodeSample({ seq: 1, brk, thr: 0, held: 0 }));
     assert.equal(sent.brk, 0.18);
     assert.equal(Number(dom.brake.style["--travel"]), sent.brk);
   } finally { ctl?.cancel(); PedalTravel.resetButtonProfile("brake"); }
@@ -3390,7 +3390,7 @@ test("opening Wheel Layout or Move & Size retires a captured Gas touch without d
   const [transport, host] = NetTransport.loopback({ latencyMs: 0 });
   transport.pump(0); host.pump(0);
   const samples = [];
-  host.onMessage((channel, data) => { if (channel === NetTransport.STATE) samples.push(PhonePad.decodeSample(data)); });
+  host.onMessage((channel, data) => { if (channel === NetTransport.STATE) samples.push(PhonePadCodec.decodeSample(data)); });
   const window = { addEventListener(type, fn) { if (type === "DOMContentLoaded") fn(); } };
   const document = dom.document, gas = dom.byId("gas"), sheet = dom.byId("layout-sheet");
   const byId = document.getElementById;
@@ -3426,7 +3426,7 @@ test("opening Wheel Layout or Move & Size retires a captured Gas touch without d
       PhonePad: { ...PhonePad, pad }, PhonePadPage }, { filename: absSrc("controller.html") });
     const ctl = window.__apexPad, layout = window.__apexPadLayout;
     assert.equal((await ctl.connect("ABC234")).ok, true);
-    host.send(NetTransport.EVENT, PhonePad.encodeHello("host", false, true));
+    host.send(NetTransport.EVENT, PhonePadCodec.encodeHello("host", false, true));
     ctl.pump();
     assert.equal(ctl.setSteeringMode("touch"), true);
 
@@ -3595,13 +3595,13 @@ test("a non-finite orientation angle is no reading: the last finite roll is kept
   const h = wakePad({ rtc: () => ({
     status: "open", pump() {}, close() {}, onClose() {}, onMessage(fn) { receive = fn; },
     send(channel, data) {
-      if (channel === NetTransport.STATE) samples.push(PhonePad.decodeSample(data));
+      if (channel === NetTransport.STATE) samples.push(PhonePadCodec.decodeSample(data));
       return true;
     },
   }) }, { sensor: true, interval(fn) { heartbeat = fn; return 1; } });
   try {
     await h.ctl.connect("ABC234");
-    receive("event", PhonePad.encodeHello("host", false, true));
+    receive("event", PhonePadCodec.encodeHello("host", false, true));
     assert.equal(h.ctl.setSteeringMode("tilt"), true);
     h.fire("deviceorientation", { beta: 0, gamma: 20 });
     heartbeat();
@@ -3633,13 +3633,13 @@ test("#6459 row 6: a surface flip releases the controls but keeps the tilt readi
   const h = wakePad({ rtc: () => ({
     status: "open", pump() {}, close() {}, onClose() {}, onMessage(fn) { receive = fn; },
     send(channel, data) {
-      if (channel === NetTransport.STATE) samples.push(PhonePad.decodeSample(data));
+      if (channel === NetTransport.STATE) samples.push(PhonePadCodec.decodeSample(data));
       return true;
     },
   }) }, { sensor: true, interval(fn) { heartbeat = fn; return 1; } });
   try {
     await h.ctl.connect("ABC234");
-    const hud = (surface) => PhonePad.encodeHud({ gear: 3, kmh: 100, rpm: 0.5, lap: 1, laps: 5, pos: 1, cars: 2, ers: 0.5,
+    const hud = (surface) => PhonePadCodec.encodeHud({ gear: 3, kmh: 100, rpm: 0.5, lap: 1, laps: 5, pos: 1, cars: 2, ers: 0.5,
       flags: 0, caution: 0, lastLapMs: 0, state: "race", surface, team: "" }, false, true);
     receive(NetTransport.STATE, hud("drive"));
     h.fire("deviceorientation", { beta: 0, gamma: 25 });
@@ -3734,4 +3734,10 @@ test("#6449 row 3: host() stays silent on a stale answer (wrong_offer / already_
     assert.ok(!h.ui.said.some((t) => t.startsWith("!")), error + ": no red error");
     h.ctl.cancel();
   }
+});
+
+test("a dash team that is not a string decodes to no colour (#7322 B4)", () => {
+  const frame = (team) => JSON.stringify(["H", 3, 287, 0.9, 1, 5, 4, 20, 0.5, 0, 0, 91234, "race", team]);
+  assert.equal(PhonePadCodec.decodeHud(frame("#aabbcc")).team, "#aabbcc", "a real hex passes");
+  assert.equal(PhonePadCodec.decodeHud(frame(["#aabbcc"])).team, "", "an array that stringifies to a hex is not a colour");
 });

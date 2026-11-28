@@ -541,7 +541,7 @@ function create(G) {
   /* Abort the wheel wizard without changing the saved map. closeSettings /
      disarmAll must call this: beginAxisCapture alone zeroes the pad every
      frame until cancelled. */
-  let abortWheel = null;
+  let /** @type {(() => void) | null} */ abortWheel = null;
   let wheelOwner = null;
   const wheelBtn = $("pm-pad-wheel");
   if (wheelBtn && Input.beginAxisCapture) {
@@ -651,8 +651,14 @@ function create(G) {
     };
   }
   window.addEventListener("gamepaddisconnected", (e) => {
-    const p = e.gamepad;
-    if (wheelOwner && p && wheelOwner === p.index + ":" + p.id && abortWheel) abortWheel();
+    const p = e.gamepad, abort = abortWheel;
+    if (!p || !abort) return;
+    if (wheelOwner) { if (wheelOwner === p.index + ":" + p.id) abort(); return; }
+    // Step 1 has no owner yet: the sheet sat on "Turn the wheel LEFT" after the
+    // only pad left. A spare pad still connected keeps the wizard (#7322 A4).
+    const pads = typeof navigator !== "undefined" && navigator.getGamepads ? navigator.getGamepads() || [] : [];
+    const other = Array.prototype.some.call(pads, (g) => g && g.connected && g !== p && !(g.index === p.index && g.id === p.id));
+    if (!other) abort();
   });
   // Opt-in diagnostic under the Controls menu: it reads the same processed
   // controller travel while the menu keeps the driving latches neutral.

@@ -91,7 +91,7 @@ export const plain = (v) => JSON.parse(JSON.stringify(v));
 // `disk`, when given, backs the store (reads and writes land in it).
 // `pre(sb)` adds globals the module reads at create() time (SettingsNav).
 export function bootUi(desktop, helpSlots = {}, disk = null, pre = null, opts = null) {
-  const { Input, key, sb, fire } = boot();
+  const { Input, key, sb, fire } = boot(opts && opts.initOpts);
   const deferTimers = !!(opts && opts.deferTimers);
   const timerQueue = [];
   let timerSeq = 1;

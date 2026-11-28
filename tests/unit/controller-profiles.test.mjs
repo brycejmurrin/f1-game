@@ -5,8 +5,8 @@ import vm from 'node:vm';
 import { absSrc } from "../helpers/abs-src.mjs";
 const root = new URL('../../', import.meta.url), read = (f) => fs.readFileSync(new URL(f, root), 'utf8');
 const plain = (v) => JSON.parse(JSON.stringify(v));
-function boot() {
-  const listeners = {}, storage = new Map(), clock = { t: 100 }, state = { pads: [] };
+function boot(storage = new Map()) {
+  const listeners = {}, clock = { t: 100 }, state = { pads: [] };
   const el = () => ({ addEventListener() {}, removeEventListener() {}, style: {}, dataset: {}, classList: { add() {}, remove() {}, toggle() {}, contains: () => false }, setAttribute() {}, getAttribute: () => null, removeAttribute() {}, children: [], getBoundingClientRect: () => ({ left: 0, top: 0, width: 300, height: 300 }), setPointerCapture() {}, releasePointerCapture() {}, hasPointerCapture: () => false });
   const sb = { Math, Object, Array, Number, isFinite, JSON, Map, Set, Date, Event,
     performance: { now: () => clock.t }, navigator: { getGamepads: () => state.pads }, screen: {},
@@ -118,18 +118,20 @@ test('real Input guarded remoteLost cannot clear a different owner; omitted sour
   I.remoteSample({ source: 'xr', steer: -.5, brk: 1 }); I.remoteLost('phone'); assert.equal(I.debugState().remote.owner, 'xr');
   I.remoteLost(); assert.equal(I.remoteActive(), false); assert.equal(I.debugState().remote.owner, null);
 });
-test('stored legacy axes/buttons load before lazy Controls UI and profile imports apply current device immediately', () => {
+test('stored legacy axes/buttons load before lazy Controls UI; an imported profile map applies after the reload', () => {
   const { Input: I, drive, storage } = boot();
   storage.set('padAxes', { steer: 3, throttle: 2 }); storage.set('pad', { camera: [19, null] });
   drive(pad('wheel', '')); assert.equal(I.getPadAxisMap().steer, 3); assert.equal(I.getPadMap().camera[0], 19);
-  I.setControllerProfiles({ v: 1, devices: [{ id: 'wheel', axes: { steer: 1 }, buttons: { camera: [18, null] } }] });
-  assert.equal(I.getPadAxisMap().steer, 1); assert.equal(I.getPadMap().camera[0], 18);
-  assert.equal(I.controllerProfile().id, 'wheel');
+  // The importer writes the map and reloads (player-tools-backup); the next boot reads it on first use.
+  storage.set('padProfiles', { v: 1, devices: [{ id: 'wheel', axes: { steer: 1 }, buttons: { camera: [18, null] } }] });
+  const next = boot(storage); next.drive(pad('wheel', ''));
+  assert.equal(next.Input.getPadAxisMap().steer, 1); assert.equal(next.Input.getPadMap().camera[0], 18);
+  assert.equal(next.Input.controllerProfile().id, 'wheel');
 });
 test('standard controller cannot consume a persisted legacy wheel map before the wheel is used', () => {
   const { Input: I, drive, storage } = boot(); storage.set('padAxes', { steer: 3, throttle: 2 });
-  drive(pad('standard first')); assert.equal(I.getPadAxisMap().steer, 0); assert.equal(I.getControllerProfiles().legacyClaimed, false);
-  drive(pad('wheel later', '')); assert.equal(I.getPadAxisMap().steer, 3); assert.equal(I.getControllerProfiles().legacyClaimed, true);
+  drive(pad('standard first')); assert.equal(I.getPadAxisMap().steer, 0); assert.equal(storage.get('padProfiles')?.legacyClaimed ?? false, false);
+  drive(pad('wheel later', '')); assert.equal(I.getPadAxisMap().steer, 3); assert.equal(storage.get('padProfiles').legacyClaimed, true);
   drive(pad('another wheel', '')); assert.equal(I.getPadAxisMap().steer, 0);
 });
 
@@ -202,13 +204,12 @@ test('a reconnect in the same slot requires a release before repeating a held ac
   assert.equal(I.consumeRecover(), true);
 });
 
-test('profile replacement keeps an unclaimed legacy wheel map reserved for the wheel', () => {
-  const { Input: I, drive, storage } = boot();
-  storage.set('padAxes', { steer: 3 });
+test('an imported empty profile map keeps an unclaimed legacy wheel map reserved for the wheel', () => {
+  const storage = new Map([['padAxes', { steer: 3 }], ['padProfiles', { devices: [], legacyClaimed: false }]]);
+  const { Input: I, drive } = boot(storage);
   drive(pad('standard first'));
-  I.setControllerProfiles({ devices: [], legacyClaimed: false });
   assert.equal(I.getPadAxisMap().steer, 0, 'the standard controller keeps its standard axis');
-  assert.equal(I.getControllerProfiles().legacyClaimed, false);
+  assert.equal(storage.get('padProfiles').legacyClaimed, false);
   drive(pad('wheel later', ''));
   assert.equal(I.getPadAxisMap().steer, 3);
 });
@@ -369,4 +370,13 @@ test('held menu direction waits ~450 ms then repeats every ~130 ms', () => {
   state.pad = mkPad(0);
   Input.poll();
   assert.deepEqual(take(), [], 'releasing the stick stops repeats immediately');
+});
+
+test("setAnalogTrim takes only its own trims, never an inherited key (#7322 A3)", () => {
+  const { Input: I } = boot();
+  const before = plain(I.debugState().analogTrim);
+  I.setAnalogTrim("toString", 1); I.setAnalogTrim("constructor", 1.5);
+  assert.deepEqual(plain(I.debugState().analogTrim), before);
+  I.setAnalogTrim("pad", 1.5);
+  assert.equal(I.debugState().analogTrim.pad, 1.5, "a real trim still applies");
 });

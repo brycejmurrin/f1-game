@@ -98,7 +98,7 @@ const PhonePadCodec = (function () {
       lap: num(a[4], 0, 999) | 0, laps: num(a[5], 0, 999) | 0, pos: num(a[6], 0, 99) | 0, cars: num(a[7], 0, 99) | 0,
       ers: num(a[8], 0, 1), flags: num(a[9], 0, 65535) | 0, caution: num(a[10], 0, 4) | 0,
       lastLapMs: num(a[11], 0, 3.6e6) | 0, state: String(a[12] || "").slice(0, 8),
-      team: /^#[0-9a-f]{6}$/i.test(a[13] || "") ? a[13] : "",
+      team: typeof a[13] === "string" && /^#[0-9a-f]{6}$/i.test(a[13]) ? a[13] : "",   // test() coerces: ["#aabbcc"] is not a colour (#7322 B4)
       ...(["spin", "slip", "lock"].includes(a[14]) ? { grip: a[14] } : {}),
       ...(SURFACES.includes(a[15]) ? { surface: a[15] } : {}),
       ...(a.length === 17 ? { hudSeq: a[16] } : {}),

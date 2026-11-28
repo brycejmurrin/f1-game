@@ -1,0 +1,3 @@
+Fixed: With a phone as the controller, only the phone buzzes now. The computer running the game no longer vibrates as well (#7322).
+Fixed: Wheel setup no longer gets stuck when the wheel drops out. If it disconnects during the steering step, or vanishes while a pedal step is waiting, setup cancels and nothing is changed. Pressing Start in the short pause between steps no longer pauses the race behind the setup sheet (#7322).
+Fixed: If the stored DRIVING HELP, LINE STEERING or FEEL values were saved as text (an imported backup or a hand edit), their rows now show the setting the car actually uses (#7322).
