@@ -39,9 +39,11 @@ A PR number (optionally a head sha). Nothing else is needed.
    PR's head is `git fetch origin pull/<n>/head` then `git show
    FETCH_HEAD:<file>`). Take the changed paths from `get_files`, not a local
    `git diff` (a shallow clone may lack the merge base). For EVERY function or member the diff changes under
-   `js/`, call `lsp_callers` or `lsp_references {symbol}` before you write a row about it (start with `lsp_outline`
-   on each changed `js/` file; pass `symbol` OR `file`+`line`, never both); Grep is for strings, CSS, HTML and
-   tests. A row about a changed symbol names the query in its why cell, e.g. `(lsp_callers paintDash = 2)`.
+   `js/`, trace it through apex-lsp before you write a row about it (`lsp_outline` on each changed `js/` file, then
+   `lsp_callers` / `lsp_references`; pass `symbol` OR `file`+`line`, never both; a `create(G)` instance member is asked
+   by file+line from `lsp_symbols`, not as `Head.member`). When lsp returns only in-file rows or prints PARTIAL (a
+   facade, a `deps` bag, `G.x`), add one Grep of `\.member\(` and give both numbers. A row about a changed symbol
+   names the query in its why cell, e.g. `(lsp_callers js/race/x.js:119:14 = 3; grep = 3)`.
 4. **Look only for what CI will not catch** (a red CI already reports itself):
    - the diff misses a Done-when line, or does something the Goal did not ask
      (scope creep);
