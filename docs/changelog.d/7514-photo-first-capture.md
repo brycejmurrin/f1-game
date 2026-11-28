@@ -1,0 +1,1 @@
+Fixed: The first Photo Studio capture after a race load or a time-of-day change no longer fails with "The scene is still getting ready"; it waits a few frames for the scene and captures on the first tap (#7514).
