@@ -744,11 +744,13 @@ var GameAudio = (function () {
     } catch (e) { /* stub / mid-teardown */ }
   }
 
+  let ersLayerCtx = null;
   function attachErsLayer() {
-    if (!ctx || !sfxBus) return;
+    if (!ctx || !sfxBus || ersLayerCtx === ctx) return;
     try {
       if (typeof ErsLayer !== "undefined" && typeof ErsLayer.attach === "function") {
         ErsLayer.attach(ctx, sfxBus);
+        ersLayerCtx = ctx;
       }
     } catch (e) { /* stub / mid-teardown */ }
   }
@@ -783,21 +785,19 @@ var GameAudio = (function () {
   // A finger's pointerdown is not one: WebKit will not resume a context inside
   // it, so counting it armed lastFailedResume on a touch held past 700 ms and the
   // touchend that followed REBUILT a context it could simply have resumed. The
-  // same table as platform-session.js isActivation and radio-voice.js's prime.
+  // table is PlatformSession.isActivation (shared with radio-voice.js's prime).
   // `true` (init(), called from game.js's own activation handler) passes; an
   // untrusted (scripted) event never does.
   function isActivationGesture(e) {
     if (!e) return false;
     if (e === true) return true;
     if (e.isTrusted === false) return false;
-    if (e.type === "keydown") return e.key !== "Escape";
-    if (e.type === "pointerdown") {
-      if (e.pointerType === "mouse") return true;
+    if (PlatformSession.isActivation(e)) return true;
+    if (e.type === "pointerdown" && e.pointerType !== "mouse") {
       // An engine that granted activation anyway (#5248, #5029).
       try { return !!(navigator.userActivation && navigator.userActivation.isActive); } catch (_) { return false; }
     }
-    if (e.type === "pointerup") return e.pointerType !== "mouse";
-    return true;   // touchend, click
+    return false;
   }
 
   /*
@@ -874,6 +874,11 @@ var GameAudio = (function () {
     if (typeof CrowdAudio !== "undefined" && CrowdAudio.detach) {
       try { CrowdAudio.detach(); } catch (e) { /* stub / mid-teardown */ }
     }
+    // Rival pass-by voices are ctx-bound too: detach like Ers/Crowd; createCtx re-attaches.
+    if (rivalPassByCtx) {   // set only once RivalAudio.attach ran
+      try { RivalAudio.detach(); } catch (e) { /* stub / mid-teardown */ }
+    }
+    rivalPassByCtx = null; ersLayerCtx = null;
     ctx = null; mutedSuspended = false;
     master = null;
     sfxBus = null; focusBus = null; releaseBuses();
@@ -894,8 +899,7 @@ var GameAudio = (function () {
     // The braking-cue gates hold `now()` stamps from the closed clock too: left in
     // place, the new near-0 clock stays under them and BRAKE CUE is mute for
     // as long as the old context had run (#6886 row 3).
-    cueT = 0; driveCueT = 0;
-    signal.resetContext();
+    cueT = 0; driveCueT = 0;   // signal.resetContext() is createCtx's (once per rebuild)
     dbgAnalyser = null;    // ctx-bound; stopEngine() nulls it but this path inlines its own
                             // teardown, so without this a stale analyser on the closed ctx would
                             // survive and centroidHz() would read a dead node (latent: only
