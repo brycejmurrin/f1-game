@@ -732,6 +732,8 @@ test("query with a full-lap window matches the same props as no window", async (
   assert.equal(g.apex.query({ fromS: 100, toS: 100 + 2 * total, limit: 1 }).matched, all);
   const part = g.apex.query({ fromS: 0, toS: 300, limit: 1 }).matched;
   lt(part, all);
+  const wrapped = g.apex.query({ fromS: total - 200, toS: 200, limit: 1 }).matched;   // fromS > toS: still a window
+  gt(wrapped, 0); lt(wrapped, all);
 });
 
 // #7512 row 27: "use strict" is a directive only as the IIFE's first statement.

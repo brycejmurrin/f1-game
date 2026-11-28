@@ -4258,6 +4258,7 @@ __apex.rollout({ seconds: 6, input: { steer: 0, throttle: true } })
 //   minClearanceM, wallContacts, lapsCompleted, lastLapS,
 //   cornerMinSpeedKph:[{turn,minSpeedKph}], terminal:{done,reason,atS},
 //   samples:[{t,frac,speedKph,lateralM,gear}] }
+// When no tick ran (ran.ticks 0: a policy done at once), speedKph.min/max/mean and minClearanceM are null and `why` says so.
 ```
 
 `policy` implements the loop the real-time agent literature converges on: an LLM
