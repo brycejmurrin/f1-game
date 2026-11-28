@@ -10,7 +10,7 @@
  * diagnostics. Successful or genuinely empty plans retain the normal rules.
  *
  *   node tools/ci/selected-gate-verdict.mjs [--junit-root DIR] [--junit-in DIR] [--started-in DIR]
- *     reads DOWNLOAD_FAILED (the artifact download steps' outcome) and SELECT / SELECTED / GUARDS / DROPPED / CALLED / DRAFT / REUSED / REUSED_RUN
+ *     reads DOWNLOAD_FAILED (the artifact download steps' outcome) and SELECT / SELECTED / GUARDS / DROPPED / CALLED / DRAFT / EVENT / REUSED / REUSED_RUN
  *     / GROUP_ACCEPT / GROUP_RUNS / GROUP_WHY (dropped-group-runs.mjs: a separate run covered the dropped specs, #5480) from env
  *     and SHARDS (the select job's `shards` plan JSON: every spec it names must have a junit testcase, #5403; a REUSED
  *     verdict inherits that check: reuse-draft-selected.mjs requires the draft run's own verdict job, which applied it to
@@ -202,6 +202,7 @@ export function recoverLostJunit(ev, jobs, { planRows = null } = {}) {
  *   unrepresented?: string,
  *   called?: string,
  *   draft?: string,
+ *   event?: string,
  *   reused?: string, reusedRun?: string,
  *   groupAccept?: string, groupRuns?: string, groupWhy?: string,
  *   failedSpecs?: string[],
@@ -369,6 +370,13 @@ function judgeSpecs(input) {
         failedSpecs,
       };
     }
+    // A MANUAL DISPATCH HAS NO DROP COUNT (#7505 R2, run 46114816668): ci.yml's `sel` step is skipped on
+    // workflow_dispatch, so DROPPED arrives empty with `select` green and no selected leg run. Only that exact shape
+    // passes (with a warning); an empty count on pull_request, push, schedule or a Pages call still fails closed.
+    if (dropped === "" && String(input.event ?? "") === "workflow_dispatch" && selected === "skipped"
+      && String(input.reused ?? "") !== "true") {
+      return { ok: true, reason, warn: "a workflow_dispatch run skips the spec selection, so it has no dropped-spec count and ran no selected spec; this verdict proves nothing about the browser specs", infraRetry, failedSpecs };
+    }
     if (!droppedKnown) {
       return { ok: false, reason: `the plan's dropped-spec count is unreadable (DROPPED=${JSON.stringify(dropped)}, not a number) — failing closed; check the select job's 'dropped' output`, infraRetry: false, failedSpecs };
     }
@@ -468,6 +476,7 @@ function main(argv = process.argv.slice(2)) {
     unrepresented: process.env.UNREPRESENTED,
     called: process.env.CALLED,
     draft: process.env.DRAFT,
+    event: process.env.EVENT,
     reused: process.env.REUSED,
     reusedRun: process.env.REUSED_RUN,
     groupAccept: process.env.GROUP_ACCEPT,

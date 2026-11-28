@@ -428,3 +428,16 @@ test("#5802/#5334: a shard that ran nothing stays red, whatever its job conclude
   assert.equal(v.ok, false);
   assert.equal(v.reason, `selected specs success, but 1 planned spec(s) left no junit testcase in any shard: ${NEVER} — they did not run (or their upload was lost); re-run, never read it as a pass`);
 });
+
+test("#7507 member 2: an empty drop count passes on workflow_dispatch only (run 46114816668)", () => {
+  const input = { select: "success", selected: "skipped", guards: "success", dropped: "", called: "false", draft: "" };
+  const dispatch = selectedGateVerdict({ ...input, event: "workflow_dispatch" });
+  assert.equal(dispatch.ok, true, dispatch.reason);
+  assert.match(dispatch.warn, /workflow_dispatch/);
+  for (const event of ["pull_request", "push", "schedule", undefined]) {
+    assert.equal(selectedGateVerdict({ ...input, event }).ok, false, `empty DROPPED on ${event} fails closed`);
+  }
+  assert.equal(selectedGateVerdict({ ...input, event: "workflow_dispatch", selected: "success", evidence: { started: ["a-1"], junit: ["a-1"] } }).ok, false,
+    "a dispatch whose selected legs ran still needs a readable count");
+  assert.equal(selectedGateVerdict({ ...input, event: "workflow_dispatch", dropped: "?" }).ok, false, "only an EMPTY count is the dispatch shape");
+});

@@ -3138,6 +3138,8 @@ jobs:
           SHARDS: ${{ needs.select.outputs.shards }}
           CALLED: ${{ inputs.concurrency_key != '' }}
           DRAFT: ${{ github.event.pull_request.draft }}
+          # workflow_dispatch skips the `sel` step, so its empty DROPPED passes with a warning there only (#7507).
+          EVENT: ${{ github.event_name }}
           REUSED: ${{ needs.select.outputs.selected_reused }}
           REUSED_RUN: ${{ needs.select.outputs.selected_reused_run }}
           GROUP_ACCEPT: ${{ steps.group_runs.outputs.accept }}

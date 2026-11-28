@@ -24,10 +24,11 @@ const STATE_WORD = /^(landing|released)\b\s*/i;
  *  { owner: "-" | text, until: ISO | null }. The owner keeps a `landing`/`released` word (leaseWord reads it), so a
  *  reader still finds the session id in it. Pure. */
 export function handoffLease(body) {
-  const m = /```handoff\n([\s\S]*?)```/.exec(String(body || ""));
-  const line = m && /^owner:\s*(.+)$/m.exec(m[1]);
+  // CRLF bodies (#7505 R3) and a note after the until-time (`until <ISO> (renewed)`, R5) still read as the lease.
+  const m = /```handoff\r?\n([\s\S]*?)```/.exec(String(body || ""));
+  const line = m && /^owner:[ \t]*([^\r\n]+)/m.exec(m[1]);
   if (!line) return { owner: "-", until: null };
-  const u = /\s+until\s+(\S+)\s*$/.exec(line[1]);
+  const u = /\s+until\s+(\S+)(?:\s.*)?$/.exec(line[1].trimEnd());
   const until = u && Number.isFinite(Date.parse(u[1])) ? u[1] : null;
   return { owner: (u ? line[1].slice(0, u.index) : line[1]).trim() || "-", until };
 }
@@ -74,5 +75,7 @@ export function adoptedUnleased(body, comments, number) {
   if (!last || last.kind !== "adopt") return null;
   const id = String(last.session || "").replace(/^[^:]*:/, "");
   const { owner } = handoffLease(body);
-  return id && String(owner).includes(id) ? null : { session: last.session, at: last.at };
+  // A whole token (#7505 R4): adopter `session_1` is not named by an owner line that says `session_12`.
+  const esc = id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return id && new RegExp(`(?:^|[^\\w-])${esc}(?![\\w-])`).test(String(owner)) ? null : { session: last.session, at: last.at };
 }
