@@ -1,0 +1,1 @@
+Improved: An installed app opened online now waits at most 0.3 s (was 1 s) for a fresh page before it shows the saved one, so a repeat launch on a slow link starts sooner; a newer build still loads as soon as it arrives.
