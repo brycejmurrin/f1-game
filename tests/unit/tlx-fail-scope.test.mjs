@@ -244,7 +244,8 @@ function webkitSwitch({ ua, pin = null, ls = {} }) {
   const from = src.indexOf("      const isWebKit = ");
   const end = src.indexOf("      };\n", src.indexOf("const _latchWebKitGL = ")) + 9;
   assert.ok(from > 0 && end > from && end - from < 2500, "the WebKit kill-switch needles moved — check this test, not the code");
-  const ctx = vm.createContext({ ua, _glPin: pin,
+  // The sniff lives in the GLX facade (#7434): evaluate it under this UA, as the shell does before tlx.js.
+  const ctx = vm.createContext({ ua, GLX: facade(ua), _glPin: pin,
     localStorage: { getItem: (k) => (k in local ? local[k] : null), setItem: (k, v) => { local[k] = String(v); } } });
   vm.runInContext(src.slice(from, end) + "\n globalThis.r = { isWebKit, _webkitStayGL, _latchWebKitGL };", ctx, { filename: absSrc("js/render/three/tlx.js") });
   return { local, ...ctx.r };
@@ -347,4 +348,46 @@ test("A-P2W: on WebGPU every shadow map hints its unread R8 colour discard (vend
     assert.equal(sun.apexDiscardColor, want, ls === "0" ? "switch off: stored" : "bit 0 = the R8 colour");
     assert.equal(sun.apexDiscardDepth, undefined, "the depth IS the shadow map: never discarded");
   }
+});
+
+// #7434 (#7147 row 9): one home for the WebKit UA sniff, GLX.isWebKit in js/render/shared/glx-facade.js.
+// The base's copied sniff, verbatim (tlx.js / post.js before #7434), as the reference.
+const OLD = (ua) => /CriOS|FxiOS|EdgiOS/.test(ua) || (/Safari\//.test(ua) && !/Chrome\/|Chromium\/|Edg\//.test(ua));
+const UAS = {
+  iphoneSafari: ["Mozilla/5.0 (iPhone; CPU iPhone OS 27_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.0 Mobile/15E148 Safari/604.1", true],
+  iphoneChrome: ["Mozilla/5.0 (iPhone; CPU iPhone OS 27_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/141.0 Mobile/15E148 Safari/604.1", true],
+  iphoneFirefox: ["Mozilla/5.0 (iPhone; CPU iPhone OS 27_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) FxiOS/140.0 Mobile/15E148 Safari/605.1.15", true],
+  iphoneEdge: ["Mozilla/5.0 (iPhone; CPU iPhone OS 27_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) EdgiOS/140.0 Mobile/15E148 Safari/605.1.15", true],
+  macSafari: ["Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15", true],
+  desktopChrome: ["Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36", false],
+  desktopEdge: ["Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0", false],
+  androidChrome: ["Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0 Mobile Safari/537.36", false],
+  firefox: ["Mozilla/5.0 (X11; Linux x86_64; rv:140.0) Gecko/20100101 Firefox/140.0", false],
+  headless: ["Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/141.0.0.0 Safari/537.36", false],
+  empty: ["", false],
+};
+
+function facade(ua) {
+  const ctx = vm.createContext({ navigator: { userAgent: ua, maxTouchPoints: 0 }, localStorage: { getItem: () => null } });
+  vm.runInContext(read("js/render/shared/glx-facade.js") + "\n globalThis.G = GLX;", ctx, { filename: absSrc("js/render/shared/glx-facade.js") });
+  return ctx.G;
+}
+
+test("WebKit sniff: GLX.isWebKit gives the base's verdict for every UA", () => {
+  for (const [name, [ua, want]] of Object.entries(UAS)) {
+    assert.equal(OLD(ua), want, `reference ${name}`);
+    assert.equal(facade(ua).isWebKit, want, `GLX.isWebKit ${name}`);
+  }
+});
+
+test("WebKit sniff: no copy of the regex in js/render/three or js/render/glx (TLX and post.js read GLX.isWebKit)", () => {
+  const dirs = ["js/render/three", "js/render/glx"];
+  const hits = [];
+  for (const d of dirs) {
+    for (const f of fs.readdirSync(new URL(`../../${d}`, import.meta.url), { recursive: true })) {
+      if (!String(f).endsWith(".js")) continue;
+      if (/CriOS\|FxiOS\|EdgiOS/.test(read(`${d}/${f}`))) hits.push(`${d}/${f}`);
+    }
+  }
+  assert.deepEqual(hits, [], "the sniff's one home is js/render/shared/glx-facade.js");
 });

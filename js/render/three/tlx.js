@@ -250,8 +250,7 @@ const TLX = (function () {
       })();
       const _hasGpu = !!(typeof navigator !== "undefined" && navigator.gpu);
       const ua = (typeof navigator !== "undefined" && navigator.userAgent) || "";
-      const isWebKit = /CriOS|FxiOS|EdgiOS/.test(ua) ||
-        (/Safari\//.test(ua) && !/Chrome\/|Chromium\/|Edg\//.test(ua));
+      const isWebKit = (typeof GLX !== "undefined" && !!GLX.isWebKit);   // the one sniff: js/render/shared/glx-facade.js
       // The per-DEVICE kill switch for WebKit AUTO. tlxAutoGL above is per TAB
       // (sessionStorage), so an iPhone whose WebGPU fails would retry it on
       // every new tab; this localStorage marker sends AUTO on WebKit straight
