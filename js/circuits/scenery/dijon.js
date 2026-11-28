@@ -77,7 +77,8 @@
       const ridgeAt = (s, side, dist, ang, len, w, h, col) => {
         const a = anchor(K(s), side, dist);
         const x = a.c[0], z = a.c[2];
-        ridge(x, z, terrainYAt(x, z) - 1.5, ang, len, w, h, col);
+        const gy = terrainYAt(x, z);   // null off the ribbon: 0 - 1.5 floated both ridges ~22 m (#7292)
+        ridge(x, z, (gy != null ? gy : a.c[1]) - 1.5, ang, len, w, h, col);
       };
 
       // DRAPE — terrain-fitted flat decals: api.drape / api.drapeRun (engine,

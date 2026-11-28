@@ -101,7 +101,8 @@
         const a = anchor(k, side, dist);
         const x = a.c[0], z = a.c[2];
         if (onTrack(x, z, 10)) return;
-        ridge(x, z, terrainYAt(x, z) - h * 0.35, headingAt(k), len, w, h, col);
+        const gy = terrainYAt(x, z);   // null off the ribbon (#7292)
+        ridge(x, z, (gy == null ? a.c[1] : gy) - h * 0.35, headingAt(k), len, w, h, col);
       };
       // A single well-spaced specimen: jittered so a row never lines up.
       const specimen = (k, side, dist, seed) => {

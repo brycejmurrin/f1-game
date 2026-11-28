@@ -9,7 +9,7 @@
       const { K, out, MAT, n, pyMin, seat, track,
               addBox, addCyl, addPrism, addCone, addFrustum, addMountain, anchor, vadd, onTrack, hash, every,
               along, runoffApron, bowlSeatWall,
-              modelGroup, waterSurface, groundPatch, peak, bush, terrainYAt, hedge, grandstandEx, tower,
+              modelGroup, waterField, groundPatch, peak, bush, terrainYAt, hedge, grandstandEx, tower,
               pine, forestEdge,
               fence, guardrail, tyreWall, billboard, gantry, marshalPost, recordBarrier } = api;
 
@@ -30,7 +30,11 @@
       const { bankedKerbStrip } = api;
 
       for (const [i, s] of [0.30, 0.38, 0.46, 0.54, 0.62, 0.70, 0.78].entries()) {
-        waterSurface(K(s), 1, 310, [150, 0.8, 150], seaCol, {
+        // waterField, not one waterSurface box: a 150 m box is rejected WHOLE
+        // when any corner nears the lap, and north-sea-1/-2/-5 never landed
+        // (footprint-rejected baseline, #7292). Same 310-460 m band, ±75 m of
+        // lap, rejected per 25 m cell instead.
+        waterField(K(s), 1, 310, 460, 75, 25, seaCol, {
           id: `north-sea-${i}`,
         });
         groundPatch(K(s), 1, 225, [72, 0.5, 105], beachCol, {
@@ -362,7 +366,9 @@
         crowdCols: [orange, [1.00, 0.64, 0.10], [0.82, 0.20, 0.02]],
       });   // T11 L outside through Arena exit kink
 
-      for (const [idx, s, dist] of [[0, 0.34, 112], [1, 0.675, 118]]) {
+      // Terrace 0 at 126 m, not 112: at 112 its footprint was rejected every
+      // build and it never landed (footprint-rejected baseline, #7292).
+      for (const [idx, s, dist] of [[0, 0.34, 126], [1, 0.675, 118]]) {
         const a = anchor(K(s), 1, dist), b = [a.r, a.u, a.t];
         modelGroup(`zandvoort-beach-terrace-${idx}`, {
           center: vadd(a.c, a.u, 4.5),
@@ -434,7 +440,9 @@
         });
       }
 
-      for (const [idx, s] of [0.31, 0.43, 0.56, 0.69].entries()) {
+      // Surf 1 at 0.42, not 0.43: at 0.43 its footprint was rejected every
+      // build and it never landed (#7292).
+      for (const [idx, s] of [0.31, 0.42, 0.56, 0.69].entries()) {
         const a = anchor(K(s), 1, 258), b = [a.r, a.u, a.t];
         modelGroup(`zandvoort-surf-${idx}`, {
           center: vadd(a.c, a.u, 0.25),

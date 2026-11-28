@@ -472,11 +472,14 @@
       groundPatch(K(0.3860), -1, 114, slab(64, 210), DUST);
       tower(K(0.3700), -1, 64, 1.1, 16);
       tower(K(0.4020), -1, 64, 1.1, 16);
+      // Ground under a ridge: terrainYAt is null off the ribbon, and a bare
+      // `terrainYAt(..) - 2.2` then reads as 0 - 2.2 (#7292).
+      const groundAt = (a) => { const y = terrainYAt(a.c[0], a.c[2]); return y == null ? a.c[1] : y; };
       for (let i = 0; i < 5; i++) {
         const a = anchor(K(0.3600 + i * 0.0140), -1, 146);
         if (onTrack(a.c[0], a.c[2], 37)) continue;
         const ang = Math.atan2(a.t[2], a.t[0]);
-        ridge(a.c[0], a.c[2], terrainYAt(a.c[0], a.c[2]) - 2.2, ang,
+        ridge(a.c[0], a.c[2], groundAt(a) - 2.2, ang,
           62, 26, 4 + hash(i * 17) * 2.5, DUST);
       }
 
@@ -496,7 +499,7 @@
         // hole, so pre-check with the same margin and simply skip.
         if (onTrack(a.c[0], a.c[2], 37)) continue;
         const ang = Math.atan2(a.t[2], a.t[0]);
-        ridge(a.c[0], a.c[2], terrainYAt(a.c[0], a.c[2]) - 2.0, ang,
+        ridge(a.c[0], a.c[2], groundAt(a) - 2.0, ang,
           58, 24, 4.5 + hash(i * 13) * 3, DUST);
       }
       // Descent scrub past orbit (was 38–68 m on +1).

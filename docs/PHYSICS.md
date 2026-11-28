@@ -1350,6 +1350,46 @@ grip or racing-line read, 2026-11-10).
 | `js/track/tracks.js` | build LUT bake | **surface** | the producer itself (centreline curv[] bake) |
 | `js/track/scenery/build-props.js` | signboard side pick, pit-pass curvature, braking-zone lamp placement | **surface** | static scenery placement (`TrackBuildProps.build`) |
 
+### Token ledger — curvature by any route
+
+The table above counts `.curvature(` CALLS; a player-path read can also arrive as the cached field
+`c.kCur`, a racing-line read (`TrackLine.at` / `attackAt` / `pathK`), a direct LUT index (`track.curv[i]`,
+`lineRoadK`, `lineK`, `kPath`) or a bound alias (`const f = Tracks.curvature; f(s)`). So
+`tests/unit/curvature-channels.test.mjs` also pins, per file, the count of the bare tokens
+`kCur kPath lineRoadK lineK TrackLine. .curv[ curvature` on comment-stripped source (`TOKENS`). A file
+with hits must be a row of the table above or a bullet here; raising a count means editing `TOKENS` and
+the row or bullet that classifies the new hit. The player-force path — `js/physics/player-forces.js`,
+`js/physics/grip-steer.js`, `js/physics/wheel-state.js` — must carry ZERO hits (fixtures inject each route
+into a copy of `player-forces.js` and require red). Files with hits that are not table rows:
+
+- `js/agent/agentview-corners.js` — **broadcast-only** — the word sits in the agent help string; no read.
+- `js/camera/flyby-seq.js` — **broadcast-only** — the Flyby hero car exception (`TrackLine.at`), below.
+- `js/car/car-draw.js` — **broadcast-only** — AI front-wheel angle from `c.kCur`, inside `!c.human` (the `js/game.js` `kCur` row).
+- `js/physics/body-attitude.js` — **broadcast-only** — AI body roll from `c.kCur`; drawn only, the human branch reads its own `speed·yawRateCur` (the `js/game.js` `kCur` row).
+- `js/race/car-fields.js` — **surface** — the car-field schema names `kCur` as a field (reset to `undefined`); no read of its value.
+- `js/circuits/scenery/indianapolis.js` — **surface** — `lineK` is a local index into the scenery spline's knots, not the line LUT.
+- `js/render/glx/glx.js` — **surface** — `lineK` is the DRIVING LINE ribbon's uniform cache, a name collision.
+- `js/editor/insight.js` — **broadcast-only** — the track designer's insight panel reads the built `curv` LUT to draw corner bands in a menu.
+- `js/editor/scenery-preview.js` — **surface** — hands `Tracks.curvature` to `TrackPit.build` for an editor preview.
+- `js/track/core/line.js` — **surface** — the racing-line producer (`TrackLine` bakes `line`, `lineK`, `lineRoadK` from `curv`).
+- `js/track/core/pit.js` — **surface** — `straightRun` walks an injected `curvature` once per circuit to open the pit lane (the `js/race/pit-geom.js` row).
+- `js/track/core/spline.js` — **surface** — defines and exports `curvature` itself.
+- `js/learn-drills/aero.js` — **surface** — `TrackLine.at` seats the drill cars at `begin()` and places the braking-zone road strip; no per-frame read.
+- `js/learn-drills/charge.js` — **surface** — `TrackLine.at` seats the car once at `begin()` (placement, #6559 §1e rule 2); never read while driving.
+- `js/learn-drills/grip.js` — **surface** — the same one-shot `begin()` placement.
+- `js/learn-drills/harvest.js` — **surface** — the same one-shot `begin()` placement.
+- `js/learn-drills/lines.js` — **surface** — the same one-shot `begin()` placement.
+- `js/learn-drills/taper.js` — **surface** — the same one-shot `begin()` placement.
+- `js/learn-drills/telemetry.js` — **surface** — the same one-shot `begin()` placement.
+- `js/learn-drills/torque.js` — **surface** — the same one-shot `begin()` placement.
+- `js/learn-drills/tyre-heat.js` — **surface** — the same one-shot `begin()` placement.
+- `js/learn-drills/wake.js` — **surface** — the same one-shot `begin()` placement.
+
+The learn-door `TrackLine.at` reads #7251 named (drill grid placement, Aero road marking) moved with the drills
+into `js/learn-drills/`; `js/ui/learn-door.js` carries no token today. The drills' placement is the same kind
+of one-shot reset as the incident handback below: it writes the car's lateral seat before the drill's clock runs and
+no force, steer or grip input reads the line afterwards (`tests/unit/curvature-contract-vm.test.mjs` drives the Lines drill).
+
 A module that consumes only REPORTS other code already produced is not in this
 table, because it has no curvature site to classify — the first-run coach marks
 (`js/ui/onboard.js`) are the worked example: they read `BrakeCue.debug().urgency`,

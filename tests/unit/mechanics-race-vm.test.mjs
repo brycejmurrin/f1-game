@@ -261,7 +261,7 @@ test("a flipped human car handed back from a takeover is demoted once and is not
   const mk = (s, human) => ({ px: 0, pz: 0, head: 0, speed: 40, s, x: 0, vLat: 0, yawRateCur: 0, prog: s, finished: false, retired: false, human });
   const cars = [mk(100, true), mk(103, false)];
   let sim, rescued = 0;
-  const G = { cars, player: cars[0], track: { total: 5000 }, PACE: 1, vTop: () => 72, smp: {},
+  const G = { cars, player: cars[0], track: { total: 5000 }, PACE: 1, pace: { k: Math.max(1, 0.05) }, vTop: () => 72, smp: {},
     trackFrom: () => ({ s: 100, x: 0 }), worldFromTrack: () => ({ x: 0, z: 0 }),
     rescuePlayer: (c) => { rescued++; sim.release(c); } };   // game.js rescuePlayer(): incidentSim.release(c) first
   sim = IncidentSim.create(G);
