@@ -29,7 +29,7 @@ const IncidentSim = (function () {
   let _forced = 0;          // one-shot manual trigger requested via __apex
 
   // Closing speeds scale with OVERALL SPEED (PACE is a ground-speed scale), so
-  // both promotion thresholds are applied ×Math.max(G.PACE, 0.05) at their
+  // both promotion thresholds are applied ×G.pace.k (max(PACE, 0.05)) at their
   // comparison sites — un-scaled, pace 10 turned every midfield tap into a
   // launch and pace 0.5 never promoted a genuine shunt.
   const R3_CAR_V = 15;         // m/s closing (at PACE 1) → resolve via Rapier
@@ -141,7 +141,7 @@ const IncidentSim = (function () {
   function notifyCar(a, b, relV) {
     if (!a || !b) return;
     if (!active()) { _rejected.inactive++; return; }
-    if (!fin(relV) || relV < R3_CAR_V * Math.max(G.PACE, 0.05)) { _rejected.belowThreshold++; return; }
+    if (!fin(relV) || relV < R3_CAR_V * G.pace.k) { _rejected.belowThreshold++; return; }
     const cars = G.cars; if (!cars) return;
     const ia = cars.indexOf(a), ib = cars.indexOf(b);
     if (ia < 0 || ib < 0) return;
@@ -196,7 +196,7 @@ const IncidentSim = (function () {
       const relV = maxRelV.get(root) || 0;
       let kind;
       if (idxs.length >= C1_MIN_CARS) { if (!_c1) { _rejected.disabledKind++; continue; } kind = "c1"; }
-      else if (relV >= R2_CAR_V * Math.max(G.PACE, 0.05)) { if (!_r2) { _rejected.disabledKind++; continue; } kind = "r2"; }
+      else if (relV >= R2_CAR_V * G.pace.k) { if (!_r2) { _rejected.disabledKind++; continue; } kind = "r2"; }
       else { if (!_r3) { _rejected.disabledKind++; continue; } kind = "r3"; }
       startIncident(kind, idxs, relV, dt);
     }
@@ -497,7 +497,7 @@ const IncidentSim = (function () {
       // Pace-scaled restore floor, capped at vTop() — the exact sibling of the
       // rescue floors in game.js; a bare 14 was 39% of top speed at pace 0.5
       // and effectively top speed at pace 0.2.
-      c.speed = Math.min(G.vTop(), Math.max(fin(c.speed) ? c.speed : 0, 14 * Math.max(G.PACE, 0.05)));
+      c.speed = Math.min(G.vTop(), Math.max(fin(c.speed) ? c.speed : 0, 14 * G.pace.k));
       c.head = Math.atan2(G.smp.t[0], G.smp.t[2]);
       if (G.worldFromTrack) {
         const w = G.worldFromTrack(c.s, c.x);

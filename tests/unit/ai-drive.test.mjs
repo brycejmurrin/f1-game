@@ -22,11 +22,21 @@ function load() {
   vm.runInContext(readFileSync(join(ROOT, "js/physics/ai-drive.js"), "utf8"), ctx,
     { filename: absSrc("js/physics/ai-drive.js") });
   S = vm.runInContext("AiStart", ctx);
+  AS = vm.runInContext("AiStrategy", ctx);
   return vm.runInContext("AiDrive", ctx);
 }
 
-let S;
+let S, AS;
 const A = load();
+
+// #7247: the strategy forwarders and the STRAT getter are gone; callers use AiStrategy.* directly.
+test("AiDrive no longer forwards AiStrategy (pitNow, STRAT and the rest are AiStrategy's alone)", () => {
+  for (const k of ["pitNow", "STRAT", "tyreClass", "tyrePace", "degCost", "splitStints", "stintPlan", "compoundFor", "strategyTemper", "tasteRoll", "wornPays"]) {
+    assert.equal(A[k], undefined, `AiDrive.${k} is gone`);
+    assert.notEqual(AS[k], undefined, `AiStrategy.${k} is the one home`);
+  }
+  assert.equal(A.pitNow === undefined && A.STRAT === undefined, true);
+});
 
 const mid = { craft: 0.75, awareness: 0.75, experience: 0.75, skill: 0.97 };
 const ace = { craft: 0.96, awareness: 0.92, experience: 1.0, skill: 0.99 };
@@ -1208,15 +1218,15 @@ test("PhysicsConsts.DIFF.err is a monotonic ladder: easy >= normal >= hard = 1",
 });
 
 test("tyres: sprints start on softs, long races mix; a soft is up and fades, a hard is down and lasts", () => {
-  assert.equal(A.tyreClass(0.5, 3), "soft"); assert.equal(A.tyreClass(0.9, 3), "medium");
-  assert.equal(A.tyreClass(0.9, 25), "hard"); assert.equal(A.tyreClass(0.1, 25), "soft");
-  assert.ok(A.tyrePace("soft", 0) > A.tyrePace("medium", 0) && A.tyrePace("medium", 0) > A.tyrePace("hard", 0));
-  assert.ok(A.tyrePace("soft", 12) < A.tyrePace("hard", 12), "by lap 12 the hard-starter is ahead on pace: a crossover");
-  assert.ok(A.tyrePace("soft", 8) > A.tyrePace("hard", 8), "and at lap 8 the soft still is");
-  assert.ok(A.tyrePace("soft", 60) >= 1.004 - 0.025 - 1e-9, "deg is capped");
-  assert.equal(A.tyrePace("nonsense", 0), 1, "an unknown class is a medium");
+  assert.equal(AS.tyreClass(0.5, 3), "soft"); assert.equal(AS.tyreClass(0.9, 3), "medium");
+  assert.equal(AS.tyreClass(0.9, 25), "hard"); assert.equal(AS.tyreClass(0.1, 25), "soft");
+  assert.ok(AS.tyrePace("soft", 0) > AS.tyrePace("medium", 0) && AS.tyrePace("medium", 0) > AS.tyrePace("hard", 0));
+  assert.ok(AS.tyrePace("soft", 12) < AS.tyrePace("hard", 12), "by lap 12 the hard-starter is ahead on pace: a crossover");
+  assert.ok(AS.tyrePace("soft", 8) > AS.tyrePace("hard", 8), "and at lap 8 the soft still is");
+  assert.ok(AS.tyrePace("soft", 60) >= 1.004 - 0.025 - 1e-9, "deg is capped");
+  assert.equal(AS.tyrePace("nonsense", 0), 1, "an unknown class is a medium");
   // The three fresh offsets are zero-mean over a mixed field.
-  assert.ok(Math.abs(A.tyrePace("soft", 0) + A.tyrePace("hard", 0) - 2 * A.tyrePace("medium", 0)) < 1e-9);
+  assert.ok(Math.abs(AS.tyrePace("soft", 0) + AS.tyrePace("hard", 0) - 2 * AS.tyrePace("medium", 0)) < 1e-9);
 });
 
 // verify-physics #14: tyrePace takes laps DONE, and c.lap counts line
@@ -1224,8 +1234,8 @@ test("tyres: sprints start on softs, long races mix; a soft is up and fades, a h
 // off-by-one). Fed c.lap, the wear-off AI carried one lap of deg from the start.
 test("AiPace.post (moved from game.js, #7258) feeds tyrePace laps done (c.lap - 1), not the crossing count", () => {
   const game = readFileSync(join(ROOT, "js/physics/ai-pace.js"), "utf8");
-  assert.match(game, /AiDrive\.tyrePace\(c\.tyreClass, Math\.max\(0, c\.lap - 1\)\)/);
-  assert.doesNotMatch(game, /AiDrive\.tyrePace\(c\.tyreClass, c\.lap\)/);
+  assert.match(game, /AiStrategy\.tyrePace\(c\.tyreClass, Math\.max\(0, c\.lap - 1\)\)/);
+  assert.doesNotMatch(game, /AiStrategy\.tyrePace\(c\.tyreClass, c\.lap\)/);
 });
 
 /* ── a straight is defendable ──────────────────────────────────────────────

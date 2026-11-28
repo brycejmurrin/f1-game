@@ -64,7 +64,7 @@ function load(over = {}) {
   const G = { cars, player: cars[0], track: { total: 5000 },
               // Promotion thresholds and the rescue floor are pace-scaled now,
               // so the façade stub carries the speed scale like the real G.
-              PACE: 1, vTop: () => 72,
+              PACE: 1, pace: { k: Math.max(1, 0.05) }, vTop: () => 72,
               trackFrom: over.trackFrom || (() => ({ s: 100, x: 0 })),
               worldFromTrack: over.worldFromTrack || (() => ({ x: 0, z: 0 })),
               rescuePlayer: () => {}, smp: {} };
@@ -375,7 +375,7 @@ test("an AI car spun round but still sliding forwards is handed back driving for
   vm.runInContext(readFileSync(join(ROOT, "js/physics/contact-geometry.js"), "utf8"), ctx, { filename: absSrc("js/physics/contact-geometry.js") });
   vm.runInContext(SRC + "\nglobalThis.IncidentSim = IncidentSim;", ctx);
   const car = { human: false, s: 500, x: 0, speed: 40, vLat: 0, yawRateCur: 0, head: 0, px: 0, pz: 500, prog: 500 };
-  const G = { cars: [car], track: { total: 5000 }, smp: {}, PACE: 1, vTop: () => 72, lapsTarget: 5, raceT: 10,
+  const G = { cars: [car], track: { total: 5000 }, smp: {}, PACE: 1, pace: { k: Math.max(1, 0.05) }, vTop: () => 72, lapsTarget: 5, raceT: 10,
     trackFrom(px, pz) { return { s: pz, x: -px }; }, worldFromTrack(s, x) { return { x: -x, z: s }; } };
   const IS = ctx.IncidentSim.create(G);
   IS.notifyWall(car, 1, 999);

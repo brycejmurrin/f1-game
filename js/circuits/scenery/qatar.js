@@ -258,7 +258,9 @@
             [0.22, 10, 10], WIN_COOL, b);
           addBox(stage, vadd(rcBase, a.u, 28.4), [14, 0.7, 14], WHITE, b);
           addBox(stage, vadd(rcBase, a.u, 30.0), [7, 3.2, 7], [0.82, 0.84, 0.86], b);
-          addCyl(stage, vadd(rcBase, a.u, 31.8), 0.18, 7, STEEL, 4, b);
+          // Mast base on the cabin roof (30 + 3.2/2 = 31.6; addCyl is base-anchored):
+          // at 31.8 it stood 0.2 m clear of it (ground-audit unsupported, #7292).
+          addCyl(stage, vadd(rcBase, a.u, 31.6), 0.18, 7, STEEL, 4, b);
           for (let g = 0; g < 25; g++) {
             const dz = (g - 12) * (PIT_LEN / 25);
             const col = (g % 2) ? [0.16, 0.16, 0.18] : [0.26, 0.26, 0.28];

@@ -1,7 +1,7 @@
 /* ai-strategy.test.mjs — the field's race strategy, in a VM.
  *
- * AiDrive.stintPlan decides what every AI car does about a worn tyre, and
- * AiDrive.pitNow decides when to ignore that plan. Both are pure, so all of it
+ * AiStrategy.stintPlan decides what every AI car does about a worn tyre, and
+ * AiStrategy.pitNow decides when to ignore that plan. Both are pure, so all of it
  * is checkable without a browser.
  *
  * The four things that actually matter, in order:
@@ -42,9 +42,9 @@ function load() {
                    "js/car/parts.js", "js/physics/tyre-model.js", "js/physics/ai-strategy.js", "js/physics/ai-start.js", "js/physics/ai-drive.js"]) {
     vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: absSrc(f) });
   }
-  return { A: vm.runInContext("AiDrive", ctx), T: vm.runInContext("TyreModel", ctx) };
+  return { A: vm.runInContext("AiStrategy", ctx), D: vm.runInContext("AiDrive", ctx), T: vm.runInContext("TyreModel", ctx) };
 }
-const { A, T } = load();
+const { A, D, T } = load();
 
 // Pit loss as a fraction of a lap: the 23.6 s measured at Monza over a ~160 s lap.
 const PIT_LOSS_LAPS = 23.6 / 160;
@@ -485,13 +485,13 @@ test("firstLife shortens the FIRST stint only: a re-plan runs the set that is on
 // that it is wider than what racing traffic uses, which is the whole point.
 test("the lane's follow distance is a car length plus air, and wider than the racing one", () => {
   const CAR_L = 4.8;
-  const lane = A.laneFollow();
+  const lane = D.laneFollow();
   assert.ok(lane > CAR_L, `a held gap must clear a car length (${lane} vs ${CAR_L})`);
   // Racing follow is a time headway (AiDrive.followGap: s0 + v·T), so the
   // like-for-like figure is at the lane's QUEUE speed — a crawl to rest — where
   // the racing gap is its s0, a metre of air: the lane holds more than that.
   const t = { craft: 1, awareness: 1, experience: 1, skill: 1, consistency: 1 };
-  const atCrawl = A.followGap(t, false, 0, 0, null, 0, null, null);
+  const atCrawl = D.followGap(t, false, 0, 0, null, 0, null, null);
   assert.ok(lane > atCrawl,
     `the lane holds more than racing traffic does at a crawl (${lane} vs ${atCrawl.toFixed(2)})`);
   // …and it is not so wide that a short lane cannot hold a queue: five cars at

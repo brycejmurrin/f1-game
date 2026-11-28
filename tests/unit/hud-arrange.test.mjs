@@ -166,8 +166,8 @@ function editor(pieceId = "piece", options = {}) {
   const key = (sn = set, pn = profile) => sn + ':' + pn;
   const get = (id, sn, pn) => ({ x: 0, y: 0, s: 100, ...values.get(key(sn, pn)) });
   const layout = { ELEMENTS: [[pieceId, 'Piece', '#' + pieceId]], shown: () => set, profile: () => profile, get,
-    set(id, v, sn, pn, live) {
-      writes.push({ id, v: { ...v }, sn, pn, live: !!live });
+    set(id, v, sn, pn, live, paintOnly) {
+      writes.push({ id, v: { ...v }, sn, pn, live: !!live, paintOnly: !!paintOnly });
       if (live) dirty = true; else { stats.saves++; dirty = false; }
       const stored = options.snap ? Object.fromEntries(Object.entries(v).map(([k,n]) => [k, Math.round(n)])) : v;
       values.set(key(sn, pn), { ...get(id, sn, pn), ...stored });
@@ -204,7 +204,7 @@ function editor(pieceId = "piece", options = {}) {
   const policy = visibilityPolicy(elements, preferences, rows, { window: viewport, root: {},
     getComputedStyle: () => ({ getPropertyValue: key => options.insets?.[key] || '0px' }) });
   Object.assign(layout, { cardSizing: policy.cardSizing, colors: policy.colors, relativeSize: policy.relativeSize, LIM: policy.LIM, visibilityIds: policy.visibilityIds, visibility: policy.visibility, setVisibility: policy.setVisibility,
-    screenBounds: policy.screenBounds, holdArrangePreview(on) { options.onPreviewHold?.(on, ids); }, fit() {} });
+    screenBounds: policy.screenBounds, holdArrangePreview(on) { options.onPreviewHold?.(on, ids); }, fit() { stats.fits = (stats.fits || 0) + 1; } });
   if (options.hidden) ids.get(pieceId).hidden = true;
   const ctx = { document: doc, window: viewport,
     RetiredCard: options.previewFinish && { preview: on => options.previewFinish(on, ids) },
@@ -250,8 +250,12 @@ test('editor: a drag paints every frame but saves once, and reads layout only at
     assert.equal(e.writes.slice(painted).every((w) => w.live), true, gesture + ': every frame is a live paint');
     assert.equal(e.stats.saves, 0, gesture + ': no storage write while the finger is down');
     assert.equal(e.stats.rects, rects, gesture + ': no forced layout read while the finger is down');
+    // #7239: HudLayout.set's own fit() (rect reads, getComputedStyle) is skipped on a frame and run once after.
+    assert.equal(e.writes.slice(painted).every((w) => w.paintOnly), true, gesture + ': every frame skips HudLayout.fit');
+    const fits = e.stats.fits || 0;
     if (gesture === 'pinch') { e.fire('pointerup', { pointerId: 2 }); assert.equal(e.stats.saves, 0, 'one finger still holds the piece'); }
     e.fire('pointerup');
+    assert.ok((e.stats.fits || 0) > fits || !e.writes.at(-1).paintOnly, gesture + ': the gesture end runs the owed fit');
     assert.equal(e.stats.saves, 0, gesture + ': the edit remains a preview after the finger lifts');
     e.api.setEditing(false);
     assert.equal(e.stats.saves, 1, gesture + ': Apply commits the session once');

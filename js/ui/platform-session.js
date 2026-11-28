@@ -2,6 +2,10 @@
    create(G, deps) exposes staged wiring so entry boot order stays explicit. */
 const PlatformSession = (function () {
 "use strict";
+// The one activation table.
+function isActivation({ type: t, key: k, pointerType: p }) {
+  return t === "keydown" ? k !== "Escape" : t === "pointerdown" ? p === "mouse" : t === "pointerup" ? p !== "mouse" : t === "touchend" || t === "click";
+}
 function create(G, deps) {
 const { $, els, store } = G;
 const { canvas, raceWakeLock, disarmProbeOnLeave, cancelMirrorPrep, setPaused, ensureNet, settingsBack, closeSettings, showTouchControls, refreshGearsBtn, paintSteer, openSettingsPage } = deps;
@@ -457,20 +461,9 @@ function firstGesture() {
 // A keyboard-only player never sends pointerdown: keydown (bar Escape, which is not
 // activation-triggering — html.spec.whatwg.org/#activation-triggering-input-event) and
 // click unlock audio too. One shared one-shot flag; every listener unhooks together.
-// ACTIVATION, NOT FIRST CONTACT: a FINGER's pointerdown is not activation-triggering
-// (only a mouse's is; touch activates on pointerup / touchend). Spending the one-shot
-// on it ran G.radio.unlock() outside a user activation, so WebKit refused the
-// priming speak() and the tap's own click, arriving after the listeners had
-// unhooked, never retried: every phone flyby, radio call and race-control line was
-// then silent (WebAudio kept working — engine.js resumes on its own touchend).
+// ACTIVATION, NOT FIRST CONTACT: a finger's pointerdown is not one (WebKit then refuses the priming speak()).
 let gestured = false;
 const GESTURE_EVTS = ["pointerdown", "pointerup", "touchend", "keydown", "click"];
-function isActivation(e) {
-  if (e.type === "keydown") return e.key !== "Escape";
-  if (e.type === "pointerdown") return e.pointerType === "mouse";
-  if (e.type === "pointerup") return e.pointerType !== "mouse";
-  return true;   // touchend, click
-}
 function onFirstGesture(e) {
   if (gestured || !isActivation(e)) return;
   gestured = true;
@@ -484,6 +477,6 @@ for (const t of GESTURE_EVTS) document.addEventListener(t, onFirstGesture, true)
 
 return { wireFirstGesture, paintBuild, wireInstall, wirePhone, paintTiltCalibration, wireLifecycle, initInput };
 }
-  return { create };
+  return { create, isActivation };
 })();
 Object.freeze(PlatformSession);

@@ -27,7 +27,7 @@ function solver() {
     DebrisWorld: { active: () => false, carImpact() {} } });
   for (const file of ["js/core/mat4.js", "js/physics/ai-start.js", "js/physics/ai-drive.js", "js/physics/contact-geometry.js", "js/physics/collide.js"])
     vm.runInContext(readFileSync(join(ROOT, file), "utf8"), ctx, { filename: absSrc(file) });
-  const G = { track: { total: 6000 }, player: null, netPlay: { owns: () => false }, PACE: 1, raceT: 0,
+  const G = { track: { total: 6000 }, player: null, netPlay: { owns: () => false }, PACE: 1, pace: { k: Math.max(1, 0.05) }, raceT: 0,
     wrapS: (s) => (s % 6000 + 6000) % 6000, worldFromTrack: (s, x) => ({ x, z: s }) };
   return { G, fx, s: vm.runInContext("Collide", ctx).create(G, (a, b, v) => fx.push([a.id, b.id, v])) };
 }

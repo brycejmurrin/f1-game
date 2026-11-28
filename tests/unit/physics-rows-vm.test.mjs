@@ -75,7 +75,7 @@ test("a lap counted under a takeover resets the player's sector clock and keeps 
                        lap: 3, lapTime: 80, finished: false, retired: false, human: true, isPlayer: true, local: true });
   const cars = [mk(4990), { ...mk(4993), human: false, isPlayer: false, local: false }];
   let footS = 4990;   // where trackFrom pins the Rapier body: before the line, then past it
-  const G = { cars, player: cars[0], track: { total: 5000 }, PACE: 1, vTop: () => 72, lapsTarget: 10, raceT: 100,
+  const G = { cars, player: cars[0], track: { total: 5000 }, PACE: 1, pace: { k: Math.max(1, 0.05) }, vTop: () => 72, lapsTarget: 10, raceT: 100,
               sectorIdx: 2, sectorStartT: 55,   // the player was in S3, split clock running
               trackFrom: () => ({ s: footS, x: 0 }), worldFromTrack: () => ({ x: 0, z: 0 }),
               rescuePlayer: () => {}, smp: {} };

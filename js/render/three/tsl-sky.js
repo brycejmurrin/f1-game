@@ -512,6 +512,13 @@
       C.dead = true; C.filling = false; D.cacheOn.value = 0;
       if (cacheWarmPending) { cacheRetireOwed = true; return; }
       cacheRetired = true; cacheRetireOwed = false;
+      // C.tex stays bound in the sky fragment: point it at a 1x1 placeholder first so a
+      // later bind cannot lazily re-create the disposed 768² RGBA16F target (tsl-gi own()).
+      try {
+        const ph = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1);
+        ph.colorSpace = THREE.NoColorSpace; ph.needsUpdate = true;
+        C.tex.value = ph; C.ph = ph;
+      } catch (_) { /* dispose proceeds regardless */ }
       for (const resource of [...C.rts, C.geo, C.mat]) {
         try { resource.dispose(); } catch (_) { /* retire the remaining resources too */ }
       }
@@ -608,7 +615,7 @@
     }
     function cacheState() {
       return C ? { size: C.S, u0: C.U0, on: D.cacheOn.value, valid: C.valid, filling: C.filling, band: C.band,
-        fills: C.fills, bands: C.bands, maxOff: +C.maxOff.toFixed(4), dead: C.dead } : null;
+        fills: C.fills, bands: C.bands, maxOff: +C.maxOff.toFixed(4), dead: C.dead, tex: C.tex.value } : null;
     }
     function dispose() { retireCache(); }
     // A steady sky still animates clouds and dithering as the clock advances.

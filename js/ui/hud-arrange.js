@@ -405,19 +405,27 @@ const HudArrange = (() => {
       HudLayout.set(id, adopted, context.set, context.profile, true);
       return adopted;
     }
-    /* A gesture frame paints only (#5031): no storage write, no layout read. The
-       clash marks, the strip's slot and the one save wait for flush() at the end. */
-    function paint() {
+    /* A gesture frame paints only (#5031, #7239): no storage write, no layout read; HudLayout's
+       fit() (edge clamp, phone pack) is owed. Any other paint() runs it: the clash marks, the strip's
+       slot and the one save wait for flush() / pointerup at the end. */
+    let fitOwed = false;
+    function paint(frame) {
       if (raf) {
         if (typeof cancelAnimationFrame === "function") cancelAnimationFrame(raf);
         else clearTimeout(raf);
       }
       raf = 0;
       const p = pending; pending = null;
-      if (!p) return;
-      const e = HudLayout.set(p.id, p.v, p.set, p.profile, true);
+      const live = frame === true;
+      if (!p) {
+        if (fitOwed && !live) { fitOwed = false; HudLayout.fit(); }
+        return;
+      }
+      const e = HudLayout.set(p.id, p.v, p.set, p.profile, true, live);
+      fitOwed = live;
       if (nameEl && e && p.id === selected && metric === "s") nameEl.textContent = sizeLabel(p.id, e.s);
     }
+    const paintFrame = () => paint(true);
     function flush() { paint(); }
     /* Bind queued edits to the layout visible when the gesture started. */
     function queue(id, v) {
@@ -426,7 +434,7 @@ const HudArrange = (() => {
       pending = { id, set: context.set, profile: context.profile,
         v: Object.assign(pending ? pending.v : {}, v) };
       if (raf) return;
-      raf = (typeof requestAnimationFrame === "function" ? requestAnimationFrame : (fn) => setTimeout(fn, 16))(paint);
+      raf = (typeof requestAnimationFrame === "function" ? requestAnimationFrame : (fn) => setTimeout(fn, 16))(paintFrame);
     }
     /* HIDDEN PIECES STAY REACHABLE WHILE ARRANGING. body[data-hud-hide] hides a
        piece with display:none, so a piece hidden here (or earlier in SETTINGS)

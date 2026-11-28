@@ -292,7 +292,7 @@ const Collide = (() => {
     // shipped slider default so a default-pace hit scores exactly what it always did: the
     // same shunt at OVERALL SPEED min/max used to score 0.36 / 1.0 (wall strikes: #4947).
     const sevRef = Math.pow(1.06, -3);   // fixed at notch 11, the pace used to calibrate impacts
-    const sevV = (v) => v * (sevRef / Math.max(G.PACE, 0.05));
+    const sevV = (v) => v * (sevRef / G.pace.k);
     Log.info("game", "Collide.create");
     const wrapS = G.wrapS;
     const incidentSim = IncidentSim;   // static owns()/notifyCar() — one instance per page
@@ -395,7 +395,7 @@ const Collide = (() => {
       if (!(gain > 0)) return;
       const w1 = hb.omega + dw, rot = hb.invInertia > 0 ? (w1 * w1 - hb.omega * hb.omega) / hb.invInertia : 0;
       if (!((v1 * v1 - v0 * v0) / hb.invMass + rot > 0)) return;
-      const cap = hb.invMass * (1 + CG.bumpRestitution(j.closing)) * CG.humanPuntCap() * Math.max(G.PACE, 0.05) / (hb.invMass + ob.invMass);
+      const cap = hb.invMass * (1 + CG.bumpRestitution(j.closing)) * CG.humanPuntCap() * G.pace.k / (hb.invMass + ob.invMass);
       const give = punt(h, gain, cap);
       if (give >= gain) return;
       const f = give / gain;
@@ -695,7 +695,7 @@ const Collide = (() => {
             // per STEP across the passes: punt(), #5894) while the AI behind pays
             // its whole share (54 -> ~0 m/s in one tick): momentum is not conserved
             // on purpose, the player is never launched. Hard hits go to Rapier.
-            const capV = CG.humanPuntCap() * Math.max(G.PACE, 0.05);
+            const capV = CG.humanPuntCap() * G.pace.k;
             if (sgn >= 0) {
               if (iB) b.speed = floorFwd(b, b.speed - iB * jImp);
               if (iA) a.speed += a.human ? punt(a, iA * jImp, iA * (1 + e) * capV / iSum) : iA * jImp;
@@ -806,7 +806,7 @@ const Collide = (() => {
       for (let i = 0; i < ranked.length; i++) { const c = ranked[i]; if (c.human && !ownsPose(c)) c._puntGot = 0; }
       // Side-rub speed loss for this step, in m/s: a deceleration (ContactGeometry.rubDecel, standard scale x PACE)
       // times the step, so the headless harness's arbitrary dt scrubs per second.
-      const rubScrub = CG.rubDecel(!!track.street) * Math.max(G.PACE, 0.05) * (dt || FIXED_DT);   // standard-scale decel x PACE = ground m/s^2
+      const rubScrub = CG.rubDecel(!!track.street) * G.pace.k * (dt || FIXED_DT);   // standard-scale decel x PACE = ground m/s^2
       // Tiny fields: all-pairs is fine and avoids bucket rebuild cost. Larger
       // fields (MP / expanded AI) use arc buckets so pairContact stays O(n·k).
       const useBuckets = ranked.length > 12;
