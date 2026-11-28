@@ -270,7 +270,7 @@ const GarageCrew = (function () {
     _m[12] = tx; _m[13] = ty; _m[14] = tz; _m[15] = 1;
     return _m;
   }
-  const ease = (x) => { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); };
+  const ease = (x) => M4.smoothstep(x);
 
   /** Where everyone stands for a pose: pure, so it is testable. `cam` is the
    *  side of the bay the camera stands on (sign of the eye's x). */

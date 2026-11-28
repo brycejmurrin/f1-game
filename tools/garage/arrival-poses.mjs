@@ -23,7 +23,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 
 export function loadArrival() {
   const ctx = vm.createContext({});
-  for (const f of ['js/garage/crew-draw.js', 'js/garage/arrival.js', 'js/track/core/pit.js']) {
+  for (const f of ['js/core/mat4.js', 'js/garage/crew-draw.js', 'js/garage/arrival.js', 'js/track/core/pit.js']) {
     vm.runInContext(readFileSync(resolve(ROOT, f), 'utf8'), ctx, { filename: f });
   }
   return { Arrival: vm.runInContext('GarageArrival', ctx), bay: vm.runInContext('TrackPit.BAY', ctx) };

@@ -3,8 +3,8 @@
 const GarageCrewDraw = (function () {
   "use strict";
   const acc = () => ({ pos: [], nrm: [], col: [], mat: [], idx: [] });
-  // Smoothstep, clamped. The arrival shutter and the service phases share it.
-  const ease = (x) => { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); };
+  // Smoothstep, clamped (M4.smoothstep). The arrival shutter and the service phases share it.
+  const ease = (x) => M4.smoothstep(x);
   // Yaw about Y, then an optional local X tilt. rx 0 is a prop on the bay;
   // the service jack's pump is the tilt. Column-major, written into m.
   function place(m, x, y, z, yaw, rx = 0) {

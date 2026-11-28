@@ -3,10 +3,13 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { absSrc } from '../helpers/abs-src.mjs';
+import { withM4 } from '../helpers/mat4-vm.mjs';
 import { fnSource } from '../helpers/fn-source.mjs';
 import { makeDom } from '../helpers/mini-dom.mjs';
 import { gameSource } from '../helpers/game-source.mjs';
-const context = vm.createContext({});
+const context = withM4(vm.createContext({}));
+vm.runInContext(readFileSync(new URL('../../js/garage/experience.js', import.meta.url), 'utf8'), context, { filename: absSrc('js/garage/experience.js') });
+const Experience = vm.runInContext('GarageExperience', context);
 vm.runInContext(readFileSync(new URL('../../js/garage/crew-draw.js', import.meta.url), 'utf8'), context, { filename: absSrc('js/garage/crew-draw.js') });
 vm.runInContext(readFileSync(new URL('../../js/garage/arrival.js', import.meta.url), 'utf8'), context, { filename: absSrc('js/garage/arrival.js') });
 // The Blender rigs' samples (LAZY_RACE): loaded as the game's idle prefetch / garage entry would.
@@ -694,7 +697,7 @@ function garageEntryRegressionHarness() {
     reducedMotion: () => false,
   };
   vm.createContext(c);
-  vm.runInContext(readFileSync(new URL('../../js/garage/crew-draw.js', import.meta.url), 'utf8'), c, { filename: absSrc('js/garage/crew-draw.js') });
+  withM4(c); vm.runInContext(readFileSync(new URL('../../js/garage/crew-draw.js', import.meta.url), 'utf8'), c, { filename: absSrc('js/garage/crew-draw.js') });
   vm.runInContext(introArrivalSource, c);
   vm.runInContext(readFileSync(new URL('../../js/data/garage-departure-motion.js', import.meta.url), 'utf8'), c, { filename: absSrc('js/data/garage-departure-motion.js') });
   const clockStart = introCameraSource.indexOf('let driveOut = null;');
@@ -1562,7 +1565,7 @@ test('the tuner binds the camera, shot-length and after-race controls; CUSTOM re
 test('the extra tuner rows are built from tables, once, after GARAGE ANGLE and FIELD OF VIEW', () => {
   const dom = makeDom(), doc = dom.document;
   const ctx = vm.createContext({ document: doc, GarageScene: { MOODS: { shipped: {}, goldenhour: {}, night: {} } } });
-  for (const f of ['js/garage/crew-draw.js', 'js/garage/arrival.js', 'js/garage/arrival-rows.js']) vm.runInContext(readFileSync(new URL('../../' + f, import.meta.url), 'utf8'), ctx, { filename: absSrc(f) });
+  withM4(ctx); for (const f of ['js/garage/crew-draw.js', 'js/garage/arrival.js', 'js/garage/arrival-rows.js']) vm.runInContext(readFileSync(new URL('../../' + f, import.meta.url), 'utf8'), ctx, { filename: absSrc(f) });
   const A = vm.runInContext('GarageArrival', ctx), rows = doc.getElementById('ga-rows');
   const add = (parent, tag, id) => { const e = doc.createElement(tag); if (id) e.id = id; parent.appendChild(e); return e; };
   const row = (id, tag) => { const r = add(rows, 'div'); r.className = 'set-row'; const cell = add(r, 'div'); return add(cell, tag, id); };
@@ -1598,7 +1601,7 @@ test('endRace notes the result; the next non-pit garage visit plays it once (gat
   const src = cam.slice(cam.indexOf('// AFTER THE RACE: endRace notes'), cam.indexOf('const arrivalCar'));
   let now = 1000, saved = null, automation = false;
   const started = [], player = { retired: false };
-  const c = vm.createContext({ GarageArrival: Arrival, G: { player, store: { get: () => saved } }, endHome() {}, performance: { now: () => now },
+  const c = vm.createContext({ GarageArrival: Arrival, GarageExperience: Experience, G: { player, store: { get: () => saved } }, endHome() {}, performance: { now: () => now },
     RaceCeremony: { eligible: (_, m) => !m.duel }, LoadingScreen: { isAutomation: () => automation }, arrival: { start: (o) => started.push(o.home) } });
   vm.runInContext(src, c, { filename: absSrc('js/garage/setup-camera.js') });
   const note = vm.runInContext('noteResult', c), home = vm.runInContext('startHome', c);
@@ -1971,7 +1974,7 @@ test('STYLE quick-picks lay a whole look over the saved settings and leave crews
 test('STYLE: the quick-picks head the tuner rows, 44px each, and a tap saves the look and presses its button', () => {
   const dom = makeDom(), doc = dom.document;
   const ctx = vm.createContext({ document: doc, GarageScene: { MOODS: { shipped: {}, showroom: {}, broadcast: {}, rain: {}, goldenhour: {}, night: {}, endurance: {} }, CUES: ['lightsup', 'spotsweep'] } });
-  for (const f of ['js/garage/crew-draw.js', 'js/garage/arrival.js', 'js/garage/arrival-rows.js']) vm.runInContext(readFileSync(new URL('../../' + f, import.meta.url), 'utf8'), ctx, { filename: absSrc(f) });
+  withM4(ctx); for (const f of ['js/garage/crew-draw.js', 'js/garage/arrival.js', 'js/garage/arrival-rows.js']) vm.runInContext(readFileSync(new URL('../../' + f, import.meta.url), 'utf8'), ctx, { filename: absSrc(f) });
   const A = vm.runInContext('GarageArrival', ctx), rows = doc.getElementById('ga-rows');
   const add = (parent, tag, id) => { const e = doc.createElement(tag); if (id) e.id = id; parent.appendChild(e); return e; };
   const row = (id, tag) => { const r = add(rows, 'div'); r.className = 'set-row'; const cell = add(r, 'div'); return add(cell, tag, id); };
@@ -2001,7 +2004,7 @@ test('STYLE: the quick-picks head the tuner rows, 44px each, and a tap saves the
 });
 test('AFTER THE RACE reads the race: place, driver and FASTEST LAP in the held title; wet → RAIN DAY, night → NEON NIGHT', () => {
   const ctx = vm.createContext({ GarageScene: { MOODS: { rain: {}, neon: {}, showroom: {}, broadcast: {}, inspection: {} }, CUES: [] } });
-  vm.runInContext(readFileSync(new URL('../../js/garage/crew-draw.js', import.meta.url), 'utf8'), ctx);
+  withM4(ctx); vm.runInContext(readFileSync(new URL('../../js/garage/crew-draw.js', import.meta.url), 'utf8'), ctx);
   vm.runInContext(readFileSync(new URL('../../js/garage/arrival.js', import.meta.url), 'utf8'), ctx);
   const A = vm.runInContext('GarageArrival', ctx);
   const held = (extra) => { const c = Object.assign(A.settings({ result: 'podium' }), extra); return A.poseFor('home')(A.duration(c, 'home') - 0.01, c, false).label; };
@@ -2025,7 +2028,7 @@ test('noteResult carries the race to the way home: driver, fastest lap, wet, nig
   const src = cam.slice(cam.indexOf('// AFTER THE RACE: endRace notes'), cam.indexOf('const arrivalCar'));
   const player = { name: 'Lando Norris', best: 81.2 }, rival = { best: 81.9 }, out = { best: 80.1, retired: true };
   const G = { player, trackIdx: 0, raceWeather: 'rain', raceTimeOfDay: 'default', store: { get: () => null } };
-  const c = vm.createContext({ GarageArrival: Arrival, G, endHome() {}, performance: { now: () => 1 }, Tracks: { LIST: [{ night: true }] },
+  const c = vm.createContext({ GarageArrival: Arrival, GarageExperience: Experience, G, endHome() {}, performance: { now: () => 1 }, Tracks: { LIST: [{ night: true }] },
     RaceCeremony: { eligible: () => true }, LoadingScreen: { isAutomation: () => false }, arrival: { start() {} } });
   vm.runInContext(src, c, { filename: absSrc('js/garage/setup-camera.js') });
   const note = vm.runInContext('noteResult', c);
@@ -2036,6 +2039,8 @@ test('noteResult carries the race to the way home: driver, fastest lap, wet, nig
   G.raceWeather = 'dry'; G.raceTimeOfDay = 'day'; rival.best = 80;
   const d = note([rival, player], {});
   assert.deepEqual([d.fastest, d.wet, d.night], [false, false, false]);
+  // #6885 1B (Bryce's pick, 2026-11-28): dusk and dawn light the way home as night, like exteriorPick.
+  for (const tod of ['dusk', 'dawn']) { G.raceTimeOfDay = tod; assert.equal(note([rival, player], {}).night, true, `${tod} is night in the garage`); }
 });
 test('PIT OUT: start({out,rate}) plays the drive-out quicker, ends inactive, skip finishes it, caption says RACE', () => {
   const { $, arrival } = harness();
@@ -2121,7 +2126,7 @@ test('#5660: the tuner rows are lazy (arrival-rows.js): absent at bind, the open
   const dom = makeDom(), doc = dom.document;
   const ctx = vm.createContext({ document: doc, GarageScene: { MOODS: { shipped: {} } } });
   // Own script origins: a compiled arrival.js shared with this file's other contexts kept its earlier global lookup.
-  for (const f of ['js/garage/crew-draw.js', 'js/garage/arrival.js']) vm.runInContext(readFileSync(new URL('../../' + f, import.meta.url), 'utf8'), ctx, { filename: absSrc(f + '#lazy-rows') });
+  withM4(ctx); for (const f of ['js/garage/crew-draw.js', 'js/garage/arrival.js']) vm.runInContext(readFileSync(new URL('../../' + f, import.meta.url), 'utf8'), ctx, { filename: absSrc(f + '#lazy-rows') });
   let loads = 0;
   ctx.LazyBundles = { live: () => ({ ensureGarageData: () => { loads++; vm.runInContext(readFileSync(new URL('../../js/garage/arrival-rows.js', import.meta.url), 'utf8'), ctx, { filename: absSrc('js/garage/arrival-rows.js#late') }); return Promise.resolve(true); } }) };
   const A = vm.runInContext('GarageArrival', ctx), rows = doc.getElementById('ga-rows');

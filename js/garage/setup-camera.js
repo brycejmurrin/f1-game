@@ -502,7 +502,7 @@ function noteResult(order, meta) {
   // fastest lap (the quickest finite best of a classified car), wet, night.
   let fast = null;
   for (const c of order) if (c && !c.retired && !c.dsq && Number.isFinite(c.best) && c.best > 0 && (!fast || c.best < fast.best)) fast = c;
-  const t = typeof Tracks !== "undefined" && Tracks.LIST ? Tracks.LIST[G.trackIdx] : null, night = G.raceTimeOfDay === "night" || (G.raceTimeOfDay === "default" && !!(t && t.night));
+  const t = typeof Tracks !== "undefined" && Tracks.LIST ? Tracks.LIST[G.trackIdx] : null, night = GarageExperience.isNight(G.raceTimeOfDay, t);
   pendingHome = { result: GarageArrival.resultKind(pos, !!(pl.retired || pl.dsq), !!(meta && meta.sprint)), pos, at: performance.now(),
     driver: String(pl.name || pl.code || ""), fastest: fast === pl, wet: /rain|wet|storm/.test(String(G.raceWeather || "")), night,
     grid: Number.isFinite(pl.gridPos) ? pl.gridPos : null, sprint: !!(meta && meta.sprint),
@@ -985,7 +985,7 @@ function garageCtx(asSetup = false) {
   ctx.weather = G.raceWeather;
   ctx.tod = G.raceTimeOfDay;
   ctx.night = h ? home.mode === "night"
-    : (G.raceTimeOfDay === "night" || (G.raceTimeOfDay === "default" && !!(t && t.night)));
+    : GarageExperience.isNight(G.raceTimeOfDay, t);   // dusk and dawn light the bay as night, like exteriorPick (#6885 1B)
   ctx.bayNight = ctx.night;   // the garage's own hour: GarageScene.moodCtx keys the bay geometry on it (#4965)
   if (c) {
     const n = c.results.length;

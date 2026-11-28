@@ -416,7 +416,7 @@ function radio({ covers = true, packOn, spotterLeft = 0, loading = null, voiceTu
   };
   if (loading) fakePack.load = () => loading;
   const ducks = [];
-  const sb = sandbox(["js/audio/radio-voice.js"], {
+  const sb = sandbox(["js/core/mat4.js", "js/audio/radio-voice.js"], {
     window: { speechSynthesis: synth, SpeechSynthesisUtterance: function (t) { this.text = t; } },
     GameAudio: { setRadioDuck: (b) => ducks.push(b), radioStingStop() {} },
     VoicePack: { create: () => fakePack, choices: VoicePack.choices, packFor: VoicePack.packFor },
@@ -908,7 +908,7 @@ test("spotter interrupts routine speech only with a ready clip, retains awarenes
 test("recorded engineer and spotter packs do not depend on speechSynthesis existing", () => {
   const calls = [];
   const pack = { ensure() {}, stop() {}, remaining: () => 0, speak: (...a) => { calls.push(a); return true; } };
-  const sb = sandbox(['js/audio/radio-voice.js'], { window: {}, GameAudio: {}, VoicePack: { create: () => pack } });
+  const sb = sandbox(['js/core/mat4.js', 'js/audio/radio-voice.js'], { window: {}, GameAudio: {}, VoicePack: { create: () => pack } });
   const v = sb.RadioVoice.create({ state: 'race', soundOn: true, store: { get: (k, d) => d, set() {} } });
   assert.equal(v.pack, pack);
   v.setEnabled(true);
