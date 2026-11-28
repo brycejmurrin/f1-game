@@ -1799,3 +1799,37 @@ test("BUTTON SIZE never promises room that would shrink a HUD SIZE above 100 %",
   const row = sizeRow("hudBtnScale", 100, lim, parseCaps("0.859 1.516 1.186 1.942 1.224 0.82"), true);
   assert.equal(row.max, 122.25, "the slider stops at the keep cap, not the steer cap");
 });
+
+// #7239 member 3: a piece HUD ELEMENTS turned off is display:none, so its per-tick strings and the
+// tyre plan are not built. STRATEGY reads the plan (pitReadouts), so it is still computed while strat is on.
+test("instruments HUD ELEMENTS hides are not computed per tick: plan, brake bias, damage, OT and AERO strings (#7239)", () => {
+  const { sb, G, els, dom, player, tick } = boot();
+  const calls = { plan: 0, cue: 0, damage: 0 };
+  const off = new Set();
+  sb.HudElements = { isOn: (id) => !off.has(id) };
+  sb.HudDamage = { sync() { calls.damage++; } };
+  sb.HudStrategy = { tick() {} };
+  G.tyres = { on: () => true, spent: () => 0.3, lapsLeft: () => 5 };
+  G.pits = { planInfo: () => { calls.plan++; return { text: "BOX L4", state: null }; }, cue: () => { calls.cue++; return null; }, commitFrac: () => 0, info: () => ({}) };
+  const run = (n) => { Object.keys(calls).forEach((k) => { calls[k] = 0; }); for (let i = 0; i < n; i++) tick(); return { ...calls }; };
+  const on = run(3);
+  assert.equal(on.plan, 3, "shown: the plan line is built each tick");
+  assert.equal(on.damage, 3);
+  for (const id of ["tyre", "strat", "damage", "bb", "ot", "aero"]) off.add(id);
+  const otWas = els.ot.textContent, aeroWas = els.aero.textContent;
+  player.otT = 4; G.raceAeroMode = "auto";   // both chips would re-spell themselves if they were built
+  const hidden = run(3);
+  assert.equal(hidden.plan, 0, "tyre and strat hidden: nobody reads the plan");
+  assert.equal(hidden.damage, 0, "damage hidden: HudDamage.sync is skipped");
+  assert.equal(hidden.cue, 3, "the pit cue (#hud-pit) is no HUD ELEMENTS piece: it still runs");
+  assert.equal(els.ot.textContent, otWas, "OT hidden: no text or aria string built");
+  assert.equal(els.aero.textContent, aeroWas, "AERO hidden: no text or aria string built");
+  off.delete("strat");
+  assert.equal(run(2).plan, 2, "STRATEGY on (tyre still hidden): pitReadouts still carries the plan");
+  off.add("strat");
+  dom.document.body.setAttribute("data-hud-arrange", "");
+  const arranging = run(1);
+  assert.equal(arranging.plan, 1, "ARRANGE HUD shows hidden pieces as ghosts: they paint");
+  assert.notEqual(els.ot.textContent, otWas);
+  assert.equal(els.aero.textContent, "AERO AUTO");
+});

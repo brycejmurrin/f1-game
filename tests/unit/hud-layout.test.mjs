@@ -2056,3 +2056,35 @@ test("an unmoved chase chip follows the screen's seed both ways; a moved one kee
   ctx.window.innerWidth = 820; ctx.window.innerHeight = 1180;
   assert.deepEqual({ ...H.get("speed", "other") }, { ...land }, "a portrait tablet keeps the landscape seed");
 });
+
+// #7239 member 2: a drag or pinch frame in ARRANGE HUD (set(…, live, paintOnly)) writes the --hl-* vars and reads no
+// layout: fit()'s edge clamp and phone pack (rects, getComputedStyle) run once when the gesture ends.
+test("an ARRANGE HUD gesture frame paints the --hl-* vars without a layout read; the full fit runs after (#7239)", () => {
+  let rects = 0, styles = 0;
+  const attrs = { "data-hud-arrange": "" };
+  const body = { hasAttribute: (k) => k in attrs, setAttribute() {}, toggleAttribute() {}, classList: { contains: () => false } };
+  const counted = () => {
+    const el = fakeEl();
+    el.getBoundingClientRect = () => { rects++; return { left: 10, top: 10, right: 60, bottom: 40, width: 50, height: 30 }; };
+    return el;
+  };
+  const els = {};
+  const { H } = load({}, {
+    phone: true,
+    doc: { body, documentElement: {}, querySelector: (sel) => (els[sel] || (els[sel] = counted())), querySelectorAll: () => [] },
+    ctx: { window: { innerWidth: 852, innerHeight: 393 }, getComputedStyle: () => { styles++; return { getPropertyValue: () => "" }; } },
+  });
+  H.set("map", { x: 1 }, "other", undefined, true);
+  assert.ok(rects + styles > 0, "harness: an ordinary live set runs fit()'s reads");
+  rects = 0; styles = 0;
+  for (let x = 2; x <= 6; x++) H.set("map", { x }, "other", undefined, true, true);
+  assert.equal(rects, 0, "no getBoundingClientRect per gesture frame");
+  assert.equal(styles, 0, "no getComputedStyle per gesture frame");
+  assert.equal(els["#minimap"].props["--hl-x"], "6", "every frame still paints");
+  H.fit();
+  assert.ok(rects + styles > 0, "the owed fit measures once at the end");
+  delete attrs["data-hud-arrange"];
+  rects = 0; styles = 0;
+  H.set("map", { x: 7 }, "other", undefined, true, true);
+  assert.ok(rects + styles > 0, "outside ARRANGE HUD the flag is ignored: the fit still runs");
+});
