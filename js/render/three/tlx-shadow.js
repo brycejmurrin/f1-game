@@ -234,7 +234,7 @@
   // n-th best score (distance² / level, lower wins: shadow-pass.js lampPass's score), the free slots taking the best
   // lamps not already held. `primary` (the one-lamp map's) and tail lights (>= tailFrom) and radius < 12 never count.
   // slots[k].x/y/z: the held lamp's position (NaN = none). out[k] = frame.lights record index, or -1.
-  let _pkS = new Float64Array(64), _pkI = new Int32Array(64);
+  let _pkS = new Float64Array(64), _pkI = new Int32Array(64), _pkT = new Float64Array(8);
   function lampPick(L, nRec, tailFrom, lum, eye, primary, slots, out, handover) {
     const n = out.length;
     if (_pkS.length < nRec) { _pkS = new Float64Array(nRec); _pkI = new Int32Array(nRec); }
@@ -246,13 +246,19 @@
       _pkS[m] = (dx * dx + dy * dy + dz * dz) / Math.max(lum ? lum[i] : Math.max(L[o + 3], L[o + 4], L[o + 5]), 1);
       _pkI[m++] = i;
     }
-    // the n-th best score (insertion into a tiny sorted list)
-    const top = [];
+    // The n-th best score: insertion into a tiny sorted prefix of module scratch. Only top[n - 1] is read, an
+    // order statistic, so tie order is irrelevant. The old `[]` + push + sort(closure) per accepted candidate
+    // allocated every night frame (hunt #7385 row A2).
+    if (_pkT.length < n) _pkT = new Float64Array(n);
+    let tn = 0;
     for (let j = 0; j < m; j++) {
       const s = _pkS[j];
-      if (top.length < n || s < top[top.length - 1]) { top.push(s); top.sort((a, b) => a - b); if (top.length > n) top.pop(); }
+      if (tn === n && !(s < _pkT[tn - 1])) continue;
+      let p = tn < n ? tn++ : n - 1;
+      while (p > 0 && s < _pkT[p - 1]) { _pkT[p] = _pkT[p - 1]; p--; }
+      _pkT[p] = s;
     }
-    const T = top.length < n ? Infinity : top[n - 1];
+    const T = tn < n ? Infinity : _pkT[n - 1];
     for (let k = 0; k < n; k++) {
       out[k] = -1;
       const sl = slots[k];

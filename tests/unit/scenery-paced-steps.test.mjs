@@ -65,15 +65,24 @@ test("a synchronous scenery caller still gets the whole closure (the stepped for
 test("the visor index yields by cell inserts: wide slabs cannot pile into one step", () => {
   const h = buildContext({ assets: false });
   const TG = h.sandbox.TrackGeom;
-  const STRIDE = 18, count = 64, records = [];
-  for (let i = 0; i < count; i++) {   // each slab spans 64 x 64 = 4096 cells of 16 m
+  // The widest slabs a cell still bins: 8 x 8 = 64 cells of 16 m each (#7388 lists wider ones apart).
+  const STRIDE = 18, span = 8, count = 4096, records = [];
+  for (let i = 0; i < count; i++) {
     const r = new Array(STRIDE).fill(0);
-    r[12] = 0; r[14] = i * 4; r[15] = 64 * 16 - 1; r[17] = i * 4 + 64 * 16 - 1; r[13] = 0; r[16] = 1;
+    r[12] = 0; r[14] = i * 16; r[15] = span * 16 - 1; r[17] = i * 16 + span * 16 - 1; r[13] = 0; r[16] = 1;
     records.push(...r);
   }
   const it = TG.lightIndexSteps(records);
   let yields = 0, n;
   while (!(n = it.next()).done) yields++;
-  assert.ok(yields >= (count * 4096) / 8192 - 1, `${yields} yields for ${count * 4096} cell inserts (the tip: record batches of 2048 gave ~1)`);
+  const inserts = count * span * span;
+  assert.ok(yields >= inserts / 8192 - 1, `${yields} yields for ${inserts} cell inserts (the tip: record batches of 2048 gave ~1)`);
   assert.equal(n.value.boxes.length, records.length);
+  assert.equal(n.value.large.length, 0, "an 8 x 8-cell slab is binned");
+  // A 64 x 64-cell slab (4096 inserts before #7388) is one entry of the always-tested list.
+  const wide = new Array(STRIDE).fill(0);
+  wide[15] = 64 * 16 - 1; wide[17] = 64 * 16 - 1; wide[16] = 1;
+  const one = TG.lightIndex(wide);
+  assert.deepEqual([...one.large], [0]);
+  assert.equal(one.cells.size, 0);
 });

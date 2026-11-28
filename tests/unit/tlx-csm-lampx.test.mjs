@@ -309,6 +309,52 @@ test("lampPick: a held lamp keeps its slot until a rival beats it by more than t
   assert.deepEqual(Array.from(out), [1, -1]);
 });
 
+// Hunt #7385 row A2: the n-th best score came from `[]` + push + sort(closure) per accepted candidate, a fresh
+// array every night frame. It is now an insertion into module scratch; the pick must be the reference pick.
+test("lampPick: the n-th best threshold matches a sorted reference, with no per-call array or sort", () => {
+  let seed = 7385;
+  const rnd = () => ((seed = (seed * 1103515245 + 12345) >>> 0) / 4294967296);
+  const ref = (L, nRec, tailFrom, eye, primary, held, n, handover) => {
+    const c = [];
+    for (let i = 0; i < nRec && i < tailFrom; i++) {
+      const o = i * 15;
+      if (i === primary || L[o + 6] < 12) continue;
+      const dx = L[o] - eye[0], dy = L[o + 1] - eye[1], dz = L[o + 2] - eye[2];
+      c.push({ i, s: (dx * dx + dy * dy + dz * dz) / Math.max(L[o + 3], L[o + 4], L[o + 5], 1) });
+    }
+    const T = c.length < n ? Infinity : c.map((x) => x.s).sort((a, b) => a - b)[n - 1];
+    const out = new Array(n).fill(-1);
+    held.forEach((sl, k) => {
+      const h = c.find((x) => L[x.i * 15] === sl.x && L[x.i * 15 + 1] === sl.y && L[x.i * 15 + 2] === sl.z);
+      if (h && h.s <= T * handover) out[k] = h.i;
+    });
+    for (let k = 0; k < n; k++) {
+      if (out[k] >= 0) continue;
+      let best = -1, bs = Infinity;
+      for (const x of c) if (x.s < bs && !out.includes(x.i)) { bs = x.s; best = x.i; }
+      out[k] = best;
+    }
+    return out;
+  };
+  for (let trial = 0; trial < 300; trial++) {
+    const nRec = 1 + Math.floor(rnd() * 40), n = 1 + Math.floor(rnd() * 4);
+    // integer grid positions: equal scores (ties) are common on purpose
+    const L = lights(Array.from({ length: nRec }, () => [Math.floor(rnd() * 8) * 10, 10, Math.floor(rnd() * 4) * 10,
+      1 + Math.floor(rnd() * 3), rnd() < 0.2 ? 8 : 40]));
+    const held = Array.from({ length: n }, () => {
+      const j = Math.floor(rnd() * nRec);
+      return rnd() < 0.5 ? { x: L[j * 15], y: L[j * 15 + 1], z: L[j * 15 + 2] } : { x: NaN, y: NaN, z: NaN };
+    });
+    const tailFrom = rnd() < 0.3 ? Math.floor(rnd() * nRec) : nRec, primary = Math.floor(rnd() * nRec);
+    const out = new Int32Array(n);
+    CM.lampPick(L, nRec, tailFrom, null, [0, 0, 0], primary, held, out, 1.2);
+    assert.deepEqual(Array.from(out), ref(L, nRec, tailFrom, [0, 0, 0], primary, held, n, 1.2), `trial ${trial}`);
+  }
+  const src = read("js/render/three/tlx-shadow.js");
+  const body = src.slice(src.indexOf("function lampPick("), src.indexOf("function lampXDriver("));
+  assert.doesNotMatch(body, /\.sort\(|=\s*\[\s*\]/, "lampPick allocates nothing per call");
+});
+
 test("lampXDriver: lamp change rebuilds now, unchanged keeps, a car-only change rebuilds on the slot's alternate frame", () => {
   const log = [];
   const D = CM.lampXDriver({ n: 2, M4: MC.M4,

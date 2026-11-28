@@ -479,8 +479,8 @@ const Input = (function () {
     navUp: () => padMenu.remoteNav("up"), navDown: () => padMenu.remoteNav("down"),
     navLeft: () => padMenu.remoteNav("left"), navRight: () => padMenu.remoteNav("right"),
     // A PHONE may not press RESET / DELETE / IMPORT (InputPadMenu.isDestructive):
-    // those take a tap on this screen. The XR controllers are the local player.
-    navSelect: () => padMenu.activate(remoteOwner === "xr" ? null : remoteGuard),
+    // those take a tap on this screen. The XR controllers (origin "xr") are the local player.
+    navSelect: (o) => padMenu.activate((o || remoteOwner) !== "xr" && remoteGuard),
     navBack: () => { padMenu.escape(); },
   };
   function remoteGuard(el) {
@@ -488,13 +488,13 @@ const Input = (function () {
     if (typeof Log !== "undefined") Log.info("input", "phone SELECT refused on a destructive control: tap it on this screen");
     return true;
   }
-  function remoteEvent(kind) {
+  function remoteEvent(kind, o) {
     const fn = REMOTE_EDGES[kind];
     if (!fn) return false;
     const menuEdge = kind === "pause" || kind.startsWith("nav");
     if (!menuEdge && remoteDrivingBlocked()) return false;
     if (!menuEdge) noteInputSource(remoteOwner === "phone" || !remStick ? "phone" : "controller");
-    return fn() !== false;
+    return fn(o) !== false;
   }
   // Forget the current remote command without tearing down the paired transport.
   // reset() uses this on blur/visibility loss; the next fresh sample can take

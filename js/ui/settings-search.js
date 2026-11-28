@@ -154,12 +154,15 @@ const SettingsSearch = (function () {
   function find(query) {
     const words = String(query || "").replace(/[-_]/g, " ").trim().toLowerCase().split(/\s+/).filter(Boolean);
     if (!words.length) return [];
-    const out = [];
+    // One chip per destination: catalog rows that share a page and target ("backup", "share code") read as duplicates.
+    const out = [], seen = new Set();
     for (const r of allRows()) {
+      const at = r.page + "#" + r.target;
+      if (seen.has(at)) continue;
       const base = (r.label + " " + r.aliases).toLowerCase();
-      if (words.every((w) => base.includes(w))) { out.push(r); continue; }
+      if (words.every((w) => base.includes(w))) { out.push(r); seen.add(at); continue; }
       const haystack = (base + " " + optionsOf(r)).toLowerCase();
-      if (words.every((w) => haystack.includes(w))) out.push(r);
+      if (words.every((w) => haystack.includes(w))) { out.push(r); seen.add(at); }
     }
     return out;
   }

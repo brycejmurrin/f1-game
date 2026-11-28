@@ -160,6 +160,11 @@ const WheelState = (function () {
     }
     return Math.abs(TM.lateralCurve(rho * (TM.CURVE_PEAK_X_F || Math.PI / 2)));
   }
+  // F(x)/x, with its slope at 0 below 1e-3: the lateral share's ratio term. A named
+  // function, not two closures per axleStep (no-alloc rule; #7399 row 16).
+  function forcePerSlip(x, rear) {
+    return x > 1e-3 ? curveAt(x, rear) / x : curveAt(1e-3, rear) / 1e-3;
+  }
 
   /**
    * One axle: demand aReq (accel units, +drive / −brake) vs tyre Fx; update vw.
@@ -250,9 +255,7 @@ const WheelState = (function () {
     o.spinning = kDir > 0 ? clamp((knAbs - SPIN_KAPPA) / LOCK_SPAN, 0, 1) : 0;
     // Lateral share of the combined force: F(ρ)·|αN|/ρ against the pure-lateral F(|αN|). Free roll is 1.
     const aN = Math.abs(alphaN), rhoL = Math.hypot(aN, knAbs);
-    const g = (x) => curveAt(x, rear);
-    const per = (x) => (x > 1e-3 ? g(x) / x : g(1e-3) / 1e-3);   // F(x)/x, its slope at 0
-    o.latScale = clamp(per(rhoL) / per(aN), 0.05, 1);
+    o.latScale = clamp(forcePerSlip(rhoL, rear) / forcePerSlip(aN, rear), 0.05, 1);
     return o;
   }
 

@@ -46,7 +46,7 @@ function load() {
   // tlx-shadow castInstanced's read, as shipped: packMatrices for a culled cast.
   ctx.shadowSys = { castInstanced: (b, count) => { const src = count !== undefined && b.packMatrices ? b.packMatrices : b.srcMatrices;
     casts.push(Array.from({ length: count === undefined ? b.instances : count }, (_, i) => src[i * 16 + 12])); } };
-  vm.runInContext(cull + "\n" + cast + "\nthis.cullInstances = cullInstances; this.castShadowInstanced = castShadowInstanced;"
+  vm.runInContext(fnSource(tlx, "function cellDroppedHead(batch, ks, kN) {") + "\n" + cull + "\n" + cast + "\nthis.cullInstances = cullInstances; this.castShadowInstanced = castShadowInstanced;"
     + "\nthis.record = function (rec, n, b) {" + rec[0] + "};", ctx);
   return { ctx, casts };
 }
@@ -107,7 +107,9 @@ function radialRig(backend, enabled) {
     vm.runInContext(read(file).replace(/^const /gm, "var "), ctx);
   ctx.CHK = ctx.TLXShaders = ctx.Frustum;
   const path = backend === "tlx" ? "three/tlx" : backend === "glx" ? "glx/glx" : "webgpu/wgx";
-  vm.runInContext(fnSource(read("js/render/" + path + ".js"), "function cullInstances(batch, planes, opts) {")
+  // TLX's cull calls its own dropped-head helper (#7385 S6), declared beside it.
+  const own = backend === "tlx" ? fnSource(read("js/render/three/tlx.js"), "function cellDroppedHead(batch, ks, kN) {") + "\n" : "";
+  vm.runInContext(own + fnSource(read("js/render/" + path + ".js"), "function cullInstances(batch, planes, opts) {")
     + "\nthis.cull = cullInstances;", ctx);
   const mats = new Float32Array(64);
   [10, 250, 700, 700].forEach((x, i) => mats[i * 16 + 12] = x);

@@ -486,7 +486,7 @@ function buildResults(order, race) {
   const classification = rankingList(els.resultsTable, tr("results.raceClassification", null, "Race classification"), "race");
   order.forEach((c, i) => {
     const dnf = dnfOf(c);
-    const nc = c.classified === false && !dnf && !hostRow.has(c.driverId);   // a guest reads the host verdict
+    const nc = c.classified === false && !dnf;   // a guest's c.classified is the host verdict (game.js adopt path), as YOUR RACE reads it
     const nm = document.createElement("div"); nm.className = "res-name";
     const pt = document.createElement("span"); pt.className = "res-pts";
     const other = c.human && !c.local ? " q-real" : "";
