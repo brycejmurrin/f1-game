@@ -16,7 +16,7 @@
         bush, palm, acacia, terrace, grandstand, grandstandEx, building, cityFront, tower, billboard, overheadSpan, marshalPost,
         mountain, backdrop, fence, wall, guardrail, tyreWall,
         floodMast: apiFloodMast, floodMastRing, ledFacadeBands, cameraTower, broadcastCompound,
-        modelGroup, groundPatch, onTrack, every, terrainYAt,
+        modelGroup, groundPatch, onTrack, every, groundAt,
         circuitKit } = api;
 
       // Fractions stay in the scenery frame rooted at sceneryStartFrac.
@@ -208,8 +208,7 @@
       // baseY-2 (nature.js) — tops stayed under the desert mesh (ground-audit
       // buried 13 @ duneWedge, worst ~1.2 m). Build the wedge without that sink.
       const duneBaseY = (x, z) => {
-        const gy = terrainYAt(x, z);
-        return gy != null && Number.isFinite(gy) ? gy : pyMin;
+        return groundAt(x, z, { fallback: pyMin });
       };
       const duneWedge = (k, side, gap, w, h) => {
         const a = anchor(k, side, gap + w * 0.3);
@@ -366,9 +365,8 @@
           const sf = (SF + 0.020 + i * 0.0055) % 1;
           const a = anchor(K(sf), 1, 26 + (i % 2) * 4), b = [a.r, a.u, a.t];
           if (onTrack(a.c[0], a.c[2], 12)) continue;
-          const gy = terrainYAt(a.c[0], a.c[2]);
           const foot = a.c.slice();
-          if (gy != null && Number.isFinite(gy)) foot[1] = gy - 0.06;
+          foot[1] = groundAt(a.c[0], a.c[2], { fallback: a.c[1] }) - 0.06;
           const body = [0.78 + (i % 3) * 0.04, 0.74, 0.64];
           // Plinth + body + roof: each sits on the one below (ground-audit chain).
           addBox(out, vadd(foot, a.u, 0.2), [5.8, 0.4, 9.5], [0.50, 0.48, 0.42], b);
@@ -381,9 +379,8 @@
       (function sakhirControlTower() {
         const a = anchor(K(SF + 0.008), 1, 38), b = [a.r, a.u, a.t];
         if (onTrack(a.c[0], a.c[2], 16)) return;
-        const gy = terrainYAt(a.c[0], a.c[2]);
         const foot = a.c.slice();
-        if (gy != null && Number.isFinite(gy)) foot[1] = gy - 0.1;
+        foot[1] = groundAt(a.c[0], a.c[2], { fallback: a.c[1] }) - 0.1;
         modelGroup("bahrain-control-tower", {
           center: vadd(foot, a.u, 14), size: [12, 32, 12], basis: b,
         }, (stage) => {
@@ -450,9 +447,8 @@
           addCyl(stage, vadd(BASE, b[1], TOWER_H + 1.3), 0.35, 4.2, STEEL, 5, b);
           addBox(stage, vadd(BASE, b[1], TOWER_H + 5.4), [1.8, 0.7, 1.8], BEACON_WARM, b);
           stage._mat = 0;
-          // Plaza on terrainYAt: BASE is road height, infield is ~0.1 m up.
-          const plaza = terrainYAt(BASE[0], BASE[2]);
-          const plazaLift = (plaza != null ? plaza - BASE[1] : 0) + 0.15;
+          // Plaza on the ground: BASE is road height, infield is ~0.1 m up.
+          const plazaLift = (groundAt(BASE[0], BASE[2], { fallback: BASE[1] }) - BASE[1]) + 0.15;
           addBox(stage, vadd(BASE, b[1], plazaLift), [18.0, 0.30, 18.0],
             [0.78, 0.74, 0.66], b);
         }, { required: true });
@@ -913,10 +909,9 @@
         const a = anchor(k, side, gap), b = [a.r, a.u, a.t];
         if (onTrack(a.c[0], a.c[2], 8)) return;
         // Seat on terrain — ground-audit had unsupported windTower feet (~16 m).
-        const gy = terrainYAt(a.c[0], a.c[2]);
         const foot = a.c.slice();
         // Seat ON terrain — Math.max left feet floating ~16 m (ground-audit).
-        if (gy != null && Number.isFinite(gy)) foot[1] = gy - 0.12;
+        foot[1] = groundAt(a.c[0], a.c[2], { fallback: a.c[1] }) - 0.12;
         out._mat = MAT.STONE;
         addFrustum(out, foot, 2.6, 1.9, h, HOSP_SAND, 4, b);          // tapered shaft
         const top = vadd(foot, a.u, h);
@@ -1141,8 +1136,7 @@
           const p = pts[i], pb = [p.r, p.u, p.t];
           const fc = vadd(p.c, p.r, -18);
           if (onTrack(fc[0], fc[2], 24)) continue;
-          const gy = terrainYAt(fc[0], fc[2]);
-          if (gy != null && Number.isFinite(gy)) fc[1] = gy - 0.1;
+          fc[1] = groundAt(fc[0], fc[2], { fallback: fc[1] }) - 0.1;
           addCyl(out, fc, 0.55, 28, [0.72, 0.72, 0.74], 6, pb);
           addBox(out, vadd(fc, p.u, 28.5), [4.4, 1.0, 1.6], FLOOD, pb);
         }
@@ -1170,9 +1164,8 @@
         // Seat on local sand — road-height a.c buried the scree skirt (#3342).
         // Seat the wide scree top to clear uneven terrain; keep the
         // scree underside ~0.08 m below the main slab so flatCoplanar stays 0.
-        const gy = terrainYAt(a.c[0], a.c[2]);
         const foot = a.c.slice();
-        if (gy != null && Number.isFinite(gy)) foot[1] = gy + seatHeight;
+        foot[1] = groundAt(a.c[0], a.c[2], { fallback: a.c[1] }) + seatHeight;
         const hv = hash(k * 41 + gap);
         // Two offset slabs make a stepped ledge rather than a single block.
         addBox(out, vadd(foot, a.u, h * 0.5), [w, h, len],
@@ -1220,9 +1213,8 @@
         ]) {
           const a = anchor(K(sf), side, gap), b = [a.r, a.u, a.t];
           if (onTrack(a.c[0], a.c[2], 14)) continue;
-          const gy = terrainYAt(a.c[0], a.c[2]);
           const foot = a.c.slice();
-          if (gy != null && Number.isFinite(gy)) foot[1] = gy - 0.08;
+          foot[1] = groundAt(a.c[0], a.c[2], { fallback: a.c[1] }) - 0.08;
           addBox(out, vadd(foot, a.u, h * 0.5), [w, h, d], TECH, b);
           addBox(out, vadd(foot, a.u, h + 0.15), [w * 1.04, 0.3, d * 1.01], PIT_CREAM, b);
         }

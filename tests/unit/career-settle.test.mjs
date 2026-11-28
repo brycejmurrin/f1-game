@@ -1581,6 +1581,22 @@ test("paceMult is clamped to [0.9, 1.1] whatever the stored tdev says", () => {
   assert.equal(Career.paceMult("missing"), 1);
 });
 
+// #7366 (#7310 R2): the hub reads objective() (directly and through state()) on
+// every render; a stale brief used to be regenerated AND saved, so a read wrote.
+test("objective() derives a stale brief without writing the save", () => {
+  let writes = 0;
+  const Career = load(8, false, (key) => { if (key.startsWith("career.")) writes++; });
+  Career.start({ flavour: "myteam", teamId: "custom", seed: 7 }); Career.engage(true);
+  const c = Career.data();
+  c.season.round = 2; c.obj = { round: 0, type: "finish", value: 10 };
+  writes = 0;
+  const o = Career.objective();
+  assert.equal(o.round, 2, "the brief is the current round's");
+  assert.deepEqual(Career.objective(), o, "the draw is pure, so a re-read agrees");
+  assert.equal(writes, 0, "a read never persists");
+  assert.equal(c.obj.round, 0, "and leaves the stored brief alone");
+});
+
 test("settlement persists once and saveStatus only reads the last result", () => {
   let writes = 0;
   const Career = load(undefined, false, (key) => { if (key.startsWith("career.")) writes++; });
@@ -1622,6 +1638,29 @@ test("Committed brief escrows only 50 credits once, locks at weekend start, sett
   const after = Career.data().money;
   assert.equal(Career.settleRound([player], player), null);
   assert.equal(Career.data().money, after);
+});
+
+// #7366 (#7310 R3): under freeMoney escrow takes nothing, so a met brief paid
+// stake * 2 and netted +100. The stake win must be +50 over the no-stake payout
+// in both modes: the paid stake comes back, an untaken one does not.
+test("a met committed brief wins the same +50 stake whether or not freeMoney paid it", () => {
+  const run = (free, committed) => {
+    const Career = hub(); const p = Career.planning();
+    Career.freeMoney(free);
+    assert.equal(p.chooseStake(committed), true);
+    const before = Career.data().money;
+    Career.markWeekendStarted();
+    assert.equal(Career.data().money, before - (committed && !free ? 50 : 0), "escrow takes the stake only when paying");
+    const player = { team: { id: "haas" }, seat: 1, cuts: 0, penalty: 0, gridPos: 1 };
+    Career.data().season.round = 1;
+    const settled = Career.settleRound([player], player);
+    assert.equal(settled.obj.done, true, "a lone clean P1 from pole meets every brief type");
+    assert.equal(settled.stake, committed ? 50 : 0);
+    return Career.data().money - before;
+  };
+  for (const free of [false, true]) {
+    assert.equal(run(free, true) - run(free, false), 50, `freeMoney=${free}: the stake nets +50`);
+  }
 });
 
 test("sponsor offers stay deterministic, share window and lock after first weekend", () => {

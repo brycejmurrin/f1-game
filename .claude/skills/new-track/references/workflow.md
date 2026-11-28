@@ -50,7 +50,8 @@ Load from the SKILL.md index when the task needs this detail.
    **1b. The scenery file — a circuit is a PAIR.** `LAZY_SCENERY` in `tools/manifest.cjs` maps EVERY
    `CIRCUITS` id to `js/circuits/scenery/<id>.js`, so create it in the same commit: copy a sibling's
    scenery file and rename its `(window.TrackScenery = window.TrackScenery || {})["<id>"]` key. The
-   body (trees, stands, barriers) → skill scenery-dress.
+   body (trees, stands, barriers) → skill scenery-dress. Seat feet with `groundAt`, not the sibling's raw
+   `terrainYAt`: a new file is allowed 0 raw calls (`scenery-terrainyat-ratchet`, #7333).
 
    **Designer presets from TUMFTM (optional, not a shipped def).** For layouts
    Apex does not carry (Norisring, Moscow Raceway, Oschersleben, Nürburgring

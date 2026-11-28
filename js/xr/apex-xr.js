@@ -100,7 +100,9 @@ const ApexXR = (function () {
         } catch (_) { known = false; /* keep caps.vr from syncCapsFromCache */ }
       } else {
         caps.vr = false;
-        storeCaps(false);
+        // Only "no navigator.xr" is a definite no. An xr object without isSessionSupported answers nothing
+        // (xr-boot.js probeVr returns null there), and a stored "0" would stick until Settings > Display rechecks.
+        if (!caps.xr) storeCaps(false);
       }
       _caps = caps;
       _plan = null; // invalidate so plan() re-resolves

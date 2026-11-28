@@ -23,7 +23,6 @@ const ReplayBroadcast = (function () {
   // used to allocate filter/sort/row objects every tick (static audit #7).
   // Same shape as game.js ranked[] reuse — length-truncated, grow slots on demand.
   const _lead = [], _stopped = [], _rows = [];
-  const _doneScratch = { k: 0, at: null };
   let _towerScript = null, _towerSample = 0, _towerN = 0;
   function _slot(arr, i) {
     let s = arr[i];
@@ -65,27 +64,6 @@ const ReplayBroadcast = (function () {
     const t = d.pitT || [], dur = d.pitDur || [];
     for (let i = 0; i < t.length; i++) if (t[i] != null && T >= t[i] - 12 && T <= t[i] + (dur[i] > 0 ? dur[i] : 22) + 6) return true;
     return false;
-  }
-  /** Discrete timing-line sample key for T: changes only when a crossing, OUT,
-   *  pit window, tyre, or fastest-lap flag that the tower shows would change. */
-  function towerSample(script, T, out) {
-    let h = 2166136261 >>> 0;
-    const drivers = script.drivers || [];
-    for (let i = 0; i < drivers.length; i++) {
-      const d = drivers[i];
-      if (d.dns) continue;
-      doneByInto(d, T, _doneScratch);
-      const gone = out ? out(d.num) : !!(d.dnf && d.outT != null && T >= d.outT);
-      const pit = inPit(d, T);
-      const tyre = compoundAt(d, Math.max(1, _doneScratch.k + 1));
-      h = _mix(h, d.num);
-      h = _mix(h, _doneScratch.k);
-      h = _mix(h, _doneScratch.at == null ? -1 : (_doneScratch.at * 1000) | 0);
-      h = _mix(h, gone ? 1 : 0);
-      h = _mix(h, pit ? 1 : 0);
-      h = _mix(h, tyre ? tyre.charCodeAt(0) : 0);
-    }
-    return _mix(h, fastestAt(script, T) || 0);
   }
   /** Fastest-lap holder's number at T, or null. */
   function fastestAt(script, T) {
@@ -533,6 +511,6 @@ const ReplayBroadcast = (function () {
     return { start, stop, tick, tickLive, refresh, onCut, manual, setAuto, setLocked, resetTiming, autoOn, viewerOwnsPicture, status, isOn: () => on };
   }
 
-  return { create, towerAt, towerSample, liveRows, nextEvent, pipPick, fmtGap };
+  return { create, towerAt, liveRows, nextEvent, pipPick, fmtGap };
 })();
 Object.freeze(ReplayBroadcast);
