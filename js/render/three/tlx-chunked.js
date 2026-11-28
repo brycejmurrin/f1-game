@@ -904,11 +904,11 @@
         if (!g || !g.attributes) continue;
         for (const k in g.attributes) if (g.attributes[k]) attrs.add(g.attributes[k]);
       }
-      for (const a of attrs) { try { if (typeof a.dispose === "function") a.dispose(); } catch (_) { /* already gone */ } }
+      for (const a of attrs) TLXUtil.safeDispose(a);   // already gone
       for (const g of geos) {
         if (!g) continue;
         if (g.attributes) { const names = Object.keys(g.attributes); for (let k = 0; k < names.length; k++) delete g.attributes[names[k]]; }
-        try { g.dispose(); } catch (_) { /* already gone */ }
+        TLXUtil.safeDispose(g);   // already gone
       }
       return attrs.size;
     }

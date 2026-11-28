@@ -13,6 +13,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { makeFakeGL, installThreeGlobals } from "../helpers/fake-webgl2.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 import { fnSource } from "../helpers/fn-source.mjs";
+import { withTlxUtil } from "../helpers/tlx-util-vm.mjs";   // TLX files release through TLXUtil (#7334)
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
@@ -27,7 +28,7 @@ const THREE = await import(pathToFileURL(path.join(ROOT, "vendor/three-0.187.0/t
 function chunkedSys(ctx) {
   const sb = { window: {}, localStorage: { getItem: () => null }, Frustum: {},
     Float32Array, Uint32Array, Uint16Array, Uint8Array, Int16Array, Int32Array, Math };
-  vm.createContext(sb);
+  vm.createContext(withTlxUtil(sb));
   vm.runInContext(CHUNKED, sb, { filename: absSrc("js/render/three/tlx-chunked.js") });
   return sb.window.TLXShaders.chunked(THREE, ctx);
 }
@@ -119,7 +120,7 @@ test("TLX's software-adapter sniff reads GPUAdapterInfo.isFallbackAdapter first 
   const a = TLX.indexOf("            const info = ad.info || null;");
   const b = TLX.indexOf("\n", TLX.indexOf("_softAdapter = !_phoneHw", a));
   assert.ok(a > 0 && b > a, "the adapter sniff moved: re-pin this slice");
-  const pcCtx = vm.createContext({ console, Log: { warn() {} } });
+  const pcCtx = vm.createContext(withTlxUtil({ console, Log: { warn() {} } }));
   for (const f of ["js/lighting/knobs.js", "js/render/shared/post-common.js"]) vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), pcCtx, { filename: absSrc(f) });
   const PostCommon = vm.runInContext("PostCommon", pcCtx);
   const soft = (ad, phone = false) => new Function("ad", "_phoneHw", "PostCommon", `"use strict"; let _softAdapter = false; ${TLX.slice(a, b)} return _softAdapter;`)(ad, phone, PostCommon);

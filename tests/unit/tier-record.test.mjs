@@ -18,6 +18,9 @@ import { tierGate, TIER_SKIPS } from "../../tools/gfx/census-verdict.mjs";
 import { makeFakeGL, installThreeGlobals } from "../helpers/fake-webgl2.mjs";
 import { carDrawVm } from "../helpers/car-draw-vm.mjs";
 import * as THREE from "../../vendor/three-0.187.0/three.webgpu.min.js";
+import { seedTlxUtil } from "../helpers/tlx-util-vm.mjs";
+
+seedTlxUtil();   // TLX files release through TLXUtil at call time (#7334)
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");

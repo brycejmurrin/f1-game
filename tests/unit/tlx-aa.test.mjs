@@ -10,7 +10,7 @@ import * as THREE from "../../vendor/three-0.187.0/three.webgpu.min.js";
 import { makeFakeGL, installThreeGlobals } from "../helpers/fake-webgl2.mjs";
 
 installThreeGlobals();
-for (const file of ["tsl-chunks.js", "tsl-post.js", "tsl-aa.js"]) {
+for (const file of ["tlx-util.js", "tsl-chunks.js", "tsl-post.js", "tsl-aa.js"]) {
   vm.runInThisContext(fs.readFileSync(new URL(`../../js/render/three/${file}`, import.meta.url), "utf8"), { filename: absSrc(`js/render/three/${file}`) });
 }
 const A = window.TLXAA;

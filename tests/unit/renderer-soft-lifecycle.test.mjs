@@ -11,6 +11,9 @@ import { fnSource } from "../helpers/fn-source.mjs";
 import { fileURLToPath } from "node:url";
 import { absSrc } from "../helpers/abs-src.mjs";
 import { glxSoftHarness } from "../helpers/glx-soft-harness.mjs";
+import { seedTlxUtil } from "../helpers/tlx-util-vm.mjs";
+
+seedTlxUtil();   // TLX files release through TLXUtil at call time (#7334)
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -63,7 +66,7 @@ function postHarness(factoryThrows = false) {
     },
   };
   const sandbox = {
-    window: { TLXShaders }, TLXShaders,
+    window: { TLXShaders }, TLXShaders, TLXUtil: seedTlxUtil(),
     document: { createElement: () => ({ getContext: () => null }) },
     Log: { info() {} },
   };
@@ -154,7 +157,7 @@ test("TLX post sheds SSAO targets after closed presents and does not grow them a
     },
   };
   const sandbox = {
-    window: { TLXShaders }, TLXShaders,
+    window: { TLXShaders }, TLXShaders, TLXUtil: seedTlxUtil(),
     document: { createElement: () => ({ getContext: () => null, width: 0, height: 0 }) },
     Log: { info() {}, warn() {} },
     performance: { now: () => 0 },
@@ -353,7 +356,7 @@ test("TLX post fallback invalidates reads and disposes the retained chain", () =
   const fallback = src.slice(at, src.indexOf("if (!painted)", at));
   assert.match(fallback, /const deadPost = post/);
   assert.match(fallback, /post = null;\s*_cancelSoftBlits\(\)/);
-  assert.match(fallback, /finally \{[^]*?deadPost\.dispose\(\)/);
+  assert.match(fallback, /finally \{[^]*?TLXUtil\.safeDispose\(deadPost\)/);
   const post = read("js/render/three/tlx-post.js");
   assert.match(post, /function makeRT[^]*?ownRT\(new THREE\.RenderTarget/,
     "lazy targets must enter the same owned set as base targets");

@@ -13,6 +13,9 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { withTlxUtil, seedTlxUtil } from "../helpers/tlx-util-vm.mjs";
+
+seedTlxUtil();   // TLX files release through TLXUtil at call time (#7334): new Function slices read the global
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
@@ -30,8 +33,8 @@ function bootShadow(warming = { on: false }) {
   const rendered = [], childLists = [];
   const renderer = { backend: {}, getRenderTarget: () => null, setRenderTarget() {}, autoClear: true,
     render(scene) { rendered.push(scene); childLists.push(scene.children); } };
-  const ctx = vm.createContext({ window: {}, localStorage: { getItem: () => null }, Log: { warn() {} },
-    Float32Array, Math, Array, Object, WeakMap, Map, Set, Number });
+  const ctx = vm.createContext(withTlxUtil({ window: {}, localStorage: { getItem: () => null }, Log: { warn() {} },
+    Float32Array, Math, Array, Object, WeakMap, Map, Set, Number }));
   vm.runInContext(read("js/render/three/tlx-shadow.js"), ctx, { filename: absSrc("js/render/three/tlx-shadow.js") });
   const sys = ctx.window.TLXShaders.shadowSys(THREE, mk(), { renderer, isMobile: false, softwareGL: false,
     isWarming: () => warming.on });
@@ -147,8 +150,8 @@ test("TLX-01: begin() retries a dead post chain on a 2 s timer, 3-strike cap and
   assert.ok(stateStart>0&&stateEnd>stateStart&&deathStart>0&&deathEnd>deathStart&&retryStart>bi&&retryEnd>retryStart,"post lifecycle extraction anchors remain production-owned");
   let now=100, builds=0, resizes=0, disposals=0, direct=0;
   const candidate=()=>({dispose(){disposals++;},resize(w,h){assert.equal(w,640);assert.equal(h,360);resizes++;}});
-  const c=vm.createContext({post:candidate(),opts:{visorFolded:2},painted:false,_warmPending:null,W:640,H:360,presentW:640,presentH:360,
-    performance:{now:()=>now},_cancelSoftBlits(){},paintCanvas(){direct++;},persistFail(){},buildPost(){builds++;return candidate();}});
+  const c=vm.createContext(withTlxUtil({post:candidate(),opts:{visorFolded:2},painted:false,_warmPending:null,W:640,H:360,presentW:640,presentH:360,
+    performance:{now:()=>now},_cancelSoftBlits(){},paintCanvas(){direct++;},persistFail(){},buildPost(){builds++;return candidate();}}));
   vm.runInContext(TLX.slice(stateStart,stateEnd)+";globalThis.status=()=>({strikes:_postStrikes,rebuild:_postRebuild,retryAt:_postRetryAt,health:_postHealth});",c);
   for(let strike=1;strike<=4;strike++){
     c.post=candidate();c.painted=false;
@@ -173,7 +176,7 @@ test("TLX-02: a dead sun pass zeroes the lit shadow strength every frame", () =>
 
 test("TLX-03: the DPR cap follows mobileTier (1.5 phone, 2 desktop); only RESOLUTION MAX lifts it (#5222)", () => {
   // The B8 lab (?lab=tlxLite) takes its own cap first; the full table is in render-effective-res.test.mjs.
-  const ctx = vm.createContext({ location: { search: "" }, URLSearchParams, WeakSet, WeakMap, Math, Object, Number, String });
+  const ctx = vm.createContext(withTlxUtil({ location: { search: "" }, URLSearchParams, WeakSet, WeakMap, Math, Object, Number, String }));
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/render/three/tlx-util.js"), "utf8"), ctx, { filename: absSrc("js/render/three/tlx-util.js") });
   vm.runInContext(TLX.replace(/^const TLX = /m, "var TLX = "), ctx, { filename: absSrc("js/render/three/tlx.js") });
   const f = ctx.TLX.dprCapFor;
@@ -202,7 +205,7 @@ test("TLX-10: window.scene/camera/renderer/THREE only behind ?three-devtools=1",
 // The real tsl-lit factory over the permissive stand-in, with uniform()/uniformArray() kept as plain
 // { value } holders so updateFrame's uploads can be read back. The shadow subsystem is a lamp-armed stub.
 function bootLit({ lampIdx = 2, extras = false } = {}) {
-  const ctx = vm.createContext({ window: {}, Log: { warn() {} }, Float32Array, Math, Array, Object, Number });
+  const ctx = vm.createContext(withTlxUtil({ window: {}, Log: { warn() {} }, Float32Array, Math, Array, Object, Number }));
   for (const f of ["js/lighting/knobs.js", "js/render/shared/post-common.js", "js/render/shared/assets.js"]) vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   vm.runInContext(read("js/render/three/tsl-lit.js"), ctx, { filename: absSrc("js/render/three/tsl-lit.js") });
   const holder = (value) => ({ value, setGroup() { return this; } });

@@ -43,7 +43,7 @@ const TLXTexPool = (function () {
       _texStat.disposed++;
       const fx = fxOf();
       if (fx && fx.releaseTexture) { try { fx.releaseTexture(t); } catch (_) { /* cache bookkeeping only */ } }
-      try { t.dispose(); } catch (_) { /* device already dying */ }
+      TLXUtil.safeDispose(t);   // device already dying
     }
     function retireTexture(t, now) {
       if (!t.__tlxPoolW) { disposePooled(t); return; }

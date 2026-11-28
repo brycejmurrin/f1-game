@@ -1,3 +1,4 @@
+import { seedTlxUtil } from "./tlx-util-vm.mjs";
 /* fake-webgl2 — a no-op WebGL2 context (a Proxy) that lets three r186's real WebGPURenderer({ forceWebGL })
  * boot and render in Node. It counts every GL call, the bytes handed to bufferData/bufferSubData, and keeps
  * every shaderSource() string, so a unit test can read the GLSL three generated for a TSL material (the
@@ -77,6 +78,7 @@ export function makeFakeGL(w = 64, h = 64) {
 /** Browser-ish globals three's bundle touches at import / init time in Node. Idempotent. */
 export function installThreeGlobals() {
   const g = globalThis;
+  seedTlxUtil(g);   // TLX files release through TLXUtil at call time (#7334)
   if (!g.self) g.self = g;
   if (!g.window) g.window = g;
   for (const k of ["ImageBitmap", "HTMLImageElement", "HTMLCanvasElement", "OffscreenCanvas", "VideoFrame", "HTMLVideoElement", "ImageData"])

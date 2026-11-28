@@ -353,7 +353,7 @@
       skipped() { curT.value = ctx.ldrTex; lastOk = false; },
       reset() { reset = true; },
       state: () => ({ frames, resets, size: [W, H], jitter: [_jit[0], _jit[1]], held: !!hist, velocity: !!velT }),
-      dispose() { try { histInit.dispose(); outInit.dispose(); } catch (_) { /* device dying */ } },
+      dispose() { TLXUtil.safeDispose(histInit, outInit); },   // each in its own try: a dying device skipped outInit (#7334)
     };
   }
 

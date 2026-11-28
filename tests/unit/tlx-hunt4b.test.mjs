@@ -19,6 +19,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { makeFakeGL, installThreeGlobals } from "../helpers/fake-webgl2.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 import { fnSource } from "../helpers/fn-source.mjs";
+import { seedTlxUtil } from "../helpers/tlx-util-vm.mjs";
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
@@ -1057,7 +1058,7 @@ function cloudCacheHarness() {
   } }));
   const C = { rts: resources.slice(0, 2), geo: resources[2], mat: resources[3], dead: false, filling: true, band: 0, N_BANDS: 4, front: 0, F: { y0: {}, y1: {} } };
   const D = { cacheOn: { value: 1 } }, U = { cloud: { value: 1 } };
-  const context = vm.createContext({ C, D, U });
+  const context = vm.createContext({ C, D, U, TLXUtil: seedTlxUtil() });
   vm.runInContext(block + "\n;globalThis.api={cacheStep,cacheWarm,dispose};", context);
   renderer = { target: "original", mrt: "mrt", autoClear: true,
     getRenderTarget() { return this.target; }, getMRT() { return this.mrt; },

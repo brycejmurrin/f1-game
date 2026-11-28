@@ -107,7 +107,7 @@ class V2 { constructor(x, y) { this.x = x; this.y = y; } set(x, y) { this.x = x;
 function load(enabled) {
   const ctx = { window: {}, console };
   ctx.window = ctx;
-  vm.createContext(ctx);
+  vm.createContext(withTlxUtil(ctx));
   vm.runInContext(read("js/render/three/tsl-viewport.js"), ctx, { filename: absSrc("js/render/three/tsl-viewport.js") });
   const TSL = fakeTSL();
   return { VP: ctx.TLXShaders.viewport({ Vector2: V2 }, TSL, { enabled }), TSL };
@@ -160,10 +160,10 @@ test("post lazy targets use their logical rect on first activation and reopening
   // Real post orchestration and TSL graphs; record uniforms at each draw.
   // No renderer compilation or GPU is needed to observe binding order.
   const THREE = await import("../../vendor/three-0.187.0/three.webgpu.min.js");
-  const ctx = vm.createContext({ window: {},
+  const ctx = vm.createContext(withTlxUtil({ window: {},
     localStorage: { getItem: (key) => key === "apex26.tlxAoFold" ? "0" : null },
     Log: { info() {} },
-  });
+  }));
   ctx.window = ctx;
   for (const file of ["js/lighting/knobs.js", "js/render/shared/post-common.js",
     "js/render/three/tsl-viewport.js", "js/render/three/tsl-chunks.js",
@@ -239,9 +239,10 @@ test("texture rebind updates ratio and edge clamp immediately, without a global 
 // Real post factories and Three graph objects; intercept only GPU drawing.
 // Assert uniforms at submission, not only after present() has completed.
 import * as RealThree from "../../vendor/three-0.187.0/three.webgpu.min.js";
+import { withTlxUtil } from "../helpers/tlx-util-vm.mjs";   // TLX files release through TLXUtil (#7334)
 function postFixture() {
   const ctx = { Log: { info() {}, warn() {} }, localStorage: { getItem() { return null; } } };
-  ctx.window = ctx; vm.createContext(ctx);
+  ctx.window = ctx; vm.createContext(withTlxUtil(ctx));
   for (const f of ["js/lighting/knobs.js", "js/render/shared/post-common.js", "js/render/three/tsl-viewport.js",
     "js/render/three/tsl-chunks.js", "js/render/three/tsl-gi.js", "js/render/three/tsl-post.js", "js/render/three/tlx-post.js"])
     vm.runInContext(read(f), ctx, { filename: absSrc(f) });

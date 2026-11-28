@@ -90,15 +90,15 @@
         if (ownedRTs.has(renderer.getRenderTarget())) renderer.setRenderTarget(null);
       } catch (_) { /* device already dying */ }
       for (const mat of ownedMaterials) {
-        try { mat.dispose(); } catch (_) { /* device already dying */ }
+        TLXUtil.safeDispose(mat);   // device already dying
       }
       // RenderTarget.dispose owns all MRT colour attachments and its depth
       // texture. Do not separately dispose those textures here.
       for (const rt of ownedRTs) {
-        try { rt.dispose(); } catch (_) { /* device already dying */ }
+        TLXUtil.safeDispose(rt);   // device already dying
       }
       for (const tex of ownedTextures) {
-        try { tex.dispose(); } catch (_) { /* device already dying */ }
+        TLXUtil.safeDispose(tex);   // device already dying
       }
       ownedMaterials.clear(); ownedRTs.clear(); ownedTextures.clear();
     }
@@ -559,7 +559,7 @@
     function dropRT(rt) {
       if (!rt) return;
       ownedRTs.delete(rt);
-      try { rt.dispose(); } catch (_) { /* device already dying */ }
+      TLXUtil.safeDispose(rt);   // device already dying
     }
     function unbind(slot, fallback) {
       if (slot) slot.value = fallback;
