@@ -919,7 +919,8 @@ const AiDrive = (function () {
   function snapProg(o) { return o._snapProg ?? o.prog; }
   function trailYieldStep(c, behind, street) {
     const near = behind ? clamp((TRAIL_FAR_S - (snapProg(c) - snapProg(behind)) / Math.max((behind._snapSpeed ?? behind.speed) || 0, 1)) / (TRAIL_FAR_S - TRAIL_NEAR_S), 0, 1) : 0;
-    if (!(behind && behind._trOf === c && trailYield(behind.trailT, street) && near > 0)) { c._trYT = 0; return false; }
+    // A finished car (returns before trailStep) or a human one (never runs it) keeps a frozen latch: never yield to it.
+    if (!(behind && !behind.finished && !behind.human && behind._trOf === c && trailYield(behind.trailT, street) && near > 0)) { c._trYT = 0; return false; }
     c._trYT = behind.trailT * near;
     c._trYS = behind.passOf === c ? -behind.passSide : ((c._snapX ?? c.x) >= (behind._snapX ?? behind.x) ? 1 : -1);
     return true;
@@ -1158,9 +1159,7 @@ const AiDrive = (function () {
     b.chaserVmax = ctx.otherVmax; b.chaserPace = ctx.otherPace; b.other = ctx.other;
     return coverConcede(b) >= 0.70;
   }
-  function sbsCommitT(ctx) { return sbsConcedes(ctx) ? SBS_COMMIT_MIN : 2; }
-  function sbsEase(ctx) { return sbsConcedes(ctx) ? 0.94 : 0.97; }
-  // sbsCommitT + sbsEase from ONE sbsConcedes.
+  // The side-by-side commit time and ease from ONE sbsConcedes.
   const _slOut = { commitT: 2, ease: 0.97 };   // pooled
   function sbsLimits(ctx, out = _slOut) {
     const c = sbsConcedes(ctx);
@@ -1721,8 +1720,8 @@ const AiDrive = (function () {
     wallAiScrub, beginLook, pushLook, endLook, lookWindow, bankGrip, aiRescueDelay, otSide,
     letPassCase, letPassDelay, letPassPull, letPassSide, letPassEase, queueFloor, laneFollow, unstuckLatFloor,
     digOutBudget, digOutEscalated, digOutHeld,
-    edgeHead, EDGE_KEEP_M, stoppedHazard, hazardReach, hazardClear, hazardHead, hazardSide, stallStep, stallSweep, STALL_RETIRE_S, otWant, repassLock, attemptRoll, runExtra, latchLate, cornerK, sbsCommitT, sbsEase, sbsArgs, SBS_COMMIT_MIN, passSideBonus, queueTime, queuePress, passReach, passTarget, passSideClosed, passHold, passCooldown, sideYieldsA, humanYieldGrace, humanYieldBand, humanYieldT, humanYieldTakes, aimIntrudes, paceSample,
-    launchPlan, launchMul, launchDone, startCalm, startCalmS, startGapT, pacePhase, trailStep, trailYieldStep, trailYieldEase, trailYieldCorner, squeezeEase, squeezeBrake,
+    edgeHead, EDGE_KEEP_M, stoppedHazard, hazardReach, hazardClear, hazardHead, hazardSide, stallStep, stallSweep, STALL_RETIRE_S, otWant, repassLock, attemptRoll, runExtra, latchLate, cornerK, sbsArgs, SBS_COMMIT_MIN, passSideBonus, queueTime, queuePress, passReach, passTarget, passSideClosed, passHold, passCooldown, sideYieldsA, humanYieldGrace, humanYieldBand, humanYieldT, humanYieldTakes, aimIntrudes, paceSample,
+    launchPlan, launchMul, launchDone, startCalm, startCalmS, startGapT, pacePhase, scriptPaceOf, trailStep, trailYieldStep, trailYieldEase, trailYieldCorner, squeezeEase, squeezeBrake,
     holdLineGap, defendOnce, lineFollow, attackOK, sideLevel,
     mistakeChance, mistakeTotal, mistakePhase, mistakeBrakeMul, mistakeGatherMul,
     lodLab,
