@@ -113,6 +113,44 @@ test("the gear map leaves gaps neutral and uses observed gear colours", () => {
   ]);
 });
 
+// #7313 R9: speedAtDate rescanned car from index 0 for every loc segment, so the
+// speed map read O(loc × car) dates. It now walks a cursor, reset only by the
+// closing segment's step back to loc[0].
+test("the speed map walks the car trace once and keeps the reference colours", () => {
+  const { mapSpeedColor, mapSpeedMax } = vm.runInContext("DataTelemetryModel", ctx);
+  const renderer = vm.runInContext("DataTelemetryRender", ctx).create({ cssColor: () => "comparison" });
+  let dateReads = 0;
+  const car = Array.from({ length: 400 }, (_, i) => {
+    const date = i * 50, speed = 100 + (i * 37) % 200;
+    return { get date() { dateReads++; return date; }, speed };
+  });
+  const N = 200;
+  const loc = Array.from({ length: N }, (_, i) => {
+    const a = (i / N) * Math.PI * 2;
+    return { date: i * 100 + 25, x: 1000 * Math.cos(a), y: 1000 * Math.sin(a) };
+  });
+  const plain = car.map((c, i) => ({ date: i * 50, speed: c.speed }));
+  const vMax = mapSpeedMax(plain);
+  const ref = (date) => {
+    let ci = 0;
+    while (ci < plain.length - 1 && plain[ci].date < date) ci++;
+    return mapSpeedColor(Math.min(1, Math.max(0, plain[ci].speed / vMax)));
+  };
+  const want = [];
+  for (let i = 1; i <= N; i++) want.push(ref(loc[i % N].date));
+  const inks = [];
+  const brush = new Proxy({ stroke() { if (this.lineWidth === 3.5) inks.push(this.strokeStyle); } },
+    { get: (target, key) => key in target ? target[key] : () => {} });
+  dateReads = 0;
+  renderer.buildMapBase({
+    primary: { car, loc }, mapMode: "speed", mw: 320, mh: 320,
+    map: true, mapBase: { getContext: () => brush },
+  });
+  assert.equal(inks.length, N, "the lap closes, so every segment is inked");
+  assert.deepEqual(inks, want);
+  assert.ok(dateReads < 4 * (car.length + N), `car dates read ${dateReads} times`);
+});
+
 test("braking duel aligns distance and refuses clamped or missing feed intervals", () => {
   const model = vm.runInContext("DataTelemetryModel", ctx);
   function lane(speed) {
