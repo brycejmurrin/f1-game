@@ -378,3 +378,12 @@ test("blocked search results reach LiveRegion, not only the status note (#6883 r
   assert.match(said[0][0], /^Pause during a session to open /);
   assert.equal(said[0][1], "hud");
 });
+test("FIND A SETTING shows one chip per destination when catalog rows share a target (#7416)", () => {
+  const h = boot();
+  const chips = (query) => { h.search.value = query; h.search.oninput(); return [...h.index.querySelectorAll("button")].filter((b) => b.dataset.settingResult); };
+  assert.equal(chips("share code").length, 1, "two catalog rows lead to the share-code import");
+  assert.equal(chips("backup").length, 2, "save and restore: two places, two chips");
+  const rows = h.ctx.Search.find("backup");
+  assert.equal(new Set(rows.map((r) => r.page + "#" + r.target)).size, rows.length);
+  assert.equal(h.ctx.Search.find("share settings")[0].target, "pm-files-show-share", "an alias only the second row carries still finds the place");
+});
