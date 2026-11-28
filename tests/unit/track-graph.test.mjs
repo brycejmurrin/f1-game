@@ -875,3 +875,74 @@ test("baked tree blockers use the rendered mesh placement transform", () => {
   assert.equal(TrackGeom.lightBlocked(track, [10, 5, 0], 0, 0, 1, Infinity), true);
   assert.equal(TrackGeom.lightBlocked(track, [13.5, 14, 0], 0, 0, 1, Infinity), false, "transformed crown corner remains transparent");
 });
+
+// #7385 S4: every backend multiplies each instanced vertex by the instance
+// colour (tsl-lit.js albedoIn = color * instanceTint, glsl-lit.js vCol = aCol *
+// aInstCol, the WGX lit chunk the same), so this is the colour a GPU draws.
+// For a model that mixes fixed-colour and NODE_COLOR ops it must equal what
+// replay() fuses: the fixed parts keep their own colour, only NODE_COLOR ops
+// take the placement's.
+const instancedVerts = (batches) => {
+  const out = [];
+  for (const b of batches) for (let i = 0; i < b.count; i++) {
+    const tint = b.colors ? [b.colors[i * 3], b.colors[i * 3 + 1], b.colors[i * 3 + 2]] : [1, 1, 1];
+    for (let v = 0; v < b.geo.pos.length / 3; v++) {
+      const p = applyMat4(b.matrices, i, [b.geo.pos[v * 3], b.geo.pos[v * 3 + 1], b.geo.pos[v * 3 + 2]]);
+      out.push([...p, b.geo.col[v * 3] * tint[0], b.geo.col[v * 3 + 1] * tint[1], b.geo.col[v * 3 + 2] * tint[2]]);
+    }
+  }
+  return out;
+};
+const fusedVerts = (buf) => {
+  const out = [];
+  for (let v = 0; v < buf.pos.length / 3; v++)
+    out.push([buf.pos[v * 3], buf.pos[v * 3 + 1], buf.pos[v * 3 + 2], buf.col[v * 3], buf.col[v * 3 + 1], buf.col[v * 3 + 2]]);
+  return out;
+};
+const vertKeys = (vs) => vs.map((v) => v.map((x) => Math.round(x * 1e4)).join(",")).sort();
+
+test("a mixed-colour model draws its fixed parts untinted when instanced, exactly as fused (#7385 S4)", () => {
+  const TRUNK = [0.30, 0.22, 0.13];
+  const pine = (rec) => {
+    rec.cyl([0, 0, 0], 0.6, 5, TRUNK, 6);
+    rec.cone([0, 4, 0], 2.5, 4, TrackGraph.NODE_COLOR, 7);
+  };
+  const pineB = (rec) => {               // another variant, same trunk op
+    rec.cyl([0, 0, 0], 0.6, 5, TRUNK, 6);
+    rec.cone([0.5, 4.5, 0], 2.0, 3, TrackGraph.NODE_COLOR, 7);
+  };
+  const g = TrackGraph.create({ raw: RAW });
+  const fused = buf();
+  const r = [0.6, 0, 0.8], u = [0, 1, 0], t = [-0.8, 0, 0.6];
+  const places = [
+    ["pineA", pine, { o: [10, 0, 4], r, u, t, s: [1.2, 1.2, 1.2], col: [0.08, 0.26, 0.12] }],
+    ["pineA", pine, { o: [-6, 1, 9], r, u, t: [0.8, 0, -0.6], col: [0.15, 0.30, 0.10] }],   // the other handedness
+    ["pineB", pineB, { o: [3, 0, -12], r, u, t, col: [0.10, 0.20, 0.10] }],
+  ];
+  for (const [key, build, p] of places) g.instance(key, p, build, { kind: "pine" }, emitter(), fused);
+  const { batches } = g.batches();
+  const plainBatches = batches;
+  assert.deepEqual(vertKeys(instancedVerts(plainBatches)), vertKeys(fusedVerts(fused)),
+    "instanced position+colour must equal the fused buffer, vertex for vertex");
+
+  // One shared, untinted trunk batch per handedness for both models; each crown keeps its key and colours.
+  const trunks = plainBatches.filter((b) => b.model.startsWith("pineA|fixed|"));
+  assert.equal(trunks.length, 2, `the two pine models share their identical trunk: ${plain(batches.map((b) => b.model))}`);
+  for (const b of trunks) {
+    assert.equal(b.colors, null, "a fixed-colour part takes no instance tint");
+    for (let v = 0; v < b.geo.col.length; v += 3)
+      assert.deepEqual(plain(Array.from(b.geo.col.slice(v, v + 3))), TRUNK);
+  }
+  assert.equal(trunks.reduce((n, b) => n + b.count, 0), 3, "every placement draws its trunk once");
+  for (const key of ["pineA", "pineB"]) {
+    const crowns = plainBatches.filter((b) => b.model === key);
+    assert.ok(crowns.length && crowns.every((b) => b.colors), `${key} crown batch carries the per-instance colours`);
+  }
+});
+
+test("a single-colour-kind model is not split (#7385 S4)", () => {
+  const g = TrackGraph.create({ raw: RAW });
+  for (const [key, col] of [["tinted", TrackGraph.NODE_COLOR], ["fixed", [0.4, 0.4, 0.4]]])
+    g.instance(key, { ...AT([0, 0, 0]), col: [0.2, 0.3, 0.4] }, (rec) => { rec.box([0, 1, 0], [1, 2, 1], col); }, null, emitter(), buf());
+  assert.deepEqual(plain(g.batches().batches.map((b) => [b.model, !!b.colors])), [["fixed", false], ["tinted", true]]);
+});
