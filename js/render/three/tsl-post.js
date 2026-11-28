@@ -324,8 +324,8 @@
             ao.mulAssign(mix(float(1.0), sh, front));
           });
     }
-    // contactSS: the same march, same occluder tests, at contactLong's taps. The start jitter trades banding for
-    // noise the AO blur (and TRAA) averages. Bounded: STEPS depth taps per pixel, fixed here at graph build.
+    // contactSS: the same march, same occluder tests, at contactLong's taps. The start jitter (static per pixel) trades banding
+    // for noise the AO blur averages. Bounded: STEPS depth taps per pixel, fixed here at graph build.
     function contactLongT(P, N, ao) {
           const C = contactLong;
           If(ssaoU.contact.greaterThan(0.0).and(ssaoU.sunVS.z.lessThan(0.05)), () => {

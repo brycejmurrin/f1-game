@@ -48,8 +48,9 @@ const APEX = Object.freeze({ contactSS: 1 });
 let _apex;
 function apexStored(st = gstore()) { return !!st && st.get("gfxPreset", null) === "extreme" && st.get("gfxApex", false) === true; }
 function apexPreset() { return _apex === undefined ? (_apex = apexStored()) : _apex; }
-// false only once a renderer has said this adapter is not desktop-class; unknown (pre-boot, a harness) is not a no.
-function apexBlocked() { return phoneDetail() || globalThis.GLX?.apexTier === false; }
+// Blocked on a phone and once a renderer is installed that does not say apexTier (GLX, WGX, TLX off a desktop-class
+// adapter); unknown (pre-boot, a harness) is not a no. refresh() repaints the row when the Graphics page opens.
+function apexBlocked() { const g = globalThis.GLX; return phoneDetail() || (!!g && g.apexTier !== true && (g.apexTier === false || !!g.backend)); }
 const SHED_ORDER = Object.freeze(["lightsHi", "raysHi", "ssaoHi", "gtao", "ssrHi", "superSample", "ssgi"]);
 let _detail = -1, _shed = 0, _cinema = false;
 function detail() {
@@ -403,7 +404,7 @@ if (typeof document !== "undefined") {
 // PRESETS / label stay module-local (UI + current() use them).
 // cycle / PHONE_MAX_ID stay exported — unit seams (quality-preset-phone).
 return {
-  init, set, cycle, current: () => current().id, defaultId,
+  init, set, cycle, current: () => current().id, defaultId, refresh: () => paintGfx(""),
   maxId, capId, isIPhone, isWeakPhone, PHONE_MAX_ID, PHONE_ULTRA_NOTE, EXTREME_NOTE, APEX_NOTE, APEX_BLOCKED_NOTE, APEX, apexBlocked,
   hasShedExtras: () => detail() > 0 || (!phoneDetail() && SHED_ORDER.some(name => overrides()[name] === true)),
   shedFeature: name => SHED_ORDER.includes(name) && feature(name, false, true) && !feature(name),

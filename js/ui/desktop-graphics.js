@@ -85,6 +85,7 @@ const DesktopGraphics = (() => {
   let expand;
   function mount() {
     const panel = document.getElementById("pm-panel-graphics");
+    GfxQuality.refresh?.();   // the renderer is installed by now: APEX shows disabled where the adapter cannot run it
     if (!panel || typeof GLX === "undefined" || panel.querySelector("[data-desktop-graphics]")) return;
     // "Use preset" names what the CURRENT preset gives (GfxQuality.presetDefault), so the rules live in one place. A phone's
     // 90 px stepper cell fits "Preset" (every phone row is off by preset); the option's aria-label keeps the full value.

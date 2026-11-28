@@ -71,6 +71,8 @@ test("a renderer that is not desktop-class refuses APEX; an unknown one (pre-boo
   no.Q.set("apex", { noReload: true });
   assert.deepEqual({ ...no.data }, { gfxPreset: "extreme" }, "GLX / WGX / a software adapter stay on EXTREME");
   assert.equal(quality({}, {}).Q.apexBlocked(), false);
+  for (const backend of ["webgl2", "webgpu", "three"]) assert.equal(quality({}, { backend }).Q.apexBlocked(), true, backend + " without apexTier");
+  assert.equal(quality({}, { backend: "three", apexTier: true }).Q.apexBlocked(), false);
   assert.equal(quality({}, undefined).Q.apexBlocked(), false);
   assert.equal(quality({}, { apexTier: true }).Q.capId("apex", false), "apex");
 });
@@ -117,7 +119,7 @@ test("contactLong: 16 taps, ordered, inside 1 m; full strength through today's 0
   assert.ok(C.weight(0.4) > C.weight(0.6) && C.weight(0.6) > C.weight(0.9));
 });
 
-async function ssaoShader(t, contactSS) {
+async function ssaoShader(t, contactSS, failLong = false) {
   const fg = makeFakeGL(320, 180);
   const renderer = new THREE.WebGPURenderer({ canvas: fg.canvas, context: fg.gl, forceWebGL: true, antialias: false });
   await renderer.init();
@@ -125,7 +127,7 @@ async function ssaoShader(t, contactSS) {
   const shadow = { sunTex: new THREE.DepthTexture(1, 1), S: { enabled: true, lightVP: identity, lampLightVP: identity, lampArmed: false, lampIdx: -1 } };
   const T = globalThis.TLXShaders, orig = T.post;
   let P = null;
-  T.post = (...a) => (P = orig(...a));
+  T.post = (...a) => { if (failLong && a[2].contactSS) throw new Error("long march failed to build"); return (P = orig(...a)); };
   const had = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
   Object.defineProperty(globalThis, "localStorage", { configurable: true, writable: true, value: { getItem: () => null, setItem() {}, removeItem() {} } });
   let post;
@@ -156,4 +158,10 @@ test("the post graph is today's unless tlx.js passes contactSS; with it the marc
   assert.notEqual(on.wgsl, off.wgsl);
   assert.equal(on.key, "tlx-post-ssao+cs", "a different program never shares a cache key");
   assert.deepEqual([loops(on.wgsl, 6), loops(on.wgsl, 16)], [false, true], "16 taps, fixed at graph build: the cost bound");
+});
+
+test("a long march that fails to build falls back to today's chain", async (t) => {
+  const off = await ssaoShader(t, false), fell = await ssaoShader(t, true, true);
+  assert.equal(fell.key, "tlx-post-ssao");
+  assert.equal(fell.wgsl, off.wgsl);
 });

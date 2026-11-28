@@ -157,6 +157,7 @@ const SPEC = [
   { k: "desktopFpsTarget", lane: "raw", group: "display", def: "display", oneOf: ["display", "60", "120"], perDevice: true, src: "js/perf/render-rate.js desktop race frame rate" },
   { k: "gfxFeatureOverrides", lane: "json", group: "display", def: {}, whole: true, perDevice: true, src: "js/ui/desktop-graphics.js per-effect choices" },
   { k: "gfxPreset", lane: "json", group: "display", def: (G) => (typeof GfxQuality !== "undefined" && GfxQuality.defaultId) ? GfxQuality.defaultId(!!(G && G.gfx && G.gfx.isMobile)) : "high", src: "js/perf/quality-preset.js defaultId", perDevice: true },
+  { k: "gfxApex", lane: "json", group: "display", def: false, perDevice: true, src: "js/perf/quality-preset.js APEX = gfxPreset extreme + this flag" },
   { k: "gfxHigh", lane: "raw", group: "display", def: null, src: "js/perf/quality-preset.js (legacy mobile tier)" },
   { k: "gfxBackend", lane: "raw", group: "display", def: null, src: "js/perf/renderer-picker.js + js/render/renderer-boot.js (unset = TLX when a GPU adapter resolves, else GLX — skips three.webgpu)", deviceBound: true },
   { k: "tlxForceGL", lane: "raw", group: "display", def: null, src: "js/perf/renderer-picker.js (null = AUTO)", deviceBound: true },

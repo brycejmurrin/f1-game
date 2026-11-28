@@ -843,7 +843,7 @@ const TLX = (function () {
         try { raw = localStorage.getItem("apex26.tlxForceHw") || ""; } catch (_) { raw = ""; }
         const set = new Set(String(raw).split(",").map((p) => p.trim()).filter(Boolean));
         const all = set.has("1") || set.has("all");
-        return { on: all || set.size > 0, has: (part) => all || set.has(part) };
+        return { on: all || set.size > 0, has: (part) => all || set.has(part), named: (part) => set.has(part) };
       })();
       // Content skips ask these, not softGpu()/softwareGL, so the switches reach them.
       // Which backend three ACTUALLY bound. `_softAdapter` is a fact about
@@ -882,8 +882,8 @@ const TLX = (function () {
       // are the same value, so nothing there changes.
       function softContent(part) { return softwareGL && !_forceHw.has(part); }
       // APEX (#7411, D-050): a desktop-class adapter is a desktop, non-WebKit, hardware adapter with three bound to
-      // WebGPU. apex26.tlxForceHw=apex opens it on a software adapter for a container still; no player has that key.
-      const _apexTier = (_deskTier && isWebGPU()) || _forceHw.has("apex");
+      // WebGPU (the backend is bound: init() was awaited above). apex26.tlxForceHw=apex opens it on a software adapter for a container still; no player has that key.
+      const _apexTier = (_deskTier && isWebGPU()) || _forceHw.named("apex");   // by name: tlxForceHw=1 / all (probes, the census) do not open it
       function softOutRT() {
         if (!softGpu()) return null;
         const up = wantSpatialUpscale();

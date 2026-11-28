@@ -516,6 +516,7 @@
     if (EX0) attempts.push([HI, EX0]);
     attempts.push([HI, null]);
     if (HI) attempts.push([null, null]);
+    if (ctx.contactSS) attempts.push([null, { contactSS: false }]);   // APEX: a long march that fails to build costs only itself
     let P = null, EX = null;
     for (let i = 0; i < attempts.length && !P; i++) {
       try { P = TLXShaders.post(THREE, TSL, postCtx(attempts[i][0], attempts[i][1])); HI = attempts[i][0]; EX = attempts[i][1]; } catch (e) {
