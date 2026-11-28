@@ -56,5 +56,34 @@ const LearnAppearance = (function () {
     sync();
   }
 
-  return Object.freeze({mount});
+  /** TRY IT IN THE CAR: a drill's launch button and its last-run line, only inside the game's LEARN frame. The
+   *  game launches the drill (js/ui/learn-door.js, apex-learn-scenario) and posts its result back on BACK TO
+   *  LESSON (apex-learn-result). tests/unit/learn-drill-reach.test.mjs pins every registered drill to one. */
+  function drill(id, label, parent) {
+    if (window.frameElement?.id !== "learn-lab") return null;
+    const launch = document.createElement("button");
+    launch.type = "button";
+    launch.id = "launch-" + id + "-drill";
+    launch.className = "drill-launch";
+    launch.textContent = "Try it in the car: " + label;
+    launch.addEventListener("click", () => window.parent.postMessage({type: "apex-learn-scenario", id}, window.location.origin));
+    const result = document.createElement("p");
+    result.id = id + "-drill-result";
+    result.setAttribute("role", "status");
+    result.hidden = true;
+    (parent || document.getElementById("lab") || document.querySelector("main") || document.body).append(launch, result);
+    window.addEventListener("message", event => {
+      const data = event.data;
+      if (event.origin !== window.location.origin || event.source !== window.parent || data?.type !== "apex-learn-result" ||
+          data.id !== id || !data.result) return;
+      const r = data.result, k = r.display?.k ?? 1, unit = r.display?.unit ?? r.unit ?? "";
+      const num = v => (Number(v) * k).toFixed(Number.isInteger(Number(v)) ? 0 : 1) + (unit ? " " + unit : "");
+      result.textContent = "Your last drill: " + (r.medal ? r.medal.toUpperCase() : "No medal") + " · " + num(r.value)
+        + (Number.isFinite(r.best) ? " (best " + num(r.best) + ")" : "") + ". " + (r.verdict || "");
+      result.hidden = false;
+    });
+    return launch;
+  }
+
+  return Object.freeze({mount, drill});
 })();

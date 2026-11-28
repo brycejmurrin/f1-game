@@ -178,3 +178,5 @@
     },
   });
 })();
+// TRY IT IN THE CAR: Wake Footprint (js/learn-drills/wake.js); BACK TO LESSON posts its last run beside the button.
+if (typeof LearnAppearance !== "undefined") LearnAppearance.drill?.("wake", "Wake Footprint");

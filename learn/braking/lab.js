@@ -294,3 +294,5 @@
   updateAxleLoads();
   updateSpeedGrip();
 })();
+// TRY IT IN THE CAR: Grip & Braking (js/learn-drills/grip.js); BACK TO LESSON posts its last run beside the button.
+if (typeof LearnAppearance !== "undefined") LearnAppearance.drill?.("grip", "Grip & Braking");

@@ -1,0 +1,1 @@
+Fixed: LEARN now offers "Try it in the car" on Grip & Braking, Racing Lines, Chassis X-Ray, Hybrid Lap Budget, Wet Weather Lines, Telemetry Detective and Rear Brake Blending (Torque Fill Exit, beside Harvest Stop); those drills had no button and could not be started. The Aero Lab's button is no longer hidden inside the collapsed "In Apex 26" section.
