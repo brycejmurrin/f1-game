@@ -44,6 +44,8 @@ test("pit resolve: a valid authored band still overrides its key", () => {
 test("pit resolve: limitKph must be positive and is clamped to [20, 300]", () => {
   assert.equal(P.resolve({ pit: { limitKph: 0 } }).limitKph, 80);
   assert.equal(P.resolve({ pit: { limitKph: -5 } }).limitKph, 80);
+  assert.equal(P.resolve({ pit: { limitKph: NaN } }).limitKph, 80);
+  assert.equal(P.resolve({ pit: { limitKph: "90" } }).limitKph, 80);
   assert.equal(P.resolve({ pit: { mode: "narrow", limitKph: 0 } }).limitKph, 60);
   assert.equal(P.resolve({ pit: { limitKph: 1000 } }).limitKph, 300);
   assert.equal(P.resolve({ pit: { limitKph: 5 } }).limitKph, 20);

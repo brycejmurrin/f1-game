@@ -109,7 +109,7 @@ const TrackSceneryData = (function () {
       const out = (arr(names) ? names : []).map((n) => Object.hasOwn(table, n) && table[n]).filter(Boolean);
       return out.length ? out : dflt;
     };
-    const two = (v, d) => (arr(v) && v.length == 2 && v.every(Number.isFinite) ? v : d);
+    const two = (v, d) => (arr(v) && v.length === 2 && v.every(Number.isFinite) ? v : d);
     return Object.assign({}, base, r, { neon: pick(r.neon, NC, base.neon), dayPal: pick(r.dayPal, DC, base.dayPal),
       kinds: arr(r.kinds) && r.kinds.length ? r.kinds : base.kinds, neonKinds: arr(r.neonKinds) ? r.neonKinds : base.neonKinds,
       fh: two(r.fh, base.fh), bh: two(r.bh, base.bh), bias: Number.isFinite(r.bias) ? r.bias : base.bias });
