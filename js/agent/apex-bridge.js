@@ -54,6 +54,7 @@ const ApexBridge = (function () {
   const RATE_LOW = 200, RATE_FLOOR = 25, RATE_MAX_WAIT_MS = 15 * 60000;   // as watch.mjs LOW / FLOOR / MAX_WAIT_MS
   const BACKOFF_MS = 60000;
   const MAX_REPLY = 60000;
+  const REQ_MS = 20000;   // one GitHub request's ceiling (#7491)
   const CMD_RE = /```apex-cmd[ \t]*\n([\s\S]*?)```/;
   // `call` reaches EVERY __apex method except these (Bryce 2026-11-25, "Broad allow-list"; was an allow-list of 50):
   // saves and files (save, persistState, settingsFile, garageFile), career, the lobby and net, a write of the garage's
@@ -269,7 +270,17 @@ const ApexBridge = (function () {
     const api = window.__apex;
     if (!api || typeof api[m] !== "function") throw new Error("__apex." + m + " unavailable");
     if (CALL_CAREER_SCORES.has(m) && careerLive(api)) throw new Error(m + " refused: it would score a DRIVER CAREER round");
+    if (m === "gpuCapture" && _run) _run.gpuTouched = true;
     return api[m].apply(api, Array.isArray(args.args) ? args.args : []);
+  }
+
+  // GPU CAPTURE (#7491): enable() stores its mode, and every later launch wraps every GL call in Spector. A capture
+  // the link turned on ends with the link (stop() turns it off and clears the stored mode); one already on when the
+  // link started is the player's own and stays.
+  const gpuMod = () => window.ApexGpuCapture || null;   // its file sets window.ApexGpuCapture; callers try/catch
+  function gpuOn() { try { const g = gpuMod(); return !!(g && (g.stored() || g.status().on)); } catch (_) { return false; } }
+  function gpuOff() {
+    try { const g = gpuMod(); if (g) g.disable(); } catch (e) { say("gpuCapture off failed: " + ((e && e.message) || e)); }
   }
 
   // Frame-phase ledger (#6941): PerfSpans p50/p95/p99 per phase. {on, reset} change the recorder (an ACTION);
@@ -411,7 +422,8 @@ const ApexBridge = (function () {
       out.push(Object.assign({ cmd: s.cmd }, r));
       if (!r.ok || (r.value && r.value.ok === false)) break;   // a tap / nav that did not arrive stops the batch too
     }
-    return out;
+    // #7491: under the reply cap, as plan() does: two big steps no longer turn the whole reply into {value:null}.
+    return fitSteps(out, MAX_REPLY - 2000);
   }
 
   // UI NAVIGATION (#6383). `tap` presses ONE control the player uses — by id, label text, data attribute, or a circuit tile by
@@ -1019,10 +1031,19 @@ const ApexBridge = (function () {
     const headers = { Accept: "application/vnd.github+json", Authorization: "Bearer " + run.token, "X-GitHub-Api-Version": "2022-11-28" };
     if (o.etag) headers["If-None-Match"] = o.etag;
     if (o.body) headers["Content-Type"] = "application/json";
-    return fetch(API + "/repos/" + REPO + (o.repoPath || "/issues/" + run.issue + path), {
-      method: o.method || (o.body ? "POST" : "GET"), headers, body: o.body ? JSON.stringify(o.body) : undefined, cache: "no-store",
-      keepalive: !!o.keepalive,
+    // #7491: every request ends within REQ_MS. A hung reply POST held run.acting (every later ACTION queued unanswered),
+    // a hung poll stopped the chain while the badge read live. The page's own timer rejects even when fetch ignores the
+    // abort; the controller (where there is one) cancels the request itself.
+    const ctl = typeof AbortController === "function" ? new AbortController() : null;
+    let timer = 0;
+    const late = new Promise((_res, rej) => {
+      timer = setTimeout(() => { try { if (ctl) ctl.abort(); } catch (_) { /* already settled */ } rej(new Error("timed out after " + REQ_MS / 1000 + " s")); }, REQ_MS);
     });
+    const req = fetch(API + "/repos/" + REPO + (o.repoPath || "/issues/" + run.issue + path), {
+      method: o.method || (o.body ? "POST" : "GET"), headers, body: o.body ? JSON.stringify(o.body) : undefined, cache: "no-store",
+      keepalive: !!o.keepalive, signal: ctl ? ctl.signal : undefined,
+    });
+    return Promise.race([req, late]).finally(() => clearTimeout(timer));
   }
   const fence = (obj) => "```apex-result\n" + JSON.stringify(obj) + "\n```";
 
@@ -1291,22 +1312,23 @@ const ApexBridge = (function () {
 
   async function start(issue, tok) {
     if (_run) return false;
-    _run = { issue, token: tok, cutoff: null, since: null, etag: null, seen: new Set(), served: 0, backoff: 0, timer: null, state: "connecting",
+    const run = _run = { issue, token: tok, cutoff: null, since: null, etag: null, seen: new Set(), served: 0, backoff: 0, timer: null, state: "connecting",
       lastRes: { status: 200, headers: null }, errors: 0, activeAt: 0, poll: null, pollWhy: null,   // POLLING
       queue: [], acting: null, running: 0, inflight: new Set(), outbox: [],   // CONCURRENCY
+      gpuTouched: false, gpu0: gpuOn(),   // GPU CAPTURE (#7491): on before the link? then stop() leaves it
       last: null, statusId: 0, statusTimer: null, statusDue: 0, statusBusy: null, statusAgain: null, statusSlow: false, statusAt: 0, onVis: null, wake: null, wakePending: null, wakeErr: null };
     paintBadge();
     try {
-      const hello = await post({ hello: true, facts: facts() });
-      if (!_run) return false;
-      _run.cutoff = _run.since = hello.created_at;
-      _run.activeAt = Date.now();   // a session commands right after the hello: poll fast for BUSY_TAIL_MS
-      _run.state = "live";
+      const hello = await post({ hello: true, facts: facts() }, run);
+      // #7491: a stop() + start() during the hello made a new run; this one's hello must not take it over.
+      if (_run !== run) return false;
+      run.cutoff = run.since = hello.created_at;
+      run.activeAt = Date.now();   // a session commands right after the hello: poll fast for BUSY_TAIL_MS
+      run.state = "live";
       paintBadge();
       say("linked to issue #" + issue);
       schedule();
       armStatus(STATUS_FIRST_MS);
-      const run = _run;
       wakeAcquire(run);
       // Visibility edits honour a rate limit (statusSlow) and a STATUS_MIN_MS floor: a flipping page cannot hammer the API.
       run.onVis = () => {
@@ -1322,9 +1344,9 @@ const ApexBridge = (function () {
       if (/^post 401\b/.test(e.message)) {
         setToken("");
         const why = "GitHub rejected the token (" + e.message.slice(5) + "; pasted text: " + tokenShape(tok) + ")";
-        if (_run) stop(why);
+        if (_run === run) stop(why);
         askToken(issue, why);
-      } else if (_run) stop("could not reach GitHub (" + e.message + ")");
+      } else if (_run === run) stop("could not reach GitHub (" + e.message + ")");
       return false;
     }
   }
@@ -1340,6 +1362,7 @@ const ApexBridge = (function () {
     try { if (run.onVis) document.removeEventListener("visibilitychange", run.onVis); } catch (_) { /* no document */ }
     wakeRelease(run);
     run.queue.length = 0;   // queued ACTIONs never start; running ones finish unanswered
+    if (run.gpuTouched && !run.gpu0) gpuOff();
     _run = null;
     // The last edit says the link ended, and why — even in the first seconds (a reload), to the id stored on the device.
     if (why !== "token rejected" && (run.statusId || storedStatusId(run.issue))) postStatus(run, why || "stopped", true);
@@ -1449,7 +1472,7 @@ const ApexBridge = (function () {
     status: () => (_run ? postStatus(_run) : Promise.resolve(null)), statusDue: () => (_run ? _run.statusDue : 0), BATCH_MAX,
     READ_CMDS, CALL_READ, isRead, PLANS, PLAN_STEPS_MAX, planSteps, drain, OUTBOX_TRIES, OUTBOX_MAX,
     outbox: () => (_run ? _run.outbox.length : 0), backoff: () => (_run ? _run.backoff : 0),
-    pollDelay, POLL_MS, POLL_BUSY_MS, BUSY_TAIL_MS, RATE_LOW, RATE_FLOOR, RATE_MAX_WAIT_MS,
+    pollDelay, POLL_MS, POLL_BUSY_MS, REQ_MS, BUSY_TAIL_MS, RATE_LOW, RATE_FLOOR, RATE_MAX_WAIT_MS,
     pollPlan: () => (_run ? pollPlan(_run, Date.now()) : null),
     active: () => !!_run };
 })();
