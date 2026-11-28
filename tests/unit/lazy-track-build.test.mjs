@@ -60,8 +60,7 @@ test("loadTrackStepped and lazyTrackEnsure gate on the track-build toolkit", () 
   assert.match(symbolSource("async function loadTrackStepped(idx, live)"), /ensureTrackBuild\(/);
   const apex = src("js/agent/apex.js");
   const lazy = apex.slice(apex.indexOf("function lazyTrackEnsure"), apex.indexOf("return o;\n}\n\n// Clear the starting-lights"));
-  assert.match(lazy, /TrackBuildProps/);
-  assert.match(lazy, /toolkitReady/);
+  assert.match(lazy, /lb\.trackBuildResident\(\)/, "the loader's own residency check (#7147 row 6)");
 });
 
 test("ensureTrackBuild injects LAZY_TRACK_BUILD and marks TrackBuildProps resident", async () => {

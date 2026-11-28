@@ -63,3 +63,43 @@ test("a readOnly ApexPlay def builds no track; a non-readOnly def at the title b
     assert.equal(builds, 1);
   } finally { g.close(); }
 });
+
+// #7433 (#7147 rows 5-6): every hook documented read-only (scan, sheetFit, logs, hudSecFlash) is exempt, and the
+// toolkit counts as resident only by the loader's own check (TrackGraph et al.), not TrackBuildProps alone.
+function countBuilds(S) {
+  const n = { builds: 0 };
+  const build = S.Tracks.build;
+  S.Tracks.build = function () { n.builds++; return build.apply(this, arguments); };
+  return n;
+}
+
+test("read-only hooks at the title (toolkit resident) build no track", async () => {
+  const g = await createGame({ carMeshes: false });
+  try {
+    const S = g.sandbox, G = g.G, A = S.__apex;
+    assert.ok(S.LazyBundles.live().trackBuildResident(), "fixture: the track toolkit is resident");
+    const n = countBuilds(S);
+    assert.equal(G.track, null, "title: no track yet");
+    A.sheetFit(); A.logs(); A.scan(10); A.hudSecFlash();
+    assert.equal(n.builds, 0, "no read-only hook ran Tracks.build");
+    assert.equal(G.track, null);
+    A.physState();   // the lazy contract still holds for a track-needing hook
+    assert.equal(n.builds, 1);
+  } finally { g.close(); }
+});
+
+test("TrackBuildProps without TrackGraph is not a resident toolkit: a non-exempt hook builds nothing and does not throw", async () => {
+  const g = await createGame({ carMeshes: false });
+  try {
+    const S = g.sandbox, G = g.G, A = S.__apex;
+    assert.ok(S.TrackBuildProps, "fixture: TrackBuildProps is defined");
+    const graph = S.TrackGraph;
+    S.TrackGraph = undefined;   // graph.js still in flight
+    const n = countBuilds(S);
+    try {
+      assert.doesNotThrow(() => A.physState());
+      assert.equal(n.builds, 0, "no build against a half-loaded toolkit");
+      assert.equal(G.track, null);
+    } finally { S.TrackGraph = graph; }
+  } finally { g.close(); }
+});

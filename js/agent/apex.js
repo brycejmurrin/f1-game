@@ -141,8 +141,8 @@ function simCareerRound() {
 // it as a hook, so the loop must sit above the literal AND this comment must
 // not quote that text (quoting it moves the slice and invents a hook called
 // `for`).
-// READ-ONLY hooks never force it (#6488: menuPrep pollers in a picker tap's settle froze 0.5-1 s, replacing the stepped build).
-const LAZY_READ_ONLY = new Set(["menuPrep", "info", "probe", "texCensus", "tlxMem", "agentHelp", "garagePrebuild", "garageCam"]);
+// READ-ONLY hooks never force it (#6488: menuPrep pollers in a picker tap's settle froze 0.5-1 s, replacing the stepped build). Every hook documented read-only belongs here (#7147).
+const LAZY_READ_ONLY = new Set(["menuPrep", "info", "probe", "texCensus", "tlxMem", "agentHelp", "garagePrebuild", "garageCam", "scan", "sheetFit", "logs", "hudSecFlash"]);
 function lazyTrackEnsure(o) {
   for (const k of Object.keys(o)) {
     const fn = o[k];
@@ -158,13 +158,11 @@ function lazyTrackEnsure(o) {
       if (k !== "race" && k !== "tt" && !G.track && !entering() && !Tracks.building()
           && !(typeof TrackBuildClient !== "undefined" && TrackBuildClient.busy()) && !(G.menuPrep && (G.menuPrep() || {}).building)) {   // menuPrep: the picker's stepped load owns it from ensureCircuit on
         const def = Tracks.LIST[G.trackIdx];
-        // LAZY_TRACK_BUILD: ensureScenery hydrates the circuit BESIDE the toolkit.
-        // Sync loadTrack here while the toolkit is still in flight throws
-        // "TrackBuildProps is not defined" (new-hooks "before a track is loaded"
-        // vs idle menu prep). Leave track null until the toolkit is resident —
-        // race()/startRace await ensureScenery; hooks then return null correctly.
-        const toolkitReady = typeof TrackBuildProps !== "undefined" && !!TrackBuildProps;
-        if (payloadReady(def) && toolkitReady) loadTrack(G.trackIdx);
+        // LAZY_TRACK_BUILD: ensureScenery hydrates the circuit BESIDE the toolkit; a sync loadTrack while any of it is
+        // in flight throws (TrackBuildProps, or TrackGraph: #7147). Leave track null until the loader's own residency
+        // check passes — race()/startRace await ensureScenery; hooks then return null correctly.
+        const lb = typeof LazyBundles !== "undefined" && LazyBundles.live ? LazyBundles.live() : null;
+        if (payloadReady(def) && lb && lb.trackBuildResident()) loadTrack(G.trackIdx);
       }
       return fn.apply(this, a);
     };

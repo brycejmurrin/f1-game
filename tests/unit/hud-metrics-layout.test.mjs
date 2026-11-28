@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
+import { createRequire } from "node:module";
 import { absSrc } from "../helpers/abs-src.mjs";
 import { cssRules as parseCss, decl } from "../helpers/css-rules.mjs";
 
@@ -14,13 +15,12 @@ test("HUD metrics layout AUTO keeps every cluster and lets fitHud adapt", () => 
   const game = fs.readFileSync(path.join(root, "js/game.js"), "utf8");
   assert.match(game, /HUD_MET_LAYOUTS\s*=\s*\["auto", "full", "timing", "driver", "compact"\]/);
   assert.match(game, /HUD_VIS_MODES\s*=\s*\["auto", "on", "off"\]/);
-  assert.match(game, /store\.get\("hudMapVis", "on"\)/);
-  assert.match(game, /store\.get\("hudGapsVis", "on"\)/);
+  assert.match(game, /hudMapVis: \[HUD_VIS_MODES, "on"\], hudGapsVis: \[HUD_VIS_MODES, "on"\]/);
   assert.match(game, /hud-met-\(\[a-z\]\+\)/);
   // MAP / GAPS / LAYOUT are setting rows painted from one refresh (js/ui/setting-row.js).
   assert.match(game, /SettingRow\.paint\(\$\("pm-hudmap"\), hudMapVis\)/);
   assert.match(game, /SettingRow\.paint\(\$\("pm-hudgaps"\), hudGapsVis\)/);
-  assert.match(game, /wireHudChips\("pm-hudmetrics", HUD_MET_LAYOUTS/);
+  assert.match(game, /\["pm-hudmetrics", "hudMetricsLayout"\]/);
   assert.match(game, /hudMapVis === "off" \? "off" : "on"/,
     "HUD fold paints MAP gold when the map is on, red NO MAP when off");
   assert.match(game, /hudGapsVis === "off" \? "off" : "on"/,
@@ -214,9 +214,10 @@ test("an unknown HUD layout falls back to the shipped FULL, and the studio jumps
   const game = fs.readFileSync(path.join(root, "js/game.js"), "utf8");
   const studio = fs.readFileSync(path.join(root, "js/ui/appearance-studio-ui.js"), "utf8");
   const exp = fs.readFileSync(path.join(root, "js/ui/settings-export.js"), "utf8");
-  assert.match(game, /store\.get\("hudMetricsLayout", "full"\)/);
-  assert.match(game, /if \(HUD_MET_LAYOUTS\.indexOf\(hudMetricsLayout\) < 0\) hudMetricsLayout = "full";/);
-  assert.match(game, /if \(HUD_MET_LAYOUTS\.indexOf\(v\) < 0\) v = "full";\s*\n\s*hudMetricsLayout = v;/);
+  // Boot read, façade setter and chip share one coercion (#7147 row 4): the default is "full".
+  assert.match(game, /hudMetricsLayout: \[HUD_MET_LAYOUTS, "full"\]/);
+  assert.match(game, /let hudMetricsLayout = storedChoice\("hudMetricsLayout"\);/);
+  assert.match(game, /set hudMetricsLayout\(v\) \{ commitHud\("hudMetricsLayout", v,/);
   assert.match(exp, /k: "hudMetricsLayout", lane: "json", group: "hud", def: "full"/);
   // One home (#2846): the studio jumps to the HUD & CAMERA LAYOUT row, which offers AUTO.
   assert.match(studio, /"HUD LAYOUT is in HUD & CAMERA", "display", "pm-hudmetrics-sel"/,
@@ -505,4 +506,28 @@ test("the ERS label's line box fits its bar (#6615)", () => {
   assert.equal(decl(rules, '#hud-energy', "overflow"), "hidden", "the bar clips, so a taller line box is cut text");
   // TEXT LARGE / LARGER keep their own taller line on a min-height bar, and out-rank the base rule.
   assert.equal(decl(rules, ':root:is([data-text-size="large"], [data-text-size="larger"]) .hud-energy-label', "line-height"), "1.15");
+});
+
+// #7433 (#7147 row 4): a direct G.hud* write (agent, settings import) repaints the fold like the chip does, and an
+// unknown value takes the shipped default — one coercion (storedChoice/commitHud) for boot, façade and chip.
+test("G.hud* setters repaint the HUD fold summary and coerce an unknown value to the default", async () => {
+  const g = await createRequire(import.meta.url)("../../tools/lib/game-vm.cjs").createGame({ carMeshes: false });
+  try {
+    const S = g.sandbox, G = g.G;
+    const sum = () => S.document.getElementById("pm-hud-details-sum").innerHTML;
+    G.hudMapVis = "on";
+    assert.ok(sum().includes(">MAP<"));
+    G.hudMapVis = "off";
+    assert.ok(sum().includes(">NO MAP<"), "a direct G write repaints the summary");
+    G.hudGapsVis = "off";
+    assert.ok(sum().includes(">NO GAPS<"));
+    G.hudProfile = "broadcast";
+    assert.ok(sum().includes(">BROADCAST<"));
+    G.hudProfile = "bogus";
+    assert.equal(G.hudProfile, "standard", "an unknown profile is the shipped default");
+    assert.ok(sum().includes(">STANDARD<"), "and the summary shows it");
+    G.hudMetricsLayout = "nope";
+    assert.equal(G.hudMetricsLayout, "full");
+    assert.ok(sum().includes(">FULL<"));
+  } finally { g.close(); }
 });

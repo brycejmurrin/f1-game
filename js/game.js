@@ -242,11 +242,16 @@ let unlimitedBudget = store.get("unlimitedBudget", true); // removes credit cap 
 const STEER_MODES = ["tilt", "buttons", "touch"];
 let steerMode = store.get("steerMode", "buttons"); if (!STEER_MODES.includes(steerMode)) steerMode = "buttons";   // a foreign stored value would leave Input in tilt with no motion permission
 const HUD_PROFILES = ["minimal", "standard", "broadcast"];
-let hudProfile = store.get("hudProfile", "standard");
-if (HUD_PROFILES.indexOf(hudProfile) < 0) hudProfile = "standard";
 const HUD_MET_LAYOUTS = ["auto", "full", "timing", "driver", "compact"];
-let hudMetricsLayout = store.get("hudMetricsLayout", "full");
-if (HUD_MET_LAYOUTS.indexOf(hudMetricsLayout) < 0) hudMetricsLayout = "full";   // the default above, not AUTO (settings-export def "full")
+const HUD_VIS_MODES = ["auto", "on", "off"];
+// One coercion for each HUD choice: the boot read, the G façade setter and the chip all go through
+// storedChoice/commitHud (#7147 row 4). An unknown value is the shipped default (LAYOUT: "full", not AUTO; settings-export def).
+const HUD_CHOICE = { hudProfile: [HUD_PROFILES, "standard"], hudMetricsLayout: [HUD_MET_LAYOUTS, "full"],
+  hudMapVis: [HUD_VIS_MODES, "on"], hudGapsVis: [HUD_VIS_MODES, "on"] };
+const hudChoice = (key, v) => (HUD_CHOICE[key][0].indexOf(v) < 0 ? HUD_CHOICE[key][1] : v);
+const storedChoice = (key) => hudChoice(key, store.get(key, HUD_CHOICE[key][1]));
+let hudProfile = storedChoice("hudProfile");
+let hudMetricsLayout = storedChoice("hudMetricsLayout");
 // AUTO is always the full set: fitHud scales / stacks / drops gaps instead of
 // hiding a cluster. A FORCED name strips the half of the metrics the other
 // half is named for (css/hud.css) — TIMING keeps sectors+gaps, DRIVER keeps
@@ -258,11 +263,15 @@ function hudLayoutNote() {
   const m = document.body.className.match(/hud-met-([a-z]+)/);
   return base + (m ? " Here AUTO is " + m[1].toUpperCase() + "." : "");
 }
-const HUD_VIS_MODES = ["auto", "on", "off"];
-let hudMapVis = store.get("hudMapVis", "on");
-let hudGapsVis = store.get("hudGapsVis", "on");
-if (HUD_VIS_MODES.indexOf(hudMapVis) < 0) hudMapVis = "on";
-if (HUD_VIS_MODES.indexOf(hudGapsVis) < 0) hudGapsVis = "on";
+let hudMapVis = storedChoice("hudMapVis");
+let hudGapsVis = storedChoice("hudGapsVis");
+// Write one HUD choice (coerced; `set` stores it) and repaint the fold and the HUD, whoever wrote it (chip, G., settings import).
+function commitHud(key, v, set) {
+  set(hudChoice(key, v));
+  paintHudDetailsSummary();
+  syncMetricsOverlayCompact();
+  updateHud(true);
+}
 function paintHudDetailsSummary() {
   // One refresh for the whole HUD fold: the closed summary (a READOUT, so it
   // keeps its gold/red words) and the setting rows inside it (js/ui/setting-row.js).
@@ -3153,29 +3162,13 @@ const G = {
   get camMode() { return camMode; }, set camMode(v) { camMode = v; },
   get camCutT() { return camCutT; }, set camCutT(v) { camCutT = v; },   // for js/camera/mode-switch.js
   get hudProfile() { return hudProfile; },
-  set hudProfile(v) {
-    if (HUD_PROFILES.indexOf(v) < 0) v = "standard";
-    hudProfile = v;
-    store.set("hudProfile", hudProfile);
-  },
+  set hudProfile(v) { commitHud("hudProfile", v, (x) => store.set("hudProfile", hudProfile = x)); },
   get hudMetricsLayout() { return hudMetricsLayout; },
-  set hudMetricsLayout(v) {
-    if (HUD_MET_LAYOUTS.indexOf(v) < 0) v = "full";
-    hudMetricsLayout = v;
-    store.set("hudMetricsLayout", hudMetricsLayout);
-  },
+  set hudMetricsLayout(v) { commitHud("hudMetricsLayout", v, (x) => store.set("hudMetricsLayout", hudMetricsLayout = x)); },
   get hudMapVis() { return hudMapVis; },
-  set hudMapVis(v) {
-    if (HUD_VIS_MODES.indexOf(v) < 0) v = "on";
-    hudMapVis = v;
-    store.set("hudMapVis", hudMapVis);
-  },
+  set hudMapVis(v) { commitHud("hudMapVis", v, (x) => store.set("hudMapVis", hudMapVis = x)); },
   get hudGapsVis() { return hudGapsVis; },
-  set hudGapsVis(v) {
-    if (HUD_VIS_MODES.indexOf(v) < 0) v = "on";
-    hudGapsVis = v;
-    store.set("hudGapsVis", hudGapsVis);
-  },
+  set hudGapsVis(v) { commitHud("hudGapsVis", v, (x) => store.set("hudGapsVis", hudGapsVis = x)); },
   get camRoll() { return feel.camRoll; }, set camRoll(v) { feel.camRoll = v; },
   get camTgt() { return camTgt; }, set camTgt(v) { camTgt = v; },
   get dbgCam() { return dbgCam; }, set dbgCam(v) { dbgCam = v; },
@@ -9507,22 +9500,16 @@ SettingRow.wire("pm-gears", { values: SettingRow.labels(["auto", "manual"]), rea
 } });
 // HUD fold setting rows. Each write repaints the whole fold through
 // paintHudDetailsSummary, so the summary and the chips can never disagree.
-function wireHudChips(id, list, read, write, after) {
-  SettingRow.wire(id, { values: SettingRow.labels(list), read, write: (v) => {
-    if (list.indexOf(v) < 0) return;
-    write(v);
-    paintHudDetailsSummary();
-    if (after) after();
-    updateHud(true);
-  } });
+// The chips write through the G façade setter: one path (commitHud) for chip, agent and settings import.
+for (const [id, key] of [["pm-hudprofile", "hudProfile"], ["pm-hudmetrics", "hudMetricsLayout"], ["pm-hudmap", "hudMapVis"], ["pm-hudgaps", "hudGapsVis"]]) {
+  SettingRow.wire(id, { values: SettingRow.labels(HUD_CHOICE[key][0]), read: () => G[key], write: (v) => { G[key] = v; } });
 }
-wireHudChips("pm-hudprofile", HUD_PROFILES, () => hudProfile,
-  (v) => { hudProfile = v; store.set("hudProfile", hudProfile); }, syncMetricsOverlayCompact);
-wireHudChips("pm-hudmetrics", HUD_MET_LAYOUTS, () => hudMetricsLayout,
-  (v) => { hudMetricsLayout = v; store.set("hudMetricsLayout", hudMetricsLayout); }, syncMetricsOverlayCompact);
-wireHudChips("pm-hudmap", HUD_VIS_MODES, () => hudMapVis, (v) => { hudMapVis = v; store.set("hudMapVis", hudMapVis); });
-wireHudChips("pm-hudgaps", HUD_VIS_MODES, () => hudGapsVis, (v) => { hudGapsVis = v; store.set("hudGapsVis", hudGapsVis); });
-wireHudChips("pm-hudmirror", MirrorPass.MODES, () => mirrorPass.mode(), (v) => mirrorPass.setMode(v));
+SettingRow.wire("pm-hudmirror", { values: SettingRow.labels(MirrorPass.MODES), read: () => mirrorPass.mode(), write: (v) => {
+  if (MirrorPass.MODES.indexOf(v) < 0) return;
+  mirrorPass.setMode(v);
+  paintHudDetailsSummary();
+  updateHud(true);
+} });
 
 // ACTIVE AERO: MANUAL / AUTO. Same shape as GEARS and for the same reason —
 // both answer "how much of the car do you operate yourself?". Takes effect
