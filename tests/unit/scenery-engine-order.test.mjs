@@ -1,7 +1,7 @@
 // Scenery ENGINE ordering pins (audit W21, 2026-11-10): reserve / record only
 // what lands. Each case is "a fix applied to one helper and not its siblings":
-//   - pine() reserves its spot, coplanar facets and note only once it lands
-//     (tree() / lobedTree() already did), and un-notes a dropped pine;
+//   - pine() and tree() reserve their spot (pine: and coplanar facets) only once
+//     they land, and un-note a dropped one (tree(): #7243 3b);
 //   - cypress / stonePine / broadleafFall / acacia / plane take their record
 //     back when the trunk is refused (tree()'s refuseTree, H26b);
 //   - grandstandEx records its barrier and solid only after both suppression
@@ -76,6 +76,21 @@ test("a dropped pine frees its spot and takes its note back; a landed one reserv
   assert.equal(h.unnoted.length, 1, "a landed pine keeps its note");
   h.nature.pine(20, 1, 15, 12, [0.2, 0.4, 0.2]);
   assert.equal(h.instances.length, 2, "a landed pine reserves its spot");
+});
+
+test("tree(): a refused trunk does not hold its spot against a neighbour 0.5 m away (#7243 3b)", () => {
+  let refuse = true;
+  const h = natureHarness({ addCyl: (...a) => (refuse ? false : Geom.addCyl(...a)) });
+  h.nature.tree(20, 1, 15, 10, [0.2, 0.4, 0.2]);
+  assert.equal(h.unnoted.length, 1, "the refused tree takes its record back");
+  assert.equal(h.out.pos.length, 0, "and ships nothing");
+  refuse = false;
+  h.nature.tree(20, 1, 15.5, 10, [0.2, 0.4, 0.2]);
+  assert.equal(h.notes.length, 2, "the neighbour was not blocked by the refused spot");
+  assert.equal(h.unnoted.length, 1, "and stands");
+  assert.ok(h.out.pos.length > 0);
+  h.nature.tree(20, 1, 15, 10, [0.2, 0.4, 0.2]);
+  assert.equal(h.notes.length, 2, "a LANDED tree reserves its spot");
 });
 
 test("a refused trunk takes back the tree's record for every species with a note", () => {
