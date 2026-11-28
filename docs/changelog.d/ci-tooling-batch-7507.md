@@ -1,0 +1,1 @@
+Fixed: CI now runs the save round-trip browser test for career and save-file changes, a manual CI run no longer fails on a missing drop count, and PR hand-off leases read correctly with Windows line endings, a note after the time, or similar session ids (#7507).
