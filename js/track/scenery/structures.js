@@ -276,7 +276,11 @@ const SceneryStructures = (function () {
       // Hi keys name the side: the W-beam and the C-post face the road, so they are handed.
       const hiK = HI ? `|hi|${side}` : "";
       const postKey = `guardrail-post|${st}|${postCol.join(",")}` + hiK;
-      const railKey = `guardrail-rail|${st}|${railCol.join(",")}` + hiK;
+      // A rail drawn in railCol alone takes its tint from the node (NODE_COLOR), so every colour
+      // shares one model; a profile that mixes postCol or a shade of railCol keeps it in the key.
+      const railSolid = HI ? st === "cable" : st !== "safer";
+      const rc = railSolid ? TrackGraph.NODE_COLOR : railCol;
+      const railKey = `guardrail-rail|${st}` + (railSolid ? "" : `|${railCol.join(",")}`) + hiK;
       const d = -side;
       // The on-track margin must stay BELOW the gap: a post anchored at hw+gap
       // sits (hw+gap)·cos(θ/2) from the neighbouring chord, so a fixed 0.5
@@ -310,7 +314,7 @@ const SceneryStructures = (function () {
             },
             { kind: "guardrail", k, side });
         ctx.instance(railKey,
-          Object.assign({ s: [1, 1, spacing] }, place),
+          Object.assign({ s: [1, 1, spacing] }, place, railSolid ? { col: railCol } : null),
           (rec) => {
             if (HI && (st === "doubleArmco" || st === "wArmco" || !RAIL_STYLES.has(st))) {
               if (st === "doubleArmco") { wBeam(rec, d, 0.62, 0.84, railCol); wBeam(rec, d, 1.16, 0.84, railCol); }
@@ -324,33 +328,33 @@ const SceneryStructures = (function () {
               rec.box([0, 0.965, 0], [0.34, 0.03, 1], dk);
             } else if (HI && st === "cable") {
               for (const y of [0.58, 0.76, 0.95])
-                rec.box([0, y, 0], [0.045, 0.045, 1], railCol);
+                rec.box([0, y, 0], [0.045, 0.045, 1], rc);
             } else if (HI && st === "safer") {             // steel tubes over the foam block
               rec.box([-d * 0.04, 0.66, 0], [0.26, 0.56, 1], postCol);
               for (const y of [0.46, 0.66, 0.86])
                 rec.box([d * 0.10, y, 0], [0.14, 0.16, 1], railCol);
               rec.box([0, 1.04, 0], [0.38, 0.10, 1], postCol);
             } else if (st === "doubleArmco") {                    // old European two-rail
-              rec.box([0, 0.62, 0], [0.18, 0.38, 1], railCol);
-              rec.box([0, 1.16, 0], [0.18, 0.38, 1], railCol);
+              rec.box([0, 0.62, 0], [0.18, 0.38, 1], rc);
+              rec.box([0, 1.16, 0], [0.18, 0.38, 1], rc);
             } else if (st === "wArmco") {                  // the W cross-section
-              rec.box([0, 0.72, 0], [0.20, 0.44, 1], railCol);
-              rec.box([-0.07, 0.72, 0], [0.09, 0.16, 1], railCol);
+              rec.box([0, 0.72, 0], [0.20, 0.44, 1], rc);
+              rec.box([-0.07, 0.72, 0], [0.09, 0.16, 1], rc);
             } else if (st === "jersey") {                  // poured concrete profile
-              rec.box([0, 0.26, 0], [0.60, 0.52, 1], railCol);
-              rec.box([0, 0.72, 0], [0.30, 0.46, 1], railCol);
+              rec.box([0, 0.26, 0], [0.60, 0.52, 1], rc);
+              rec.box([0, 0.72, 0], [0.30, 0.46, 1], rc);
             } else if (st === "cable") {                   // 1970s wire rope
               for (const y of [0.58, 0.95])
-                rec.box([0, y, 0], [0.07, 0.07, 1], railCol);
+                rec.box([0, y, 0], [0.07, 0.07, 1], rc);
             } else if (st === "safer") {                   // smooth tube over foam
-              rec.box([0, 0.70, 0], [0.34, 0.62, 1], railCol);
+              rec.box([0, 0.70, 0], [0.34, 0.62, 1], rc);
               rec.box([0, 1.04, 0], [0.38, 0.10, 1], postCol);
             } else {
-              rec.box([0, 0.7, 0], [0.18, 0.45, 1], railCol);                   // armco (default)
+              rec.box([0, 0.7, 0], [0.18, 0.45, 1], rc);                   // armco (default)
             }
           },
           { kind: "guardrail", k, side });
-      }, `guardrail|${side}|${gap}|${postKey}|${railKey}`);
+      }, `guardrail|${side}|${gap}|${postKey}|${railKey}|${railCol.join(",")}`);
     };
     // Stacked-tyre barrier with a coloured conveyor-belt cap.
     //   opts: { style: "stack"(default) | "tecpro" | "airfence", tyreCol }
@@ -367,7 +371,9 @@ const SceneryStructures = (function () {
       // omitted one let the circuit's first wall colour every later one.
       const slab = st === "tecpro" || st === "airfence";
       const stackKey = `tyre-stack|${st}|${tyre.join(",")}` + (slab ? `|${cap.join(",")}` : "") + (HI ? "|hi" : "");
-      const capKey = `tyre-cap|${st}|${(slab ? tyre : cap).join(",")}`;
+      // The belt is one box in one colour: the node carries it, so every cap colour shares a model.
+      const beltCol = slab ? tyre : cap;
+      const capKey = `tyre-cap|${st}`;
       const capHeight = st === "tecpro" ? 0.98 : st === "airfence" ? 1.14 : 0.95;
       // A belt runs along the offset row of stacks. On an inside bend those
       // centres can be metres closer together than the centreline stations.
@@ -431,14 +437,15 @@ const SceneryStructures = (function () {
         if (length < 1e-6) return;
         const t = norm(chord), r = norm(cross(t, p.u)), u = norm(cross(r, t));
         const o = top.map((v, i) => v / 2 + (prev[i] + next[i]) / 4);
-        ctx.instance(capKey, { o, r, u, t, s: [1, 1, length] },
+        ctx.instance(capKey, { o, r, u, t, s: [1, 1, length], col: beltCol },
           (rec) => {
-            if (st === "tecpro") rec.box([0, 0, 0], [1.7, 0.16, 1], tyre);
-            else if (st === "airfence") rec.box([0, 0, 0], [1.5, 0.14, 1], tyre);
-            else rec.box([0, 0, 0], [2.0, 0.3, 1], cap);
+            const NC = TrackGraph.NODE_COLOR;
+            if (st === "tecpro") rec.box([0, 0, 0], [1.7, 0.16, 1], NC);
+            else if (st === "airfence") rec.box([0, 0, 0], [1.5, 0.14, 1], NC);
+            else rec.box([0, 0, 0], [2.0, 0.3, 1], NC);
           },
           { kind: "tyreWall", k, side });
-      }, `tyreWall|${side}|${gap}|${stackKey}|${capKey}`);
+      }, `tyreWall|${side}|${gap}|${stackKey}|${capKey}|${beltCol.join(",")}`);
     };
     const gantry = (s, h, col, opts) => {
       const st = (opts && opts.style) || kitOf("gantry", "box");

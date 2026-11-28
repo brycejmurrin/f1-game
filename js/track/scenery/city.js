@@ -17,6 +17,8 @@ const SceneryCity = (function () {
   // tools/track/graph-parity.cjs asserts zero inherited-material nodes.
   const matKey = (m) => m ? UNIT_BOX + ":" + m : UNIT_BOX;
   const matBox = (m) => m ? massBox(m) : unitBox;
+  // billboard-face styles whose model never reads `side` (the panel default does: its strut).
+  const FACE_STYLES = new Set(["trivision", "arched", "led", "fascia", "banner", "monopole", "tower"]);
 
   function create(ctx) {
     const { out, glassBuf, def, theme, NIGHT, MAT, lod,
@@ -861,15 +863,19 @@ const SceneryCity = (function () {
       if (NIGHT) face = [Math.min(1.45, face[0] * 1.30 + 0.10),
                          Math.min(1.45, face[1] * 1.30 + 0.10),
                          Math.min(1.45, face[2] * 1.30 + 0.10)];
-      // side AND postCol belong in the key: the panel branch places its rear
-      // support strut at `side * 0.5` (so a shared template put the strut on
-      // the TRACK-facing front of every mixed-side board — Silverstone,
-      // Montreal), and four branches paint with postCol, which two callers
-      // with different post colours were silently sharing.
-      ctx.instance(`billboard-face|${h}|${st}|${side}|${postCol.join(",")}`,
-        Object.assign({ s: [1, 1, w], col: face }, place),
+      // postCol belongs in the key: four branches paint with it, which two
+      // callers with different post colours were silently sharing. `side` does
+      // only for the panel, whose rear support strut sits at `side * 0.5` (a
+      // shared template put the strut on the TRACK-facing front of every
+      // mixed-side board — Silverstone, Montreal). The height `h` is only a
+      // lift of the whole face, so it rides in the place origin (u has scale 1)
+      // and every height shares one model; fascia sits on the barrier at any h.
+      const fascia = st === "fascia";
+      const panel = !FACE_STYLES.has(st);
+      ctx.instance(`billboard-face|${st}` + (panel ? `|${side}` : "") + `|${postCol.join(",")}`,
+        Object.assign({ s: [1, 1, w], col: face }, place, fascia ? null : { o: vadd(p.c, p.u, h) }),
         (rec) => {
-          const NC = TrackGraph.NODE_COLOR;
+          const NC = TrackGraph.NODE_COLOR, h = 0;   // canonical: the face's foot, lifted by the origin
           if (st === "trivision") {
             for (let i = 0; i < 3; i++)
               rec.box([(i - 1) * 0.16, h + 0.6 + i * 1.05, 0], [0.42, 0.95, 1], NC);

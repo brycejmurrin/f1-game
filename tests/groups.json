@@ -1118,6 +1118,7 @@
     "// throwing, and ctxKey re-keys on hydration. VM, ~0.3 s.",
     "tests/unit/scene-live.test.mjs",
     "tests/unit/scenery-api-contract.test.mjs",
+    "tests/unit/scenery-batch-key.test.mjs",
     "tests/unit/scenery-engine-order.test.mjs",
     "tests/unit/scenery-guards.test.mjs",
     "tests/unit/scenery-kits.test.mjs",
