@@ -4561,17 +4561,18 @@ const TLX = (function () {
       //    frustumCulled = false, so three never calls computeBoundingSphere()
       //    and so never reads position.array to cull. A geometry that IS
       //    frustum-culled would be culled to nothing by this.
-      //  - the array is swapped for a ZERO-LENGTH array of the same class, not
-      //    null: draw()'s `index.array.BYTES_PER_ELEMENT` still resolves, and
-      //    .count is a plain property set once in the BufferAttribute
-      //    constructor (`this.count = t.length / e`), so it is untouched.
+      //  - the array is set to NULL (see drop() below and tlx-chunked.js
+      //    releaseMirrors for the A/B); the INDEX is never touched, and .count
+      //    is a plain property set once in the BufferAttribute constructor
+      //    (`this.count = t.length / e`), so it is untouched.
       //  - only AFTER a completed render: __tlxDrawnBatch is stamped when the
       //    mesh is acquired and must be strictly older than the current batch,
       //    so the upload has happened. Releasing before first draw uploads
       //    nothing and the mesh vanishes.
-      //  - instanced and DynamicDrawUsage attributes are skipped: those ARE
-      //    version-bumped, and updateAttribute() would then bufferSubData a
-      //    zero-length array — a silent no-op instead of the new data.
+      //  - instanced, DynamicDrawUsage and StreamDrawUsage attributes are
+      //    skipped: those ARE version-bumped (_instUsage puts plain-mesh
+      //    instance buffers on Stream), and updateAttribute() would then read
+      //    a null array instead of the new data.
       function releaseGeoMirrors(g) {
         if (!g || g.__tlxFreed) return 0;
         // Not on the WebGPU backend: r187 rebuilds a pipeline's vertex-layout key from attribute.array
@@ -4614,7 +4615,7 @@ const TLX = (function () {
         };
         const drop = (a) => {
           if (!a || !a.array || !a.array.length) return;
-          if (a.isInstancedBufferAttribute || a.usage === THREE.DynamicDrawUsage) return;
+          if (a.isInstancedBufferAttribute || a.usage === THREE.DynamicDrawUsage || a.usage === THREE.StreamDrawUsage) return;
           if (!uploaded(a)) { kept++; return; }
           freed += a.array.byteLength;
           // NULL, not zero-length — see tlx-chunked.js releaseMirrors() for the

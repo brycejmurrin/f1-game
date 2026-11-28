@@ -1046,7 +1046,9 @@
       // CITY SKYGLOW: light-pollution dome hugging the horizon + a hint of
       // cloud-belly pickup (clouds over a lit city glow from below).
       If(U.cityGlow.x.add(U.cityGlow.y).add(U.cityGlow.z).greaterThan(0.001), () => {
-        const horiz = pow(clamp(max(dir.y, 0.0).mul(2.4).oneMinus(), 0.0, 1.0),
+        // max(…, 1e-4) as GLX (glsl-sky.js): pow(0, y) is undefined in GLSL/WGSL, and the base is 0 at
+        // and above dir.y = 1/2.4 (hunt #5777 R17b). 1e-4^(3·reach) is ~0, so no pixel moves.
+        const horiz = pow(max(clamp(max(dir.y, 0.0).mul(2.4).oneMinus(), 0.0, 1.0), 1e-4),
           U.cityGlowReach.mul(3.0));
         c.addAssign(U.cityGlow.mul(horiz));
         const pickup = cityCov.mul(cityThick.mul(0.65).add(0.35))

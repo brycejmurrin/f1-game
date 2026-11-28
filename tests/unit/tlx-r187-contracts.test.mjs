@@ -316,3 +316,33 @@ test("LP-01: both release sites record what they null (WebGL2 leg), so the repai
   chunkedSys({ isWebGPU: () => false, noteNulled: (x) => noted.push(x) }).releaseMirrors({ chunks: gl.geos.map((geo) => ({ geo })) });
   assert.deepEqual(noted, Object.values(gl.attrs), "the chunked release notes each shared attribute before nulling it");
 });
+
+// ── #7435 (hunt #5777 R17c, R22) ──────────────────────────────────────────────────────────────────────────────
+test("#7435 R17c: the discard FBO checks walk the framebuffers with no per-call array", () => {
+  const post = read("js/render/three/tlx-post.js");
+  assert.doesNotMatch(code(post), /Object\.values\(d\.framebuffers\)/, "no array built per discard");
+  const ownsFb = new Function(`"use strict"; ${fnSource(post, "function ownsFb(fbs, fb) {")}; return ownsFb;`)();
+  const a = {}, b = {}, fbs = { 0: a, 7: b };
+  assert.equal(ownsFb(fbs, a), true);
+  assert.equal(ownsFb(fbs, b), true);
+  assert.equal(ownsFb(fbs, {}), false, "a foreign FBO is not ours");
+  assert.equal(ownsFb(fbs, null), false, "nothing bound");
+  assert.equal(ownsFb(undefined, a), false, "no framebuffers yet");
+});
+
+test("#7435 R22: releaseGeoMirrors keeps a Stream attribute's array and still frees a static one", () => {
+  const data = new Map();
+  const backend = { isWebGPUBackend: false, get: (a) => (data.has(a) ? data.get(a) : (data.set(a, { buffer: {} }), data.get(a))) };
+  const release = new Function("THREE", "renderer", "_mirrorLedger", `"use strict";
+    ${fnSource(TLX, "function releaseGeoMirrors(g) {")}
+    return releaseGeoMirrors;`)(THREE, { backend }, { note() {} });
+  const g = new THREE.BufferGeometry();
+  const pos = new THREE.BufferAttribute(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]), 3);
+  const stream = new THREE.BufferAttribute(new Float32Array(9), 3).setUsage(THREE.StreamDrawUsage);
+  const dyn = new THREE.BufferAttribute(new Float32Array(9), 3).setUsage(THREE.DynamicDrawUsage);
+  g.setAttribute("position", pos); g.setAttribute("iOffset", stream); g.setAttribute("iDyn", dyn);
+  release(g);
+  assert.equal(pos.array, null, "a static uploaded attribute is still freed");
+  assert.ok(stream.array && stream.array.length === 9, "the Stream attribute keeps its array: its writes bump the version");
+  assert.ok(dyn.array && dyn.array.length === 9, "Dynamic is kept, as before");
+});

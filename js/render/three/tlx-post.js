@@ -1679,11 +1679,18 @@
     }
     // WebGL2 only: invalidate `list` on rt's FBO, and only while three still has THAT FBO bound
     // (the pass it just rendered) — never a guess. Returns true when it did.
+    // Is fb one of three's per-target FBOs? A keyed walk: `Object.values(…).indexOf` built an array on every
+    // discard, twice a frame (hunt #5777 R17c).
+    function ownsFb(fbs, fb) {
+      if (!fbs || !fb) return false;
+      for (const k in fbs) if (fbs[k] === fb) return true;
+      return false;
+    }
     function discardAttachments(rt, list) {
       const be = renderer.backend, gl = be && be.gl, st = be && be.state;
       if (!rt || !list || !list.length || !gl || typeof gl.invalidateFramebuffer !== "function" || !st || !st.currentBoundFramebuffers) return false;
       const d = be.get(rt), fb = st.currentBoundFramebuffers[gl.DRAW_FRAMEBUFFER];
-      if (!fb || !d || !d.framebuffers || Object.values(d.framebuffers).indexOf(fb) < 0) return false;
+      if (!d || !ownsFb(d.framebuffers, fb)) return false;
       gl.invalidateFramebuffer(gl.DRAW_FRAMEBUFFER, list);
       return true;
     }
@@ -1752,7 +1759,7 @@
       // Only the FBO three just rendered the scene into (and, under MSAA, resolved out of) — never a guess.
       const target = msaa ? gl.READ_FRAMEBUFFER : gl.DRAW_FRAMEBUFFER;
       const fb = st.currentBoundFramebuffers[target];
-      const ours = msaa ? (fb && fb === d.msaaFrameBuffer) : (fb && d.framebuffers && Object.values(d.framebuffers).indexOf(fb) >= 0);
+      const ours = msaa ? (fb && fb === d.msaaFrameBuffer) : ownsFb(d.framebuffers, fb);
       if (!ours) return false;
       if (!_invDepth) { _invDepth = [gl.DEPTH_ATTACHMENT]; _invTag = [gl.COLOR_ATTACHMENT1]; _invBoth = [gl.DEPTH_ATTACHMENT, gl.COLOR_ATTACHMENT1]; }
       gl.invalidateFramebuffer(target, _depthKeep ? _invTag : _tagKeep ? _invDepth : _invBoth);
