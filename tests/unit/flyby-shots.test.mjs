@@ -1249,3 +1249,29 @@ test("FlybySight.mix: the frame's sky / ground / prop shares and their cost", as
     return null;
   });
 });
+
+// Hunt #7348 F4: solve() runs these every flyby frame; both are cached now.
+test("F4: boundaries() is memoised per shot list, and an in-place retime recomputes", () => {
+  const F = loadFlybyRuntime();
+  const shots = [{ id: "wide", dur: 0.25 }, { id: "turn", dur: 0.25 }, { id: "wide2", dur: 0.5 }];
+  const a = F.boundaries(shots);
+  assert.equal(F.boundaries(shots), a, "a second frame on the same list allocates nothing (fails before: a new array each call)");
+  assert.deepEqual([...a], [0.25, 0.5]);
+  shots[2].dur = 0.75;  // the editor retimes a shot in place
+  assert.deepEqual([...F.boundaries(shots)].map((x) => +x.toFixed(6)), [0.2, 0.4]);
+  shots.reverse();      // and reorders it (same length, same total)
+  assert.deepEqual([...F.boundaries(shots)].map((x) => +x.toFixed(6)), [0.6, 0.8]);
+  assert.deepEqual([...F.boundaries([{ dur: 0 }, { dur: 0 }])], [], "a zero-length list still has no cuts");
+});
+
+test("F4: syncPresentation() looks #loading up once, not every frame", () => {
+  let lookups = 0;
+  const el = { isConnected: true, dataset: { phase: "run" } };
+  const F = loadFlybyRuntime({ clearTimeout: () => {}, document: { getElementById: (id) => { lookups++; return id === "loading" ? el : null; } } });
+  for (let i = 0; i < 60; i++) F.syncPresentation({ sectors: i / 60, dip: 0, dipMs: 150 }, false);
+  assert.equal(lookups, 1, `60 frames looked #loading up ${lookups}x (fails before: 60)`);
+  assert.equal(el.dataset.sectors, (59 / 60).toFixed(3), "the cached element still receives the frame's sectors");
+  el.isConnected = false;   // a rebuilt shell: the stale node is dropped
+  F.syncPresentation({ sectors: 0, dip: 0, dipMs: 150 }, false);
+  assert.equal(lookups, 2);
+});
