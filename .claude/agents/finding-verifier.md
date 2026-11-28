@@ -29,7 +29,10 @@ the rest on a `not checked:` line. Optional: a tip SHA the claims were made at.
 1. Read the cited file at the CURRENT tree (Read with an offset around the
    line, or `git show HEAD:<file>`). Never trust the claim's quote, line number
    or paraphrase: the line may have moved, been fixed, or never said that.
-2. If the line moved, locate a named JS symbol through `code-nav` / apex-lsp
+2. A claim about who calls, reads or defines a named JS symbol is decided by apex-lsp (`lsp_callers` /
+   `lsp_references`; a `create(G)` instance member is asked by file+line from `lsp_symbols`, not as `Head.member`);
+   when lsp returns only in-file rows or prints PARTIAL, add one Grep of `\.member\(` and give both numbers.
+   If the line moved, locate a named JS symbol through `code-nav` / apex-lsp
    (Bash fallback: `node tools/mcp/lsp-mcp.mjs`); text fragments use search,
    `git log -L` or
    `git log -S '<fragment>' --oneline -5` for when it changed. A claim that was
