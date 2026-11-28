@@ -44,3 +44,15 @@ test("every agentHelp() manifest entry names a pinned hook", () => {
   const ghosts = entries.map(e => e.split("(")[0]).filter(n => !want.has(n));
   assert.deepEqual(ghosts, [], "agentHelp() lists a hook __apex does not have");
 });
+
+// #7445 (garage hooks into ApexCam, visorScene into the api literal): a carve keeps the DOCUMENTED surface too.
+// The generated index in docs/DEBUG-HOOKS.md must list exactly the pinned keys, so a move that drops a hook from
+// the parse (or leaves a stale row) fails here as well as in hooks-documented.test.mjs.
+test("docs/DEBUG-HOOKS.md's generated index lists exactly the pinned hooks", () => {
+  const doc = fs.readFileSync(new URL("../../docs/DEBUG-HOOKS.md", import.meta.url), "utf8");
+  const a = doc.indexOf("<!-- GENERATED: hooks-table -->");
+  const b = doc.indexOf("### Agent view surface", a);
+  assert.ok(a >= 0 && b > a, "hooks-table block missing");
+  const rows = [...doc.slice(a, b).matchAll(/^\| `(?:async )?([A-Za-z_$][\w$]*)/gm)].map(m => m[1]).sort();
+  assert.deepEqual(rows, pinned);
+});

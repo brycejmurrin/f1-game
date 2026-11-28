@@ -276,7 +276,7 @@ test("a preset is a bundle of plain flags, and a named camera is parameters", ()
 });
 
 test("garageFrame takes an absolute camera, not only counted clicks", () => {
-  const src = code("js/agent/apex.js");
+  const src = code("js/agent/apex-cam.js");
   const at = src.indexOf("garageFrame(view, opts)");
   assert.ok(at > 0, "garageFrame hook must exist");
   const body = src.slice(at, at + 2800);
@@ -335,7 +335,7 @@ test("garage-angles walks CAMERAS as lists — views × az × el × dist × zoom
     assert.ok(src.includes(`"${f}"`), `${f} must be one of the tool's OWN flags`);
   }
   assert.match(src, /part\.<category>|startsWith\("part\."\)/, "--part.<category> axes fit catalog parts in-page");
-  const hook = read("js/agent/apex.js");
+  const hook = read("js/agent/apex-cam.js");
   assert.match(hook, /garageFrame\(view, opts\)[\s\S]*?view !== "free"/, "garageFrame's `free` view keeps the current camera");
   // BEHAVIOUR, not just text: --plan builds the matrix without a browser.
   const plan = (args) => JSON.parse(execFileSync("node",
@@ -375,7 +375,7 @@ test("garage-angles: ranges, targets, lamps, seats, DPR, `all`, base lists and a
   assert.match(src, /function pixelDiff/, "an A/B is a changed-pixel fraction, not only a pair sheet");
   assert.match(src, /function writeMatrixSheet/, "rows × cameras contact sheet");
   assert.match(src, /oracleHiddenPct\(teamId,/, "occlusion is recorded per SHOT, not only on rollups");
-  const hook = read("js/agent/apex.js");
+  const hook = read("js/agent/apex-cam.js");
   assert.match(hook, /G\.setupCam\.setSetupAim\(o\.target\.map\(Number\)\)/, "garageFrame aims the orbit at a car-space point");
   assert.match(hook, /GarageScene\.spot\(o\.lamp \|\| null\)/, "garageFrame aims the lamp");
   assert.match(hook, /garageTeam\(id, seatWanted\)/, "garageTeam takes a seat");
@@ -418,7 +418,7 @@ test("garage-angles: stations, field→station picking, pairs, flat art, a free 
   assert.match(src, /async function serveSession/, "--serve is a JSON-lines session on ONE browser");
   assert.match(src, /async function writePairs/, "pairs get a Δ% AND a diff overlay");
   assert.match(src, /async function finishRun/, "the run tail is re-runnable for --watch");
-  const hook = read("js/agent/apex.js");
+  const hook = read("js/agent/apex-cam.js");
   assert.match(hook, /G\.setupCam\.setSetupFree\(o\.clamp === false\)/, "clamp:false lifts the player's floors for a dev shot");
   assert.match(hook, /el: Math\.asin\(/, "an explicit eye becomes the orbit's own terms");
   const game = read("js/game.js");

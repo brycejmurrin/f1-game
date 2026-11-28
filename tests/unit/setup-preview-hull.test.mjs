@@ -161,7 +161,7 @@ test("the garage auto-fit is capped below the manual zoom ceiling", () => {
 // defect above is unobservable: garageCam() reported setupPreviewDist (8.5)
 // while the camera sat at the 15 m clamp, so no hook and no test could see it.
 test("__apex.garageCam reports the effective distance, not just the stored zoom", () => {
-  const apex = readFileSync(new URL("../../js/agent/apex.js", import.meta.url), "utf8");
+  const apex = readFileSync(new URL("../../js/agent/apex-cam.js", import.meta.url), "utf8");
   // Bound the slice at the NEXT hook rather than by a character budget: this
   // block carries its own explanation, so a fixed window silently ran past the
   // end of it (or, with a shorter one, stopped before the fields).

@@ -44,8 +44,8 @@ const UNDOCUMENTED = new Set([
 /** The LIVE hook names: Object.keys(__apex) after a headless VM boot (the
  *  generator's own list, tools/gen/gen-hooks-table.mjs liveHookNames). A regex
  *  over js/agent/apex.js saw only the `api` literal: the 17 ApexCam hooks
- *  spread into it from js/agent/apex-cam.js and `visorScene` (set by js/game.js
- *  bindAgent) were invisible to this ratchet (W25 row 12, 2026-11). */
+ *  spread into it from js/agent/apex-cam.js and `visorScene` (then set by js/game.js
+ *  bindAgent; in the literal since #7445) were invisible to this ratchet (W25 row 12, 2026-11). */
 let LIVE = null, PLAY = [];
 before(async () => { ({ live: LIVE, play: PLAY } = await liveSurface()); });
 function hookNames() {
@@ -155,11 +155,12 @@ test("the source parse takes hooks()'s own return, not a nested helper's", () =>
   for (const n of ["cameraState", "camera", "flybyCam", "dolly", "roadside"]) assert.ok(nameSet.has(n), n);
 });
 
-test("a live hook assigned outside the api literal still gets an index row (visorScene)", () => {
-  // js/game.js bindAgent sets __apex.visorScene after ApexApi.create(G).
-  assert.ok(!sourceHooks().some((h) => h.name === "visorScene"));
-  const row = collectHooks(LIVE).find((h) => h.name === "visorScene");
-  assert.ok(row && row.kind === "live", "visorScene row");
+test("visorScene is an api-literal hook, and a key set outside the literal still gets an index row", () => {
+  // #7445: js/game.js bindAgent no longer writes __apex.visorScene after ApexApi.create(G); the hook
+  // is in the literal, so the parse supplies its signature. The fallback row stays for any future late key.
+  assert.ok(sourceHooks().some((h) => h.name === "visorScene"), "visorScene parsed from js/agent/apex.js");
+  const row = collectHooks([...LIVE, "lateKey"]).find((h) => h.name === "lateKey");
+  assert.ok(row && row.kind === "live", "a late key's fallback row");
 });
 
 test("collectHooks(LIVE) is one row per live name, in live order", () => {
