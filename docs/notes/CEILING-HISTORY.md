@@ -1,5 +1,13 @@
 # Ceiling history — the module-size ratchet, 2026-08 → 2026-09-03
 
+## 2026-11-27 — claude/ratchet-ui-rows-7208: 8 new per-file rows for the big UI files (#7208; #6548 item 3)
+
+Eight NEW `lines` rows, each seeded at its current value on tip `f18eba40` (re-measured after the #7294 and #7304 syncs), so these files can only shrink from here
+(a new row is not a raise; no existing row moves): `js/ui/select-screen.js` **1447**, `js/ui/hud-layout.js` **1314**,
+`js/ui/settings-export-body.js` **1291**, `js/ui/photo-studio-ui.js` **1278**, `css/carsetup.css` **2118**,
+`css/overlays.css` **2046**, `css/data.css` **1633**, `css/tuner.css` **1565**. Edited in `ratchets.json` itself because
+`applyFragments` ignores a fragment row the base file does not already carry (#7203). They make the #6548 carves stick.
+
 ## 2026-11-27 — PR #7284 (claude/ui-shape-7259): one UiShape module for the phone / screen-shape predicates (#7259)
 
 `(tree) eagerScripts` +1 and `(tree) eagerCodeBytes` +195. Deliberate raise, which needs a `ratchet-raise` label (D-042);
