@@ -33,7 +33,7 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["brands_hatch"] =
   function (api) {
-      const { n, hash, every, anchor, onTrack, out, terrainYAt, mountain,
+      const { n, hash, every, anchor, onTrack, out, terrainYAt, groundAt, mountain,
         tree, pine, bush, hedge, forestEdge, conifer, broadleafFall,
         building, house, motorhome, tower, spectatorHill,
         terrace, bleacher, modelGroup, vadd, MAT, indexSolid,
@@ -318,8 +318,7 @@
         const roof = opts.roof;
         const b = [a.r, a.u, a.t];
         // Seat the plinth on terrain — bowl banks bury a ribbon-only anchor.
-        const gy = terrainYAt(a.c[0], a.c[2]);
-        const dy = gy != null ? (gy - a.c[1]) : 0;
+        const dy = groundAt(a.c[0], a.c[2], { fallback: a.c[1] }) - a.c[1];
         stage._mat = MAT.CONCRETE;
         // Back shell only — no full-depth slab that shares a top with risers.
         addBox(stage, vadd(vadd(a.c, a.r, side * (depth * 0.48)), a.u, dy + h * 0.40),
@@ -536,8 +535,7 @@
       {
         const a = anchor(K(sl(0.018)), 1, 50);
         const b = [a.r, a.u, a.t];
-        const gy = terrainYAt(a.c[0], a.c[2]);
-        const dy = gy != null ? (gy - a.c[1]) : 0;
+        const dy = groundAt(a.c[0], a.c[2], { fallback: a.c[1] }) - a.c[1];
         modelGroup("brands-kentagon", {
           center: vadd(a.c, a.u, dy + 6.0),
           size: [22, 16, 22],
@@ -923,11 +921,11 @@
       // ground rather than laid on it.
       const farHill = (frac, side, dist, w, h, dy) => {
         const a = anchor(K(frac), side, dist).c;
-        const y = terrainYAt(a[0], a[2]);
+        const y = groundAt(a[0], a[2], { fallback: a[1] });
         // snowline ABOVE the summit: the default is 0.62, which put snow and
         // rock on the top 38% of hills this size — North Downs chalk woodland
         // carries neither.
-        mountain(a[0], a[2], (y === null ? a[1] : y) + dy, w, h,
+        mountain(a[0], a[2], y + dy, w, h,
           { rough: 0.22, snowline: 2, forest: [0.17, 0.31, 0.19] });
       };
       farHill(0.06, 1, 990, 1722, 86, -35);
