@@ -457,13 +457,14 @@ function suitColour(liv) {
 }
 let _armMesh = null, _armKey = "";
 const _armC2 = [NaN, NaN, NaN];   // the c2 the cached sleeve was built from: a per-frame check that allocates nothing
+const _armNoC2 = [-1, -1, -1];    // stands in for an absent c2, so a livery without one keeps the fast path (#7365)
 // Unit sleeve: +z from the wrist (z 0, radius 1) to the elbow (z 1, ARM_TAPER),
 // a little fuller at the forearm's belly. Radial normals, so the per-frame
 // stretch (radius on x/y, length on z) leaves them pointing the right way.
 function getForearm(liv) {
-  const c2 = liv && liv.c2;
-  if (_armMesh && c2 && c2[0] === _armC2[0] && c2[1] === _armC2[1] && c2[2] === _armC2[2]) return _armMesh;
-  _armC2[0] = c2 ? c2[0] : NaN; _armC2[1] = c2 ? c2[1] : NaN; _armC2[2] = c2 ? c2[2] : NaN;
+  const c2 = liv && liv.c2 || _armNoC2;
+  if (_armMesh && c2[0] === _armC2[0] && c2[1] === _armC2[1] && c2[2] === _armC2[2]) return _armMesh;
+  _armC2[0] = c2[0]; _armC2[1] = c2[1]; _armC2[2] = c2[2];
   const col = suitColour(liv), key = col.map((v) => v.toFixed(2)).join(",");
   if (_armMesh && _armKey !== key) { if (_gfx.freeMesh) _gfx.freeMesh(_armMesh); _armMesh = null; }
   if (_armMesh) return _armMesh;
