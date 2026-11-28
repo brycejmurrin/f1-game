@@ -375,11 +375,12 @@ test("#5022: the road-follow ease bites on into-corner over-rotation, never on c
 test("step stays finite at vTopNow 0 and weatherGrip 0 (floored divisors)", () => {
   const { PlayerForces, TyreModel, PhysicsConsts } = load();
   const L = 3.2, FW = PhysicsConsts.FRONT_WEIGHT, ar = FW * L, af = L - ar;
-  for (const [vTopNow, weatherGrip] of [[0, 1], [72, 0]]) {
+  // speed 0 with vTopNow 0 is the 0/0 the vTopSafe floor exists for; (40/0)² is Infinity, which min(1, ·) hides.
+  for (const [vTopNow, weatherGrip, speed] of [[0, 1, 0], [0, 1, 40], [72, 0, 40]]) {
     const api = PlayerForces.create({ PLAYER_GRIP: 1.15, FRONT_GRIP: 0.94, DRIFT: 0, YAW_INERTIA: 0.58, YAW_DAMP: 1.0 });
     const tyres = TyreModel.create({ get raceTyreWear() { return "off"; }, store: { get: () => "off", set: () => {} } });
     const c = {
-      human: true, isPlayer: false, speed: 40, axEstSm: -30, aeroX: 0, wake: 0,
+      human: true, isPlayer: false, speed, axEstSm: -30, aeroX: 0, wake: 0,
       vLat: 0, yawRateCur: 0, head: 0, brakeStab: 1, rearUtil: 0,
       brakeBias: null, rollBalance: 0.5, lateralAccel: 0, offroad: false, tread: 0, flatSpot: 0,
     };
@@ -392,7 +393,7 @@ test("step stays finite at vTopNow 0 and weatherGrip 0 (floored divisors)", () =
     });
     for (const k of ["axFrac", "axFracF", "axFracR", "gripFront", "gripRear", "forceFront",
       "forceRear", "lateralAccel", "yawRateCur", "vLat", "head"]) {
-      assert.ok(Number.isFinite(c[k]), `vTopNow=${vTopNow} weatherGrip=${weatherGrip}: ${k} = ${c[k]}`);
+      assert.ok(Number.isFinite(c[k]), `vTopNow=${vTopNow} weatherGrip=${weatherGrip} speed=${speed}: ${k} = ${c[k]}`);
     }
   }
 });
