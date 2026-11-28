@@ -181,3 +181,26 @@ test("a tree whose trunk the guard refuses leaves no registry note (H26b)", () =
   g.nature.tree(0, 1, 24, 12, col);
   assert.equal(g.notes.filter((n) => n[0] === "tree").length, 1, "a landed trunk is noted once");
 });
+
+test("pines on both sides of the road share one handedness and one batch (#7385 S5)", () => {
+  const f = makeFixture();
+  f.nature.pine(2, 1, 24, 12, [.2, .35, .18]);
+  f.nature.pine(10, -1, 24, 12, [.2, .35, .18]);
+  assert.equal(f.graph.stats().nodes, 2);
+  const batches = f.graph.batches().batches;
+  const crowns = batches.filter((b) => b.model.startsWith("pine|") && !b.model.includes("|fixed|"));
+  const trunks = batches.filter((b) => b.model.startsWith("pine|fixed|"));
+  assert.equal(crowns.length, 1, `one crown batch, not a mirrored pair: ${batches.map((b) => `${b.model}@${b.variant}`)}`);
+  assert.equal(crowns[0].count, 2);
+  assert.equal(trunks.length, 1);
+  assert.equal(trunks[0].count, 2);
+  assert.equal(crowns[0].variant, trunks[0].variant);
+  // the side -1 pine's frame is a half-turn of the track frame, never a mirror
+  for (let i = 0; i < 2; i++) {
+    const m = crowns[0].matrices, b = i * 16;
+    const det = m[b] * (m[b + 5] * m[b + 10] - m[b + 6] * m[b + 9]) - m[b + 1] * (m[b + 4] * m[b + 10] - m[b + 6] * m[b + 8])
+      + m[b + 2] * (m[b + 4] * m[b + 9] - m[b + 5] * m[b + 8]);
+    assert.ok(Math.abs(det) > 1e-6);
+    if (i) assert.equal(Math.sign(det), Math.sign(m[0] * (m[5] * m[10] - m[6] * m[9]) - m[1] * (m[4] * m[10] - m[6] * m[8]) + m[2] * (m[4] * m[9] - m[5] * m[8])));
+  }
+});
