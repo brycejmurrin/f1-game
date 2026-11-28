@@ -1614,7 +1614,10 @@ test("replay A: a 120 Hz phone drawing every second rAF is judged on drawn frame
     assert.equal(r.scale, 1); assert.equal(r.tier, 0); assert.equal(r.autoShed, 0);
   }
   const old = replay("half", (i, s, drew) => (drew ? 16.67 : 8.33), 7200, { legacy: true });
-  assert.ok(old.moves >= 2 && old.floor < 10, `the un-gated feed still shows the defect (${JSON.stringify(old)})`);
+  // The un-gated feed still sinks the floor to the fast cadence; since #7402 the half-cadence
+  // draw budget (2 x vsync) keeps that sunk floor from cutting scale, so it no longer moves.
+  assert.ok(old.floor < 10, `the un-gated feed still shows the defect (${JSON.stringify(old)})`);
+  assert.equal(old.moves, 0, "the cadence budget absorbs it");
 });
 
 test("replay B: the opt-in \"30\" tier on a 60 Hz phone never sheds (was 10 moves, tier 4)", () => {
@@ -1974,4 +1977,21 @@ test("GRAPHICS HIGH: a crash-sentinel floor keeps a struck phone at 1.5 until th
   assert.deepEqual([PerfGov.strikes(), calls], [1, [0]], "one strike: HIGH boots at the tier's 1.5");
   PerfGov.setUserTier(2); PerfGov.setUserTier(0);
   assert.deepEqual(calls, [0, 0, 0], "the floor (tier 2) wins over the HIGH preset");
+});
+
+test("a halved or tiered 120 Hz phone is judged against its drawn cadence, not the 8.3 ms vsync (#7402)", () => {
+  // 120 Hz vsync quantisation: a drawn rAF presents at the next 8.33 ms multiple of its cost,
+  // a skipped one is the bare vsync. Cheap 7 ms frames for 20 s pull the floor to 8.3; the
+  // scene then costs 11 ms (fill-scaled), which still holds the 60 fps half/tier cadence.
+  const q120 = (c) => Math.max(1, Math.ceil(c / 8.333 - 1e-9)) * 8.333;
+  const raf = (i, s, drew) => (!drew ? 8.333 : q120(i < 2400 ? 7 : 11 * (0.4 + 0.6 * s * s)));
+  for (const rate of ["half", "45"]) {
+    const r = replay(rate, raf, 36000);
+    assert.equal(r.moves, 0, `${rate}: no scale move while the cadence holds (${JSON.stringify(r)})`);
+    assert.equal(r.scale, 1); assert.equal(r.tier, 0); assert.equal(r.autoShed, 0);
+  }
+  for (const rate of ["half", "45"]) {   // a constant 11 ms scene never moved, and still does not
+    assert.equal(replay(rate, (i, s, drew) => (!drew ? 8.333 : q120(11)), 36000).moves, 0, rate);
+  }
+  assert.equal(replay("auto", quantised(() => 11), 18000).moves, 0, "a 60 Hz panel never halves and never moves");
 });
