@@ -31,7 +31,50 @@
 // the leak lived in TLX and TLX is what players run.
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 import { censusInitScript, censusAfterGc, pickTrack, settle, sustainedGrowthMB, waitFrames, waitUntilDrawn } from "../../tools/lib/mem-census.mjs";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { createWriteStream, mkdirSync, writeFileSync } from "node:fs";
+import { createGzip } from "node:zlib";
+
+// PROBE ONLY (#7464, never lands): a gzipped CDP heap snapshot per picker visit, to name who holds the
+// extra copy of the world's vertex data in the HIGH state on Metal (run 46109757702).
+async function heapSnapshotGz(cdp, path) {
+  const gz = createGzip({ level: 6 }), out = createWriteStream(path);
+  gz.pipe(out);
+  const done = new Promise((resolve, reject) => { out.on("finish", resolve); out.on("error", reject); gz.on("error", reject); });
+  const onChunk = (e) => { gz.write(e.chunk); };
+  cdp.on("HeapProfiler.addHeapSnapshotChunk", onChunk);
+  try { await cdp.send("HeapProfiler.takeHeapSnapshot", { reportProgress: false, captureNumericValue: false }); }
+  finally { cdp.off("HeapProfiler.addHeapSnapshotChunk", onChunk); gz.end(); }
+  await done;
+}
+// PROBE ONLY: CPU arrays three's scene still holds, counted once per ArrayBuffer, split by owner kind.
+function attributeCensus() {
+  const seenBuf = new Set(), seenAttr = new Set(), out = { attrs: 0, nulled: 0, buffers: 0, bytes: 0, byKind: {}, big: [] };
+  const note = (a, kind, name) => {
+    if (!a || seenAttr.has(a)) return;
+    seenAttr.add(a); out.attrs++;
+    const arr = a.array || (a.data && a.data.array);
+    if (!arr) { out.nulled++; return; }
+    const buf = arr.buffer;
+    if (!buf || seenBuf.has(buf)) return;
+    seenBuf.add(buf); out.buffers++; out.bytes += buf.byteLength;
+    const k = out.byKind[kind] || (out.byKind[kind] = { buffers: 0, bytes: 0 });
+    k.buffers++; k.bytes += buf.byteLength;
+    if (buf.byteLength >= 1048576) out.big.push([kind, name, buf.byteLength]);
+  };
+  const geo = (g, where) => {
+    if (!g || !g.attributes) return;
+    const kind = where + ":" + (g.__tlxKind || "?") + (g.__tlxKept ? "+kept" : "") + (g.__tlxFreed ? "+freed" : "");
+    for (const k in g.attributes) note(g.attributes[k], kind, k);
+    if (g.index) note(g.index, kind, "index");
+  };
+  try { if (window.scene) window.scene.traverse((o) => geo(o.geometry, "scene")); } catch (e) { out.error = String(e); }
+  try {
+    const r = window.renderer && window.renderer._objects && window.renderer._objects._renderObjects;
+    if (r) for (const ro of r) geo(ro.geometry, "ro");
+  } catch (e) { out.roError = String(e); }
+  out.big.sort((a, b) => b[2] - a[2]); out.big.length = Math.min(out.big.length, 40);
+  return out;
+}
 
 // Three CLI runs of the fixed tree (tools/gfx/mem-census.mjs, picker path, TLX,
 // SwiftShader, 960×540) grew 0.4–1.0 MB per round once warm; the #773 tree
@@ -62,7 +105,7 @@ const CIRCUITS = ["monza", "monaco"];
 test("loading circuits one after another keeps one world in memory and does not grow", async ({ page }) => {
   // Ten picker builds on software GL (six took 92-123 s, past the 120 s
   // default). The build wait itself is bounded by pickTrack's timeout.
-  test.setTimeout(480000);
+  test.setTimeout(1500000);   // PROBE: ten heap snapshots on top of the ten builds
   await page.addInitScript(() => {
     try { localStorage.setItem("apex26.gfxBackend", "three"); } catch (_) {}
     // software GL on a busy runner: TLX init measured > 8 s (run 38660546141) — give it room so the pick is actually TLX
@@ -98,7 +141,14 @@ test("loading circuits one after another keeps one world in memory and does not 
       await settle(page, SETTLE_MS);
       const c = await censusAfterGc(page, cdp);
       const nbc = await page.evaluate(() => { const n = window.renderer && window.renderer._nodes; let zero = 0; if (n) for (const st of n.nodeBuilderCache.values()) if (st.usedTimes <= 0) zero++; return n ? { size: n.nodeBuilderCache.size, zero } : null; });
-      readings.push({ visit, id, ...c, renderObjects: c.three?.renderObjects, nodeBuilderCache: nbc });
+      // PROBE ONLY (#7464): the reading above is taken BEFORE the snapshot; `afterSnapshot` says whether the
+      // snapshot's own GC moved the state.
+      const attrs = await page.evaluate(attributeCensus);
+      const snapPath = censusPath.replace(/\.json$/, `-v${visit}-${id}.heapsnapshot.gz`);
+      let snapshot = snapPath, afterSnapshot = null;
+      try { await heapSnapshotGz(cdp, snapPath); afterSnapshot = (await censusAfterGc(page, cdp)).runtimeMemory; }
+      catch (error) { snapshot = "failed: " + String(error.message || error); }
+      readings.push({ visit, id, ...c, renderObjects: c.three?.renderObjects, nodeBuilderCache: nbc, attrs, snapshot, afterSnapshot });
       writeFileSync(censusPath, JSON.stringify(readings, null, 1));
       expect(c.aliveTracks, `visit ${visit} to ${id}: built tracks still reachable after GC`).toEqual([id]);
       expect(c.three && c.three.renderObjects, `visit ${visit} to ${id}: the world must have drawn for this reading to mean anything`)
