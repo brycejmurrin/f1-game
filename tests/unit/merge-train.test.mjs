@@ -13,6 +13,7 @@ import {
   stuckGreen, retryAttempts, STUCK_GREEN_MIN, RETRY_MAX, isStackPr, strayTrainRefs, broadRetest, RETEST_BROAD,
   readScreen, screenAccept, screenFold, screenMain, soloLane, landRunsInFlight, resnapVerdict, resnapTree, SCREEN_BUDGET_MS,
   STACK_PREFIX, REBASE_WAIT_MAX_MIN, stackRef, parseStackRef, readStack, stackPlan, trainInFlight, retestBudget, planTrain,
+  UNLABELED_TRAIN_MIN, unlabeledTrain,
 } from "../../tools/ci/merge-train.mjs";
 import { evaluate, isProtectedConfigPath, isConfigPath } from "../../tools/ci/merge-gate.mjs";
 import { planVerdict } from "../../tools/ci/ready-gate.mjs";
@@ -1226,5 +1227,98 @@ test("promote half-failure (#6679 finding 1): the labels land, the body PATCH er
     assert.equal(spec.head.sha, head);
     const d = await f.build();
     assert.deepEqual(d.logs, [`= merge-train waiting — train #200 is still running; the screen was not stacked on its head ${head.slice(0, 8)}, nothing stacked`]);
+  } finally { f.rm(); }
+});
+
+// ---- #7254 (#7249 rows 1-3): --build robustness ------------------------------------------------------------------
+/** A one-train mock (the #6667 shape): train #6580 carries #5 and #6; `over` answers a path first (return undefined to
+ *  fall through). The second open-list read errors, so the run ends after the train loop and the stack step. */
+function oneTrain({ over = () => undefined, train: t = {} } = {}) {
+  const m = { base: sha("a"), cars: [{ pr: 5, head: sha("b"), ref: "claude/x" }, { pr: 6, head: sha("c"), ref: "claude/y" }] };
+  const train = { number: 6580, state: "open", head: { sha: sha("e"), ref: "train/x-5-6" }, labels: [{ name: "land" }, { name: "train" }], body: renderManifest(m), created_at: "2026-11-25T10:30:00Z", ...t };
+  const writes = [], logs = [];
+  let opens = 0;
+  const request = (p, o) => {
+    const v = over(p, o);
+    if (v !== undefined) return v;
+    if (o?.method) { writes.push({ p, ...o }); return { json: {} }; }
+    if (p.startsWith("pulls?state=open")) return opens++ ? { error: "stop here" } : { json: [train] };
+    if (p === "pulls/5") return { json: { state: "open", head: { sha: sha("b") }, labels: [{ name: "land" }] } };
+    if (p === "pulls/6") return { json: { state: "open", head: { sha: sha("c") }, labels: [{ name: "land" }] } };
+    if (p.startsWith("git/matching-refs/heads/train/")) return { json: [{ ref: "refs/heads/train/x-5-6" }] };
+    if (p.startsWith("git/matching-refs/")) return { json: [] };
+    if (p.includes("check-runs?check_name=CI")) return { json: { check_runs: [] } };
+    if (p.startsWith("actions/workflows/ci.yml/runs")) return { json: { workflow_runs: [{ id: 1, status: "in_progress", conclusion: null }] } };
+    if (p.includes("/statuses")) return { json: [] };
+    return { error: `unexpected ${p}` };
+  };
+  const run = (at = "2026-11-25T11:00:00Z") => main(["--build"], { request, log: (l) => logs.push(l), now: Date.parse(at) });
+  return { m, writes, logs, run };
+}
+
+test("#7254 row 2: one unreadable car read leaves a healthy train open — no PATCH, no comment, no branch DELETE", async () => {
+  const m = { base: sha("a"), cars: [{ pr: 5, head: sha("b") }, { pr: 6, head: sha("c") }] };
+  const cars = new Map([[6, { state: "open", head: { sha: sha("c") }, labels: [{ name: "land" }] }]]);
+  assert.deepEqual(trainDisposition({ manifest: m, cars, ciConclusion: "", gate: "", unread: [{ pr: 5, error: "HTTP 404: Not Found" }] }),
+    { close: false, unreadable: true, why: "car #5 (HTTP 404: Not Found) unreadable, waiting" });
+  assert.equal(trainDisposition({ manifest: m, cars, ciConclusion: "", gate: "" }).outcome, "stale", "a car truly gone (no read error) is still moved");
+  const t = oneTrain({ over: (p, o) => (p === "pulls/5" && !o?.method ? { error: "HTTP 403: Resource not accessible by integration" } : undefined) });
+  assert.equal(await t.run(), 0, t.logs.join("\n"));
+  assert.deepEqual(t.writes, [], "the train is not closed, commented on or its branch deleted");
+  assert.deepEqual(t.logs, ["  train #6580: car #5 (HTTP 403: Resource not accessible by integration) unreadable, waiting", "= merge-train waiting — train #6580 is still running"]);
+});
+
+test("#7254 row 3: an open train/ PR with no `train` or `land` past UNLABELED_TRAIN_MIN is closed stale; a fresh one waits", async () => {
+  assert.equal(UNLABELED_TRAIN_MIN, 10);
+  const now = Date.parse("2026-11-25T11:00:00Z");
+  const p = (labels, created_at = "2026-11-25T10:30:00Z") => ({ labels: labels.map((name) => ({ name })), created_at });
+  assert.equal(unlabeledTrain(p(["land", "train"]), now), "");
+  assert.equal(unlabeledTrain(p([], "2026-11-25T10:50:00Z"), now), "", "inside the window openTrain may still be labelling it");
+  assert.equal(unlabeledTrain(p([], "")), "", "an unreadable age keeps it");
+  assert.equal(unlabeledTrain(p(["train"]), now), "an unlabeled train (no `land` after 30 min): no gate runs on it, so it would wait forever");
+  assert.equal(unlabeledTrain(p([]), now), "an unlabeled train (no `train` or `land` after 30 min): no gate runs on it, so it would wait forever");
+  const t = oneTrain({ train: { labels: [] } });
+  await t.run(); // after the close the plan reads the open list again, which this mock refuses ("stop here")
+  const close = t.writes.find((w) => w.p === "pulls/6580");
+  assert.equal(close?.body.state, "closed", t.logs.join("\n"));
+  assert.deepEqual(trainResult(close.body.body), { outcome: "stale", why: "an unlabeled train (no `train` or `land` after 30 min): no gate runs on it, so it would wait forever" });
+  assert.deepEqual(t.writes.filter((w) => w.method === "DELETE").map((w) => w.p), ["git/refs/heads/train/x-5-6"]);
+  const fresh = oneTrain({ train: { labels: [], created_at: "2026-11-25T10:55:00Z" } });
+  assert.equal(await fresh.run(), 0);
+  assert.deepEqual(fresh.writes, []);
+});
+
+test("#7254 row 3: a failed labels POST closes the new train and deletes its ref; the next --build leaves no unlabeled train/ PR open", async () => {
+  const f = stackFixture();
+  try {
+    const tip = f.merge();
+    fs.writeFileSync(f.screenFile, JSON.stringify({ tip, cars: [3, 4].map((pr) => ({ pr, head: f.heads[pr], ok: true, why: "" })) }));
+    const failing = (p, o) => (p === "issues/200/labels" && o?.method === "POST" ? { error: "HTTP 502: Bad Gateway" } : f.request(p, o));
+    const a = await f.build(undefined, failing);
+    assert.equal(a.code, 1);
+    assert.equal(a.logs.at(-1), "= merge-train error — labels on #200: HTTP 502: Bad Gateway; closed and its branch deleted");
+    assert.equal(f.opened[0].state, "closed");
+    assert.equal(trainResult(f.opened[0].body).outcome, "stale");
+    assert.equal(spawnSync("git", ["rev-parse", "-q", "--verify", `refs/heads/${f.opened[0].head.ref}`], { cwd: f.remote }).status, 1, "its ref is deleted");
+    const b = await f.build("2026-11-25T12:30:00Z");
+    assert.equal(b.code, 0, b.logs.join("\n"));
+    const orphans = f.opened.filter((q) => q.state === "open" && q.head.ref.startsWith(TRAIN_PREFIX) && unlabeledTrain(q, Date.parse("2026-11-25T12:30:00Z")));
+    assert.deepEqual(orphans.map((q) => q.number), []);
+    affix(b.logs.at(-1), "= merge-train opened #201 — cars=#3,#4 ");
+  } finally { f.rm(); }
+});
+
+test("#7254 row 1: a plain screen measured on a tip that has since moved opens no train (screen measured X, tip is Y)", async () => {
+  const f = stackFixture();
+  try {
+    const old = f.merge();
+    fs.writeFileSync(f.screenFile, JSON.stringify({ tip: old, cars: [3, 4].map((pr) => ({ pr, head: f.heads[pr], ok: true, why: "" })) }));
+    const t = moveTip(f);
+    const r = await f.build();
+    assert.equal(r.code, 0, r.logs.join("\n"));
+    assert.equal(r.logs.at(-1), `= merge-train idle — the screen measured the tip ${old.slice(0, 8)}, the tip is ${t.slice(0, 8)} now; the next run screens onto it`);
+    assert.deepEqual(f.opened, [], "no train opened onto an unmeasured tip");
+    fs.writeFileSync(f.screenFile, JSON.stringify({ tip: t, cars: [3, 4].map((pr) => ({ pr, head: f.heads[pr], ok: true, why: "" })) }));
+    affix((await f.build()).logs.at(-1), "= merge-train opened #200 — cars=#3,#4 ");
   } finally { f.rm(); }
 });
