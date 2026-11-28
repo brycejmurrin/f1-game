@@ -1677,8 +1677,6 @@
       const car = o.carReflect != null ? o.carReflect : PostCommon.knob(o.tune || null, "carReflect");
       return !!(F.invProj && F.proj && F.upVS) && ((o.reflect || 0) > 0.001 || car > 0.001);   // the composite's SSR gate, exactly
     }
-    // WebGL2 only: invalidate `list` on rt's FBO, and only while three still has THAT FBO bound
-    // (the pass it just rendered) — never a guess. Returns true when it did.
     // Is fb one of three's per-target FBOs? A keyed walk: `Object.values(…).indexOf` built an array on every
     // discard, twice a frame (hunt #5777 R17c).
     function ownsFb(fbs, fb) {
@@ -1686,6 +1684,8 @@
       for (const k in fbs) if (fbs[k] === fb) return true;
       return false;
     }
+    // WebGL2 only: invalidate `list` on rt's FBO, and only while three still has THAT FBO bound
+    // (the pass it just rendered) — never a guess. Returns true when it did.
     function discardAttachments(rt, list) {
       const be = renderer.backend, gl = be && be.gl, st = be && be.state;
       if (!rt || !list || !list.length || !gl || typeof gl.invalidateFramebuffer !== "function" || !st || !st.currentBoundFramebuffers) return false;

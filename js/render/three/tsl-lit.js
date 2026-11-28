@@ -2670,7 +2670,7 @@
           // M9: fetch the real surroundings from the probe cube along the
           // reflection vector and cross-fade the analytic mirror toward it by
           // the probe strength (uEnvStr, 0 off). envCC is already
-          // .toVar()-anchored, so this unconditional reassign never strands
+          // .toVar()-anchored, so the branched reassign below never strands
           // (STANDING RULE). .sample() shares the swappable base node.
           if (envCubeNode) {
             // textureLod(uEnvCube, Rg, rough*2.5) — js/render/glx/shaders/glsl-lit.js.
