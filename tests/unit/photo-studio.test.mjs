@@ -382,6 +382,58 @@ test("a garage still waits for a fresh capture draw even when a previous photo e
   assert.equal(await b.api.capture(), true);
 });
 
+test("a first capture after a shader warm waits a frame and retries instead of refusing (#7514)", async () => {
+  const b = boot();
+  b.api.open({source: "garage"});
+  let calls = 0;
+  b.G.gfx.renderCaptureFrame = draw => { if (calls++ === 0) return false; draw(); return true; };
+  assert.equal(await b.api.capture(), true, "the first tap captures");
+  assert.equal(calls, 2, "one skipped draw, one retry");
+  assert.match(b.dom.byId("ps-message").textContent, /^Captured /);
+  assert.equal(b.order.filter(action => action === "read").length, 1, "at most one pixel read");
+});
+
+test("a capture draw that never lands gives up after the bounded retries (#7514)", async () => {
+  const b = boot();
+  b.api.open({source: "garage"});
+  let calls = 0;
+  b.G.gfx.renderCaptureFrame = () => { calls++; return false; };
+  assert.equal(await b.api.capture(), false);
+  assert.equal(calls, 8, "eight frames, then the refusal");
+  assert.equal(b.order.filter(action => action === "read").length, 0);
+});
+
+test("a retry re-arms the soft-present wait after the frame it waited on (#7514 review)", async () => {
+  const frames = [], b = boot({ requestAnimationFrame: fn => frames.push(fn) });
+  b.api.open({source: "garage"});
+  const events = [];
+  let calls = 0;
+  Object.assign(b.G.gfx, {
+    softPresent: () => true,
+    invalidateSoftPresent: () => events.push("invalidate"),
+    awaitSoftPresent: () => { events.push("await"); return new Promise(() => {}); },
+    renderCaptureFrame: draw => { events.push("draw"); if (calls++ === 0) return false; draw(); return true; },
+  });
+  const capture = b.api.capture();
+  await Promise.resolve();
+  assert.deepEqual(events, ["invalidate", "await", "draw"]);
+  frames.shift()();
+  await capture;
+  assert.deepEqual(events.slice(3, 6), ["invalidate", "await", "draw"], "a fresh wait is armed before the retried draw");
+});
+
+test("closing the studio during a retry wait cancels without a pixel read (#7514 review)", async () => {
+  const frames = [], b = boot({ requestAnimationFrame: fn => frames.push(fn) });
+  b.api.open({source: "garage"});
+  b.G.gfx.renderCaptureFrame = () => false;
+  const capture = b.api.capture();
+  await Promise.resolve();
+  b.api.close(false);
+  while (frames.length) frames.shift()();
+  assert.equal(await capture, false);
+  assert.equal(b.order.filter(action => action === "read").length, 0);
+});
+
 function chooseSamples(b, count) {
   const row = b.dom.byId("ps-samples");
   row.value = String(count);
