@@ -1420,13 +1420,16 @@ const FlybySeq = (function () {
   const PAN_RUNGS = Math.floor(Math.log(PAN_MIN_K) / Math.log(PAN_K) + 1e-9);   // 0.85^21 = 0.033: the walk's last rung (0.103 left a lift ramp whipping at the bottom)
   let _flyS = REF_S;
   function setDuration(ms) { _flyS = ms > 0 ? ms / 1000 : REF_S; }
+  // Memoised per frame (#7348); an in-place retime/reorder changes the key.
+  let _bList = null, _bKey = NaN, _bTot = NaN, _bOut = [];
   function boundaries(shots) {
     const list = (shots && shots.length) ? shots : DEFAULT;
-    let total = 0;
-    for (const shot of list) total += shot.dur || 0;
-    if (!(total > 0)) return [];
-    const out = []; let acc = 0;
-    for (let i = 0; i < list.length - 1; i++) { acc += list[i].dur || 0; out.push(acc / total); }
+    let total = 0, key = list.length;
+    for (let i = 0; i < list.length; i++) { const d = list[i].dur || 0; total += d; key += d * (i + 1); }
+    if (list === _bList && key === _bKey && total === _bTot) return _bOut;
+    const out = [];
+    if (total > 0) { let acc = 0; for (let i = 0; i < list.length - 1; i++) { acc += list[i].dur || 0; out.push(acc / total); } }
+    _bList = list; _bKey = key; _bTot = total; _bOut = out;
     return out;
   }
   const DIP_MS = 150, REDUCED_DIP_MS = 300;
@@ -1449,9 +1452,11 @@ const FlybySeq = (function () {
     return shot.sway * Math.sin(Math.max(0, Math.min(1, t)) * Math.PI * 2);
   }
   let _dipTimer = 0;
+  let _loadingEl = null;
   function syncPresentation(p, cut) {
     if (typeof document === "undefined" || !document.getElementById) return;
-    const el = document.getElementById("loading");
+    if (!_loadingEl || _loadingEl.isConnected === false) _loadingEl = document.getElementById("loading");
+    const el = _loadingEl;
     if (!el || !el.dataset || el.dataset.phase !== "run") return;
     el.dataset.sectors = p.sectors > 0 ? p.sectors.toFixed(3) : "";
     if (!cut) return;
@@ -2077,7 +2082,7 @@ const FlybySeq = (function () {
     anchorS, posePoint, cornerS, cornerSide, cornerTurn,
     poseFromWorld, shotFromView, select, whenMatch, vary, setPlayerSlot, slotIndex, slotKnown, withoutSlot, withoutGrid,
     bindCorners: viaStore(bindCorners), warm: viaStore(warm), cancelWarm, setDuration, planSteps: viaStore(planSteps),
-    boundaries, presentation, swayAt, setHeroCars, driveHero: viaStore(driveHero), rollHero: viaStore(rollHero), gridProgress,
+    boundaries, presentation, syncPresentation, swayAt, setHeroCars, driveHero: viaStore(driveHero), rollHero: viaStore(rollHero), gridProgress,
     DEFAULT, GRID_SHOTS,
     FAR, FOG, NEAR, FENCE, REF_S, PAN_MAX, PARA_MAX,
   };

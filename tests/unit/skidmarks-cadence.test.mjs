@@ -225,3 +225,70 @@ test("GLX reserves the skid trail once and streams only live vertices", () => {
   assert.equal(h.count("bufferData"), 1, "new VBO needs its store");
   assert.deepEqual(args("bufferSubData").map(a => a[4]), [120 * 6 * 5], "restore the trail even with a clean CPU copy");
 });
+
+// Hunt #7348 X3: with the rival cap full, stampFor() rewrote the oldest rival
+// slot IN PLACE, so lay() flushed the newest mark first. It now lands at the head.
+function makeSkidsX3() {
+  const ctx = vm.createContext({ Float32Array, Float64Array, Uint8Array, Array, Math });
+  seedLog(ctx);
+  const S = vm.runInContext(SRC + ";SkidMarks", ctx, { filename: absSrc("js/fx/skidmarks.js") });
+  return { S, skids: S.create() };
+}
+const at = (x) => { const m = new Float32Array(16); m[0] = m[5] = m[10] = m[15] = 1; m[12] = x; return m; };
+function ringOrder(skids) {   // oldest -> newest, by each mark's x tag
+  const xs = [];
+  skids.draw({ drawSkidBatch: () => false, drawMark: (m) => xs.push(Math.round(m[12] * 100)) }, [0, 0, 0]);
+  return xs;
+}
+
+test("X3: a capped rival mark lands at the ring head and outlives older marks", () => {
+  const { S, skids } = makeSkidsX3();
+  let tag = 0;
+  const player = () => skids.stamp(at(++tag / 100), true, 1);
+  const rival = () => assert.ok(skids.stampFor({ t: 0 }, at(++tag / 100), true, 1));
+  for (let i = 0; i < S.AI_CAP; i++) rival();
+  while (skids.count < S.MAX_SKID) player();
+  assert.equal(skids.otherCount, S.AI_CAP);
+  rival();   // cap full: replaces the oldest rival mark
+  const newest = tag;
+  const order = ringOrder(skids);
+  assert.equal(order.length, S.MAX_SKID);
+  assert.equal(order[order.length - 1], newest, "the new rival mark is the newest in ring order (fails before: it sat at the oldest rival's slot)");
+  assert.equal(order.filter((x) => x === 1).length, 0, "the oldest rival mark was the one dropped");
+  assert.equal(skids.otherCount, S.AI_CAP, "the rival share is unchanged");
+  // The player lays MAX_SKID - 1 more: the new rival mark is the last survivor.
+  for (let i = 0; i < S.MAX_SKID - 1; i++) player();
+  const after = ringOrder(skids);
+  assert.equal(after[0], newest, "every older mark was flushed before it (fails before: flushed in the first wrap)");
+  assert.equal(skids.otherCount, 1);
+});
+
+test("X3: a full ring that has wrapped (idx != 0) still puts the capped rival mark at the head", () => {
+  const { S, skids } = makeSkidsX3();
+  let tag = 0;
+  for (let i = 0; i < S.AI_CAP; i++) skids.stampFor({ t: 0 }, at(++tag / 100), true, 1);
+  while (skids.count < S.MAX_SKID) skids.stamp(at(++tag / 100), true, 1);
+  for (let i = 0; i < 7; i++) skids.stamp(at(++tag / 100), true, 1);   // wraps: drops rivals 1..7
+  assert.equal(skids.otherCount, S.AI_CAP - 7);
+  while (skids.otherCount < S.AI_CAP) skids.stampFor({ t: 0 }, at(++tag / 100), true, 1);
+  skids.stampFor({ t: 0 }, at(++tag / 100), true, 1);   // cap full again
+  const order = ringOrder(skids);
+  assert.equal(order.length, S.MAX_SKID);
+  assert.equal(order[order.length - 1], tag, "the newest mark is last in ring order");
+  assert.equal(order.filter((x) => x === 8).length, 0, "the oldest surviving rival (8) was dropped");
+  for (let i = 1; i < order.length; i++) assert.ok(order[i] > order[i - 1], `ring order is age order at ${i}`);
+  assert.equal(skids.otherCount, S.AI_CAP);
+});
+
+test("X3: before the ring is full, a capped rival mark still goes to the head", () => {
+  const { S, skids } = makeSkidsX3();
+  let tag = 0;
+  for (let i = 0; i < S.AI_CAP; i++) skids.stampFor({ t: 0 }, at(++tag / 100), true, 1);
+  skids.stamp(at(++tag / 100), true, 1);
+  skids.stampFor({ t: 0 }, at(++tag / 100), true, 1);
+  const order = ringOrder(skids);
+  assert.equal(skids.count, S.AI_CAP + 1, "no slot was added past the cap");
+  assert.equal(order[order.length - 1], tag);
+  assert.equal(order[order.length - 2], S.AI_CAP + 1, "the player mark keeps its place");
+  assert.equal(order[0], 2);
+});
