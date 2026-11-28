@@ -1,5 +1,16 @@
 # Ceiling history — the module-size ratchet, 2026-08 → 2026-09-03
 
+## 2026-11-27 — PR #7330 (claude/vm-groups-router-7255): VM groups from one list + one path→group router (#7255)
+
+`(tree) assertPinsAll` 10594 → **10604** (+10), past the absorb of 5. Each new assert is a pin that #7255 asks for, and
+both pins fail on base. `tests/unit/node-plan.test.mjs` gains three: game-vm = a ∪ b (cam-surge-hold sat in b only), plus
+the `union` lists of game-vm and game-vm-b. `tests/unit/pick-tests.test.mjs` adds one router test: `pickAll === pick`, the
+ALWAYS/SPECIFIC split, and every `git ls-files` path against the frozen former `EXTRA_ROUTES` rows. Its spot checks
+`vendor/three-…` → tiny + gfx and `controller.html` → tiny + input are the Done-when lines.
+`tests/unit/test-groups-generated.test.mjs` adds one `resolveUnions` test: derivation, key order, drift detection and its
+refusals. Trimming them would drop either a refusal or the parity that the issue's member 1 asks for. Fragment:
+`ratchets.d/claude--vm-groups-router-7255.json`. Label: `ratchet-raise`.
+
 ## 2026-11-27 — PR #7284 (claude/ui-shape-7259): one UiShape module for the phone / screen-shape predicates (#7259)
 
 `(tree) eagerScripts` +1 and `(tree) eagerCodeBytes` +195. Deliberate raise, which needs a `ratchet-raise` label (D-042);
