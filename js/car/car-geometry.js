@@ -360,43 +360,48 @@ const CarGeometry = (function () {
   // of a car's vertices are exact repeats; welding them halves the vertex count
   // with a bit-identical picture. Vertex ranges (sections, zones) do not survive,
   // so callers that read them (measure, refinish) skip it. Returns out.
+  // posOnly (Car3D.build opts.caster on a silhouette, #7436): a car shadow caster is drawn only by depth passes that read position (GLX
+  // DEPTH_VS, WGX SHADOW_VERTEX_LAYOUT, TLX __tlxCasterOnly), so it keys on position alone, drops zero-area
+  // triangles, zero-fills normal and colour (GLX/WGX pack a fixed stride) and drops mat.
   const _f = new Float32Array(10), _u = new Uint32Array(_f.buffer);
-  function weld(out) {
-    const n = out.pos.length / 3;
+  function weld(out, posOnly) {
+    const n = out.pos.length / 3, K = posOnly ? 3 : 10;
     if (!n || out.nrm.length !== n * 3 || out.col.length !== n * 3 || (out.mat && out.mat.length !== n)) return out;
-    if (out.luv) return CarHero.weld(out);   // a hero build's loft UVs join the key (js/car/car-hero.js)
+    if (out.luv && !posOnly) return CarHero.weld(out);   // a hero build's loft UVs join the key (js/car/car-hero.js)
     let cap = 1; while (cap < n * 2) cap <<= 1;
-    const table = new Int32Array(cap).fill(-1), keys = new Uint32Array(n * 10), remap = new Int32Array(n);
-    const pos = [], nrm = [], col = [], mat = out.mat ? [] : null;
+    const table = new Int32Array(cap).fill(-1), keys = new Uint32Array(n * K), remap = new Int32Array(n);
+    const pos = [], nrm = [], col = [], mat = out.mat && !posOnly ? [] : null;
     let m = 0;
     for (let i = 0; i < n; i++) {
       _f[0] = out.pos[i*3]; _f[1] = out.pos[i*3+1]; _f[2] = out.pos[i*3+2];
       _f[3] = out.nrm[i*3]; _f[4] = out.nrm[i*3+1]; _f[5] = out.nrm[i*3+2];
       _f[6] = out.col[i*3]; _f[7] = out.col[i*3+1]; _f[8] = out.col[i*3+2]; _f[9] = mat ? out.mat[i] : 0;
       let h = 2166136261;
-      for (let k = 0; k < 10; k++) h = Math.imul(h ^ _u[k], 16777619);
+      for (let k = 0; k < K; k++) h = Math.imul(h ^ _u[k], 16777619);
       let slot = (h >>> 0) & (cap - 1), hit = -1;
       for (;;) {
         const j = table[slot];
         if (j < 0) break;
         let same = true;
-        for (let k = 0; k < 10; k++) if (keys[j*10+k] !== _u[k]) { same = false; break; }
+        for (let k = 0; k < K; k++) if (keys[j*K+k] !== _u[k]) { same = false; break; }
         if (same) { hit = j; break; }
         slot = (slot + 1) & (cap - 1);
       }
       if (hit < 0) {
         hit = m++; table[slot] = hit;
-        for (let k = 0; k < 10; k++) keys[hit*10+k] = _u[k];
+        for (let k = 0; k < K; k++) keys[hit*K+k] = _u[k];
         pos.push(out.pos[i*3], out.pos[i*3+1], out.pos[i*3+2]);
-        nrm.push(out.nrm[i*3], out.nrm[i*3+1], out.nrm[i*3+2]);
-        col.push(out.col[i*3], out.col[i*3+1], out.col[i*3+2]);
+        if (!posOnly) nrm.push(out.nrm[i*3], out.nrm[i*3+1], out.nrm[i*3+2]), col.push(out.col[i*3], out.col[i*3+1], out.col[i*3+2]);
         if (mat) mat.push(out.mat[i]);
       }
       remap[i] = hit;
     }
-    const idx = out.idx;
+    let idx = out.idx;
     for (let t = 0; t < idx.length; t++) idx[t] = remap[idx[t]];
-    out.pos = pos; out.nrm = nrm; out.col = col; if (mat) out.mat = mat;
+    if (posOnly) {
+      idx = idx.filter((_, t, a) => { const b = t - t % 3; return a[b] !== a[b+1] && a[b+1] !== a[b+2] && a[b] !== a[b+2]; });
+      out.idx = idx; out.pos = pos; out.nrm = new Float32Array(m * 3); out.col = new Float32Array(m * 3); delete out.mat;
+    } else { out.pos = pos; out.nrm = nrm; out.col = col; if (mat) out.mat = mat; }
     return out;
   }
 

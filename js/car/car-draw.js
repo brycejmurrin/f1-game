@@ -235,6 +235,7 @@ const CarDraw = (function () {
         noWheels: !!(extra && extra.noWheels),
         field: !!(extra && extra.noWheels),   // factory body — probe vs playerBodies
         silhouette: !!(extra && extra.silhouette),
+        caster: !!(extra && extra.caster),   // the team shadow caster: welded on position (#7436)
         seats: extra && extra.seats,   // body-only: teammates' bodies from this build (#4219)
         detail: extra && extra.silhouette ? 0 : carDetail().rival,   // meshHi rival (0 below ULTRA)
       });
@@ -298,7 +299,7 @@ const CarDraw = (function () {
     }
     function buildPendingTeamMesh() {
       const team = _pbTeam, num = _pbNum, setup = _pbSetup;
-      const extra = _pbKind === 1 ? { num, silhouette: true, setup }
+      const extra = _pbKind === 1 ? { num, silhouette: true, caster: true, setup }
         : _pbKind === 2 ? { noWheels: true, num, setup } : { num, setup };
       let data = _pbKind === 2 ? _seatData.get(_pbKey) : null;
       if (data) _seatData.delete(_pbKey);
@@ -1515,7 +1516,7 @@ const CarDraw = (function () {
     function buildPendingCockpitShadow() {
       const team = _cbTeam, liv = deps.resolveLivery(team);
       const geom = Car3D.build(liv.c1, liv.c2,
-        { livery: liv, teamId: team.id, silhouette: true, noDriver: true, ownHalo: true, halo: _cbHalo, num: _cbNum,
+        { livery: liv, teamId: team.id, silhouette: true, caster: true, noDriver: true, ownHalo: true, halo: _cbHalo, num: _cbNum,
           parts: _cbParts });
       geom._casterOnly = true;   // a caster, unlike the lit shared rival body
       return G.gfx.createMesh(geom);
