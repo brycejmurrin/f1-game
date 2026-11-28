@@ -314,7 +314,11 @@ const ApexGpuCapture = (function () {
   // wanted/status/disable/enable stay module-local except the three unit tests
   // in wgx-labels.test.mjs that race enable vs disable; apex.js wires only api().
   // hooks() was never spread — apex.js registers gpuCapture via ApexGpuCapture.api.
-  return { api, boot, status, disable, enable };
+  // stored(): the mode a later launch will boot with (apex-bridge.js reads it when a link starts, #7491).
+  function stored() {
+    try { const s = localStorage.getItem(KEY); return s === "spector" || s === "webgl-lint" ? s : null; } catch (_) { return null; }
+  }
+  return { api, boot, status, disable, enable, stored };
 })();
 
 if (typeof window !== "undefined") {
