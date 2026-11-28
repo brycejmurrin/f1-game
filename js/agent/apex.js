@@ -142,7 +142,7 @@ function simCareerRound() {
 // not quote that text (quoting it moves the slice and invents a hook called
 // `for`).
 // READ-ONLY hooks never force it (#6488: menuPrep pollers in a picker tap's settle froze 0.5-1 s, replacing the stepped build).
-const LAZY_READ_ONLY = new Set(["menuPrep", "info", "probe", "texCensus", "tlxMem", "agentHelp", "garagePrebuild", "garageCam"]);
+const LAZY_READ_ONLY = new Set(["menuPrep", "info", "probe", "texCensus", "tlxMem", "agentHelp", "garagePrebuild", "garageCam", "visorScene"]);
 function lazyTrackEnsure(o) {
   for (const k of Object.keys(o)) {
     const fn = o[k];
@@ -360,136 +360,8 @@ const api = {
     // before driving a rendered race (#4253). step() is not held.
     ...(({ warming, liveTicks }) => ({ warming, liveTicks }))(G.cameraDampingState()),
   }),
-  garageCam: () => ({
-    exterior: typeof GaragePrebuild !== "undefined" && GaragePrebuild.instance() ? GaragePrebuild.instance().state().exterior : null,
-    on: G.setupPreviewOn, spin: G.setupCam.spin,
-    az: G.setupCam.az, el: G.setupCam.el, dist: G.setupCam.dist,
-    // dist is the ZOOM's stored distance; effDist is what the camera actually
-    // used last frame. They differ on the auto-turntable path, which is the one
-    // that can misframe — fitD is the auto fit before the clamp, so a test can
-    // see the fit diverge (fitD >> effDist) instead of only its symptom.
-    effDist: G.setupCam.effDist, fitD: G.setupCam.effFit, panelFrac: G.setupCam.effPanel,
-    pan: G.setupCam.pan.slice(),
-    // ACTIVE AERO in the garage: the switch and the FLAP TRAVEL it eases toward.
-    // Separate fields on purpose — the button label follows the switch, so a
-    // preview whose blend never moves still reads "X-MODE" while showing a car
-    // that has not changed at all.
-    xOn: G.setupCam.xOn, aeroX: G.setupCam.aeroX,
-  }),
-  // GARAGE PREBUILD (js/garage/prebuild.js): ready/blockers/last run ms/tap-to-first-frame ms.
-  garagePrebuild: () => (typeof GaragePrebuild !== "undefined" && GaragePrebuild.instance() ? GaragePrebuild.instance().state() : null),
   // THE MENU'S RACE PREP (read-only): world/done/warmed/warmFrames/warming/cars — what RACE! will find ready.
   menuPrep: () => (G.menuPrep ? G.menuPrep() : null),
-  garagePrewarm: (on) => (typeof GaragePrebuild !== "undefined" && GaragePrebuild.instance() ? GaragePrebuild.instance().setEnabled(on) : null),   // the title prebuild's A/B switch (session; apex26.garagePrewarm="off" at boot)
-  // GARAGE ACTIVE AERO, drivable without a frame loop. The preview eases inside
-  // the rAF render, and a headless page composites no frames at all, so the
-  // whole garage animation was unobservable from a test — which is exactly how
-  // "the wings do not move" reached a player instead of a spec. No argument
-  // reads the state; garageStep(dt) advances the ease by dt seconds. Shut: garage_closed.
-  garageAero(on, opts) {
-    if (!G.setupPreviewOn) return { ok: false, error: "garage_closed" };
-    if (on !== undefined) G.setupCam.setSetupAero(!!on, opts);
-    return { xOn: G.setupCam.xOn, aeroX: +G.setupCam.aeroX.toFixed(4),
-             mode: G.setupCam.aeroX > 0.05 ? "X" : "Z" };
-  },
-  // Off-by-default X-mode TE strip (`CarMesh.drawAeroEdge`). Real cars do not
-  // light their wings; `apex26.aeroEdge=1` is the debug latch.
-  aeroEdge(on) {
-    const KEY = "apex26.aeroEdge";
-    if (on !== undefined) {
-      try { if (on) localStorage.setItem(KEY, "1"); else localStorage.removeItem(KEY); }
-      catch (e) { /* private mode */ }
-    }
-    try { return localStorage.getItem(KEY) === "1"; } catch (e) { return false; }
-  },
-  garageStep(dt, n) {
-    if (!G.setupPreviewOn) return { ok: false, error: "garage_closed" };
-    const [step, count] = stepArgs(dt, n);
-    for (let i = 0; i < count; i++) G.setupCam.stepSetupAero(step);
-    return this.garageAero();
-  },
-  // Switch garage car without opening #teampicker — same store writes as the tile
-  // click in select-screen.js (G.teamIdx, buildSetup, tickUi). Multi-team
-  // garage-angles surveys use this instead of the picker UI (~15 s per team).
-  garageTeam(id, seatWanted) {
-    if (!G.setupPreviewOn) return { ok: false, error: "garage_closed" };
-    const i = Teams.LIST.findIndex((t) => t.id === id);
-    if (i < 0) return { ok: false, error: "unknown_team", id };
-    const t = Teams.LIST[i];
-    const label = t.name.toUpperCase();
-    // An explicit SEAT (0 / 1) switches the driver — number, helmet, T-cam —
-    // on the same team too; without one the first free seat is taken.
-    const wantSeat = Number.isInteger(seatWanted) && seatWanted >= 0 && seatWanted < t.drivers.length ? seatWanted : null;
-    if (G.teamIdx === i && (wantSeat == null || wantSeat === G.driverIdx)) return { ok: true, switched: false, label, seat: G.driverIdx };
-    const taken = G.peerSeats ? G.peerSeats() : [];
-    const isTaken = (si) => taken.some((s) => s.team === t.id && s.driver === si);
-    let seat = wantSeat != null ? wantSeat : 0;
-    if (wantSeat == null) while (seat < t.drivers.length - 1 && isTaken(seat)) seat++;
-    G.teamIdx = i;
-    G.driverIdx = seat;
-    G.store.set("team", i);
-    G.store.set("driver", seat);
-    try { document.documentElement.dataset.team = t.id; } catch (_) { /* no DOM */ }
-    // Drop the preview meshes AND the key naming the one still held, or a no-op
-    // switch left setup-camera drawing a freed mesh (spMeshBust's two halves).
-    if (typeof GarageScene !== "undefined" && GarageScene.dropPreviewMeshes) { GarageScene.dropPreviewMeshes(); G.setupCam.meshKey = ""; }
-    G.buildSetup();
-    G.tickUi();
-    return { ok: true, switched: true, label, seat };
-  },
-  // One-shot preset + framing — mirrors #cs-stack / cs-view-* / cs-pan-*: opts.target [x,y,z] car-space look-at, lamp (preset name | null), az/el/dist absolute (rad, m), pan [strafe, dolly] m, zoom/strafe/dolly/azNudge/elNudge counted clicks; eye+look [x,y,z] place the eye itself (implies clamp:false); fov (deg) / centre:true a matched-lens reference shot (look-at centred, no panel shift); clamp:false lifts the player's el ≥ 0 / minDist floors for this framing; view "free" keeps the current camera.
-  garageFrame(view, opts) {
-    if (!G.setupPreviewOn) return { ok: false, error: "garage_closed" };
-    if (!view) return { ok: false, error: "no_view" };
-    if (view !== "free") G.setupCam.setSetupView(view);   // a preset resets orbit/target/pan; absolutes go on top
-    let o = opts || {};
-    const num = (v) => (Number.isFinite(v) ? v : null);
-    const xyz = (v) => Array.isArray(v) && v.length === 3 && v.every((n) => Number.isFinite(+n));
-    if (xyz(o.eye) && xyz(o.look)) {
-      // An explicit EYE is an orbit about the look-at point from where the eye
-      // stands: the same spherical terms the garage camera composes (game.js
-      // eye = orbit + [sin az · d · cos el, d · sin el, cos az · d · cos el]).
-      const dx = +o.eye[0] - +o.look[0], dy = +o.eye[1] - +o.look[1], dz = +o.eye[2] - +o.look[2];
-      const d = Math.hypot(dx, dy, dz) || 1e-6;
-      o = Object.assign({}, o, { target: o.look.map(Number), az: Math.atan2(dx, dz),
-        el: Math.asin(Math.max(-1, Math.min(1, dy / d))), dist: d, clamp: false });
-    }
-    // fov (deg) / centre: a matched-lens reference shot — its own vertical fov, the look-at in the
-    // middle of the frame (no panel lens shift, no auto recentre). Absent = the player's camera.
-    const lens = num(o.fov) > 0 || o.centre ? { fov: num(o.fov) > 0 ? Math.max(5, Math.min(90, o.fov)) : null, centre: !!o.centre } : null;
-    G.setupCam.setSetupFree(o.clamp === false);   // a dev shot may leave the player's range; the next preset restores it
-    if (lens) G.setupCam.setSetupFree(/** @type {any} */ (lens));   // a matched lens is a free dev shot too (setup-camera reads the object)
-    if (Array.isArray(o.target) && o.target.length === 3) G.setupCam.setSetupAim(o.target.map(Number));   // orbit + look-at, car space
-    if (o.lamp !== undefined && typeof GarageScene !== "undefined" && GarageScene.spot) GarageScene.spot(o.lamp || null);
-    if (num(o.az) != null) G.setupCam.nudgeSetupCam(o.az - G.setupCam.az, 0, 0);
-    if (num(o.el) != null) G.setupCam.nudgeSetupCam(0, o.el - G.setupCam.el, 0);
-    if (num(o.dist) > 0) G.setupCam.nudgeSetupCam(0, 0, o.dist / G.setupCam.dist);   // clamped by the game
-    const steps = (n, fn) => { for (let i = 0; i < Math.abs(n | 0); i++) fn(n > 0 ? 1 : -1); };
-    steps(o.azNudge != null ? o.azNudge : o.nudgeAz, (s) => G.setupCam.nudgeSetupCam(0.18 * s, 0, 0));
-    steps(o.elNudge != null ? o.elNudge : o.nudgeEl, (s) => G.setupCam.nudgeSetupCam(0, 0.12 * s, 0));
-    steps(o.zoom, (s) => G.setupCam.nudgeSetupCam(0, 0, s > 0 ? 1 / 1.12 : 1.12));
-    steps(o.strafe, (s) => G.setupCam.setupPan(0.15 * s, 0));
-    steps(o.dolly, (s) => G.setupCam.setupPan(0, 0.15 * s));
-    if (Array.isArray(o.pan)) G.setupCam.setupPan(+o.pan[0] || 0, +o.pan[1] || 0);
-    const c = this.garageCam();
-    return { ok: true, view, az: c.az, el: c.el, dist: c.effDist, pan: c.pan };
-  },
-  // Merge catalog part ids into the current team's garage setup and rebuild.
-  garageParts(parts) {
-    const team = Teams.LIST[G.teamIdx];
-    if (!team || !parts || typeof parts !== "object") return { ok: false, error: "bad_parts" };
-    const cur = Object.assign({}, G.getTeamParts(team.id));
-    for (const [cat, id] of Object.entries(parts)) {
-      if (typeof id === "string" && id !== "") cur[cat] = id;   // an Infinity/object id persisted as JSON null (the parts store never re-validates)
-    }
-    G.saveTeamParts(team.id, cur);
-    // Garage open: drop the preview, rebuild the sheet. Closed (menu / a race): DONE's recompute, so the next frame re-keys the player body, cockpit and wheel meshes.
-    if (!G.setupPreviewOn) G.recomputePlayerMods();
-    else { if (typeof GarageScene !== "undefined" && GarageScene.dropPreviewMeshes) { GarageScene.dropPreviewMeshes(); G.setupCam.meshKey = ""; } G.buildSetup(); }
-    return { ok: true, team: team.id, parts: cur, live: !G.setupPreviewOn };
-  },
-  // Debug: hide/show individual track meshes. e.g. meshToggle({props:true}) hides props.
-  meshToggle(o) { G.hideMeshes = Object.assign({}, G.hideMeshes, o || {}); return G.hideMeshes; },
   // Player telemetry for steering tests: lateral offset x (m, +=right of centre),
   // heading offset angle (rad, relative to track tangent), local curvature k
   // (rad/m, +=LEFT turn — measured in agentview.js's corner table; spline's old
@@ -1826,7 +1698,7 @@ const api = {
     return this.obs();
   },
 
-    ...ApexCam.hooks(G, { smp, smp2, camVantage, setCamMode, snapGameCam }), // peeled: G.camRoll G.cameraDampingState
+    ...ApexCam.hooks(G, { smp, smp2, camVantage, setCamMode, snapGameCam, stepArgs }), // peeled: G.camRoll G.cameraDampingState
   ...ApexTrack.hooks(G, { smp, wrapS }),
   ...ApexLobby.hooks(G, { raceOrder }), // peeled: G.ttLaps
   ...(typeof ApexPlay !== "undefined" ? ApexPlay.hooks(G) : {}), // ApexPlay: hand-loading tests may omit it; def() registry (js/agent/apex-play.js); empty until a U4.x unit defs a hook
@@ -2454,6 +2326,8 @@ const api = {
     }
     return d;
   },
+  // The visor glint scene (js/fx/visor-optics.js); null until the race-session visor payload loads.
+  visorScene: () => (typeof VisorOptics !== "undefined" ? VisorOptics.sceneFromG(G) : null),
 };
 try { if (typeof ThreeInspector !== "undefined") ThreeInspector.boot(gfx); } catch (_) { /* dev tool: never blocks boot */ }
 lazyTrackEnsure(api);

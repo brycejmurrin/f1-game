@@ -432,7 +432,7 @@ test("the tap-to-first-frame measure counts only the visible garage, and says wh
 test("GaragePrebuild.instance() is the page's one instance (for __apex.garagePrebuild)", () => {
   const h = page();
   assert.equal(h.GP.instance(), h.pre);
-  const apex = read("js/agent/apex.js");
+  const apex = read("js/agent/apex-cam.js");
   assert.match(apex, /garagePrebuild: \(\) => \(typeof GaragePrebuild !== "undefined" && GaragePrebuild\.instance\(\) \? GaragePrebuild\.instance\(\)\.state\(\) : null\)/);
   const game = read("js/game.js");
   assert.match(game, /const renderSetupPreview = garagePre\.timed\(setupCam\.renderSetupPreview\);/, "every garage frame render() draws is measured");
