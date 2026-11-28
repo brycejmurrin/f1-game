@@ -380,3 +380,13 @@ test("contact rules pin: bumpRestitution, rubDecel, humanPuntCap are bit-identic
   assert.ok(Object.is(R.rubDecel(0),3));assert.ok(Object.is(R.rubDecel(1),3.5));
   assert.ok(Object.is(R.humanPuntCap(),8));
 });
+
+// #7399 row 17: sweep() swapped lo/hi with an array literal on its per-axis path.
+test("sweep swaps lo/hi without an array literal and still times a reversed crossing",()=>{
+  const src=readFileSync(new URL("js/physics/contact-geometry.js",root),"utf8");
+  const body=src.slice(src.indexOf("function sweep("),src.indexOf("function support("));
+  assert.ok(!/\[\s*lo\s*,\s*hi\s*\]\s*=/.test(body),"array-literal swap in sweep()");
+  const hit=C.sweep(9,0,-9,0,0,0);assert.ok(hit);close(hit.time,(9-4.8)/18);close(hit.nx,1);
+  const diag=C.sweep(-9,-9,9,9,0.3,0.3),back=C.sweep(9,9,-9,-9,0.3,0.3);
+  assert.ok(diag&&back);close(diag.time,back.time);
+});
