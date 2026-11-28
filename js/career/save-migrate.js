@@ -444,9 +444,50 @@ const SaveMigrate = (function () {
     } catch (_) { return false; }
   }
 
+  // THE SEASON OBJECT'S ONE FIELD LIST (#7337). `apex26.season` and
+  // `career.season` share this shape; every reader or cleaner used to keep its
+  // own list, so a new field was lost on backup or recovery unless someone
+  // updated the right one (`you`, #7309). scope: who writes it; backup: a
+  // standalone backup/recovery file carries it; clean: the value or undefined
+  // (drop), null where a dedicated cleaner owns the field (bounded maps,
+  // config, the qualifying grid and its stamps); group "quali": the grid and
+  // its ownership stamps, which travel together. Row order is the backup
+  // output order. tests/unit/season-fields.test.mjs pins every write site.
+  const SEASON_ID_RE = /^[A-Za-z0-9_.:-]{1,48}$/;
+  const seasonId = (v) => (typeof v === "string" && SEASON_ID_RE.test(v) ? v : undefined);
+  const row = (scope, backup, clean, group) => Object.freeze({ scope, backup, clean: clean || null, group: group || null });
+  const quali = () => row("both", true, null, "quali");   // js/race/quali-model.js
+  const SEASON_FIELDS = Object.freeze({
+    round: row("both", true), pts: row("both", true), teamPts: row("both", true),
+    driverCodes: row("both", true), finishes: row("both", true), roundPts: row("both", true),
+    config: row("standalone", true),
+    you: row("both", true, seasonId),                 // SeasonCal.seatPlayer
+    stage: row("both", true, (v) => (v === "race" ? "race" : undefined)),
+    lastFl: row("both", true, seasonId),
+    seed: row("both", true, (v) => (Number.isInteger(v) && v > 0 && v <= 0xFFFFFFFF ? v : undefined)),
+    qualiOrder: quali(), qualiTrack: quali(), qualiMode: quali(), qualiSeat: quali(),
+    startedRound: row("career", false), calIds: row("career", false),   // career.js; ride the career slot
+    sprintOrder: row("both", false),                  // legacy: SeasonCal.resume deletes it
+  });
+  const SEASON_BACKUP_KEYS = Object.freeze(Object.keys(SEASON_FIELDS)
+    .filter((k) => SEASON_FIELDS[k].backup && SEASON_FIELDS[k].scope !== "career"));
+  // A season's rules. opts[0] is the value an unknown one normalises to
+  // (SeasonCal.normalize; laps' default is SeasonCal.DEFAULT_LAPS, also 3).
+  // Id lists have no option set: both readers filter them to known circuits.
+  const SEASON_CONFIG = Object.freeze({
+    trackIds: Object.freeze({ ids: true }),
+    quali: Object.freeze({ opts: Object.freeze([true, false]) }),
+    sprint: Object.freeze({ opts: Object.freeze([false, true, "rounds"]) }),
+    sprintIds: Object.freeze({ ids: true }),
+    laps: Object.freeze({ opts: Object.freeze([3, 5, 10, 25, 57]) }),
+    points: Object.freeze({ opts: Object.freeze(["modern", "classic"]) }),
+    flPoint: Object.freeze({ opts: Object.freeze([false, true]) }),
+    drop: Object.freeze({ opts: Object.freeze([0, 2, 3]) }),
+  });
+
   // tallyOf is migration-only (cleanTally); Career.tallyOf owns the live save.
   return { migrateCareer, migrateSeasonPoints, remapPoints, roundMap, finishMap, CAREER_V,
-           careerVersion,
+           careerVersion, SEASON_FIELDS, SEASON_BACKUP_KEYS, SEASON_CONFIG, SEASON_ID_RE,
            validateCareerSave,
            LIMITS: Object.freeze({ TDEV_MAX: TDEV_LIMIT, DEV_MAX: DEV_LIMIT, EXP_MAX: EXP_LIMIT, MONEY_MAX, SALARY_MAX, FACILITY_MAX: FACILITY_LIMIT, BONUS_MAX, YEARS_MAX, BUDGET_LVL_MAX, PAID_SPONSORS_MAX, YEAR_MIN, YEAR_MAX }) };
 })();
