@@ -177,6 +177,7 @@
     "tests/unit/capture-tools-pool.test.mjs",
     "tests/unit/capture-tools-present.test.mjs",
     "tests/unit/capture-tools-replay.test.mjs",
+    "tests/unit/car-caster-weld.test.mjs",
     "tests/unit/car-detail-tiers.test.mjs",
     "// ~22 s, the slowest entry here, and deliberately in THIS list rather than",
     "// test:sweeps: sweeps is skipped by ci.yml when a push cannot move circuit",
