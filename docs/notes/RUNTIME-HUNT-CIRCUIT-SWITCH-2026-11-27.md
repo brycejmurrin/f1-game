@@ -158,3 +158,11 @@ sixth visit after a five-minute pause as on the first, it is heat.
 
 `gpu-census.yml` (real GPU, macOS): `track` monza, `entry` tt, `mem_cycles` 6 would add the real-GPU memory
 series; it runs one circuit, so it does not replace the phone reading.
+
+State at release (2026-11-28 ~05:45Z): #7464 is open and unclaimed with `needs-device`; this branch holds the note
+only and has no PR. Two reads are owed, by whoever takes it next:
+1. The Metal heap-snapshot probe (§Real GPU): a temporary edit of `tests/specs/track-switch-memory.spec.js` that
+   writes a `.heapsnapshot` per visit into its uploaded census directory, on a branch whose `macos-latest` renderer
+   job runs it (the orchestrator dispatches `ci.yml` with `renderer_macos=true`); diff a HIGH monaco visit against a
+   LOW one and take retaining paths of the 1-4 MB `system / JSArrayBufferData` buffers.
+2. The phone-bridge series above, for the report itself.
