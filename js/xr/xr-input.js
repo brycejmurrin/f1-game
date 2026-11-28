@@ -40,9 +40,14 @@ const XrInput = (function () {
    * Map one XRFrame's input sources into a remote sample + edge events.
    * `prev` is the previous latch { primary: bool, secondary: bool } (mutated).
    * Returns { sample: {roll, thr, brk, held}, events: string[], recenter: bool }.
+   * The result, its sample and its events are ONE reused scratch (no per-frame
+   * garbage at 72-120 Hz): valid until the next call, never kept across frames.
    * `roll` is a steer command in −1..1 (the name is historical); inject()
    * hands it to Input as a STICK (`steer`), never through the tilt pipeline.
    */
+  const _events = [];
+  const _sample = { roll: null, thr: 0, brk: 0, held: 0 };
+  const _out = { sample: _sample, driving: false, events: _events, recenter: false, latch: null };
   function mapFrame(sources, prev, options) {
     const menuOpen = !!(options && options.menuOpen);
     const menuNav = menuOpen && !!options.overlay;
@@ -81,7 +86,8 @@ const XrInput = (function () {
       if (btn(gp, BTN_SECONDARY) > 0.5) secondaryDown = true;
     }
     const latch = prev || { primary: false, secondary: false };
-    const events = [];
+    const events = _events;
+    events.length = 0;
     let recenter = false;
     if (primaryDown && !latch.primary) {
       if (menuNav) events.push("navSelect"); else recenter = true;
@@ -97,14 +103,13 @@ const XrInput = (function () {
     latch.secondary = secondaryDown;
 
     const steer = XrRig.stickToSteer(stickX);
-    return {
-      // held stays 0: XR has no clutch/hand-brake remoteSample bit.
-      sample: { roll: hasStick ? steer : null, thr: thr, brk: brk, held: 0 },
-      driving: hasGamepad && !(options && options.driving === false),
-      events,
-      recenter,
-      latch,
-    };
+    _sample.roll = hasStick ? steer : null;
+    _sample.thr = thr; _sample.brk = brk;
+    _sample.held = 0;   // XR has no clutch/hand-brake remoteSample bit.
+    _out.driving = hasGamepad && !(options && options.driving === false);
+    _out.recenter = recenter;
+    _out.latch = latch;
+    return _out;
   }
 
   /** Apply a mapFrame result to Input (remoteSample / remoteEvent). The stick
@@ -118,12 +123,15 @@ const XrInput = (function () {
       // have supplied a newer sample since our last frame; never clear it.
       if (input.remoteLost) input.remoteLost("xr");
     } else {
+      // Fresh on purpose: remoteSample is another module's API and may keep it.
       const sample = { source: "xr", thr: s.thr, brk: s.brk, held: s.held | 0 };
       if (typeof s.roll === "number") sample.steer = s.roll;
       input.remoteSample(sample);
     }
     const ev = mapped.events || [];
-    for (let i = 0; i < ev.length; i++) input.remoteEvent(ev[i]);
+    // "xr": a menu SELECT from the local player's own controllers, even when XR
+    // does not own the drive lane (EXISTING CONTROLS, no pad, hidden): #7414.
+    for (let i = 0; i < ev.length; i++) input.remoteEvent(ev[i], "xr");
     return true;
   }
 
