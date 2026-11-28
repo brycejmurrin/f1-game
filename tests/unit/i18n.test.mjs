@@ -138,6 +138,22 @@ test("en-XA pseudo expands the resolved string", () => {
   assert.ok(out.length > "SETTINGS".length);
 });
 
+test("en-XA pseudo keeps {holes} intact and leaks no NUL (#7513)", () => {
+  const ctx = loadI18n();
+  const P = vm.runInContext("I18nPseudo", ctx);
+  for (const src of ["X{n} laps", "a{x}bcd", "{a}{b} and {c}"]) {
+    const out = P.expand(src);
+    assert.ok(!out.includes("\u0000"), `no NUL in ${JSON.stringify(out)}`);
+    for (const hole of src.match(/\{[^}]+\}/g)) assert.ok(out.includes(hole), `${hole} survives in ${out}`);
+  }
+  assert.equal(P.expand("X{n} laps"), "[X{n} l~áps~]");
+  // No-hole strings: byte-identical to the pre-fix output.
+  assert.equal(P.expand("SETTINGS"), "[SÉT~TÍN~GS]");
+  assert.equal(P.expand("Race start in progress"), "[Rác~é s~tár~t í~n p~róg~rés~s]");
+  // A stray NUL in source text does not hang or vanish.
+  assert.equal(P.expand("x\u0000y"), "[x\u0000y~]");
+});
+
 test("plain English does not fetch a locale file", async () => {
   let fetches = 0;
   const { I18n } = loadI18n({

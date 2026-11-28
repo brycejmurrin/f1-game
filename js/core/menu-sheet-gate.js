@@ -121,7 +121,12 @@ const MenuSheetGate = (function () {
     const mo = new MutationObserver(sync);
     mo.observe(el, { attributes: true, attributeFilter: ["hidden", "inert"] });
     if (was) parkWarm(gate);
-    return () => { try { mo.disconnect(); } catch (_) { /* already gone */ } };
+    // Dispose resumes anything still parked: a caller that stops while the
+    // sheet is open would otherwise leave its warm counts at 0 (#7513).
+    return () => {
+      try { mo.disconnect(); } catch (_) { /* already gone */ }
+      resumeWarm(gate);
+    };
   }
 
   return { open, slice, idle, parkWarm, resumeWarm, parkedWarm, watch };

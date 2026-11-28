@@ -370,6 +370,38 @@ test("MenuSheetGate.parkWarm holds menu warm counters until resume", () => {
   assert.equal(Gate.parkedWarm(gate), null);
 });
 
+test("MenuSheetGate.watch disposer resumes counts parked while Settings is open (#7513)", () => {
+  const sheet = { hidden: false };
+  const dom = { getElementById: (id) => (id === "pmsettings" ? sheet : null), activeElement: null };
+  let disconnected = 0;
+  const ctx = vm.createContext({
+    performance: { mark() {} },
+    setTimeout: (fn) => { fn(); return 1; },
+    document: dom,
+    Object, Promise, WeakMap,
+    MutationObserver: class { observe() {} disconnect() { disconnected += 1; } },
+  });
+  vm.runInContext(read("js/core/menu-sheet-gate.js"), ctx, { filename: absSrc("js/core/menu-sheet-gate.js") });
+  const Gate = vm.runInContext("MenuSheetGate", ctx);
+  const gate = { warm: 4, garageWarm: 2 };
+  const unwatch = Gate.watch(gate, { document: dom });
+  assert.equal(gate.warm, 0, "open sheet parks on watch");
+  assert.equal(gate.garageWarm, 0);
+  unwatch(); // prebuild stop() while Settings is still open
+  assert.equal(disconnected, 1);
+  assert.equal(gate.warm, 4, "dispose restores warm");
+  assert.equal(gate.garageWarm, 2, "dispose restores garageWarm");
+  assert.equal(Gate.parkedWarm(gate), null);
+  // Dispose without a park: counts untouched, as on base.
+  sheet.hidden = true;
+  const other = { warm: 1, garageWarm: 0 };
+  const unwatch2 = Gate.watch(other, { document: dom });
+  unwatch2();
+  assert.equal(other.warm, 1);
+  assert.equal(other.garageWarm, 0);
+  assert.equal(disconnected, 2);
+});
+
 test("game.js menuIdle routes through MenuSheetGate (no inline idle loop)", () => {
   const src = read("js/game.js");
   assert.ok(src.includes("MenuSheetGate.idle(") && src.includes("MenuSheetGate.slice("));
