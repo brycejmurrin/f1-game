@@ -1,0 +1,1 @@
+Fixed: A trackside billboard or marshal post that the scenery guards dropped no longer leaves an invisible wall where it would have stood (Monaco had one, at the start of the lap), and a refused tree no longer keeps its neighbour from growing (#7243).
