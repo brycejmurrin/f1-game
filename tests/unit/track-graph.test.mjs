@@ -26,14 +26,14 @@ function load() {
   sandbox.window = sandbox;
   const ctx = vm.createContext(sandbox);
   seedLog(ctx);
-  for (const rel of ["js/track/core/geom.js", "js/track/scenery/graph.js"]) {
+  for (const rel of ["js/track/core/geom.js", "js/track/scenery/graph.js", "js/track/scenery/models.js"]) {
     const src = fs.readFileSync(path.join(ROOT, rel), "utf8").replace(/^const\b/gm, "var");
     vm.runInContext(src, ctx, { filename: absSrc(rel) });
   }
   return ctx;
 }
 
-const { TrackGraph, TrackGeom } = load();
+const { TrackGraph, TrackGeom, TrackModels } = load();
 // Arrays built inside the VM realm are not reference-equal to host literals, so
 // deepEqual against a literal needs the value copied back across the boundary.
 const plain = (v) => JSON.parse(JSON.stringify(v));
@@ -796,7 +796,7 @@ test("published world blockers match fused and instanced boxes without prism hul
 
 test("visor tree surfaces block crowns but preserve sky gaps and finite light segments", () => {
   const records = [], foliage = { _mat: TrackGeom.MAT.FOLIAGE };
-  TrackGeom.lightPrimitive(records, foliage, "cone", [[0, 2, 10], 3, 6, [.2, .4, .1], 7]);
+  TrackModels.lightPrimitive(records, foliage, "cone", [[0, 2, 10], 3, 6, [.2, .4, .1], 7]);
   const track = { _lightOccluders: TrackGeom.lightIndex(records) };
   const hit = (eye, dx, dy, dz, max = Infinity) => TrackGeom.lightBlocked(track, eye, dx, dy, dz, max);
   assert.equal(hit([0, 4, 0], 0, 0, 1), true, "opaque crown hides the source");
@@ -806,7 +806,7 @@ test("visor tree surfaces block crowns but preserve sky gaps and finite light se
   assert.equal(hit([0, 4, 0], 0, 0, 20, 1), true, "a lamp behind the tree is blocked");
   assert.equal(TrackGeom.lightBlocked(structuredClone(track), [0, 4, 0], 0, 0, 1, Infinity), true);
   const ignored = [];
-  TrackGeom.lightPrimitive(ignored, { ...foliage, _dryRun: true }, "cone", [[0, 2, 10], 3, 6, [.2, .4, .1], 7]);
+  TrackModels.lightPrimitive(ignored, { ...foliage, _dryRun: true }, "cone", [[0, 2, 10], 3, 6, [.2, .4, .1], 7]);
   assert.equal(ignored.length, 0, "rejected placement probes retain no silhouette");
 });
 
@@ -850,8 +850,8 @@ test("tree blocker publication agrees for fused, instanced and staged crowns", a
 test("dense forests build across multiple steps and keep distant triangles out of a local visor ray", () => {
   const records = [], foliage = { _mat: TrackGeom.MAT.FOLIAGE };
   for (let i = 0; i < 1000; i++)
-    TrackGeom.lightPrimitive(records, foliage, "cone", [[500 + i * 10, 2, 100], 3, 6, [.2, .4, .1], 7]);
-  TrackGeom.lightPrimitive(records, foliage, "cone", [[0, 2, 10], 3, 6, [.2, .4, .1], 7]);
+    TrackModels.lightPrimitive(records, foliage, "cone", [[500 + i * 10, 2, 100], 3, 6, [.2, .4, .1], 7]);
+  TrackModels.lightPrimitive(records, foliage, "cone", [[0, 2, 10], 3, 6, [.2, .4, .1], 7]);
   const steps = TrackGeom.lightIndexSteps(records);
   let yields = 0, result = steps.next();
   while (!result.done) {
@@ -870,7 +870,7 @@ test("baked tree blockers use the rendered mesh placement transform", () => {
   const mesh = buf();
   TrackGeom.addCone(mesh, [2, 0, 0], 2, 6, [.2, .4, .1], 7);
   const records = [];
-  TrackGeom.lightMesh(records, mesh, { x: 10, y: 3, z: 20, rotY: Math.PI / 2, scale: 2 });
+  TrackModels.lightMesh(records, mesh, { x: 10, y: 3, z: 20, rotY: Math.PI / 2, scale: 2 });
   const track = { _lightOccluders: TrackGeom.lightIndex(records) };
   assert.equal(TrackGeom.lightBlocked(track, [10, 5, 0], 0, 0, 1, Infinity), true);
   assert.equal(TrackGeom.lightBlocked(track, [13.5, 14, 0], 0, 0, 1, Infinity), false, "transformed crown corner remains transparent");

@@ -1171,8 +1171,9 @@ test("real foliage index removes all hidden solar effects while preserving adjac
   const { V, ctx } = load();
   const geom = vm.runInContext(read("js/track/core/geom.js") + ";TrackGeom", ctx, { filename: absSrc("js/track/core/geom.js") });
   ctx.TrackGeom = geom;
+  const models = vm.runInContext(read("js/track/scenery/models.js") + ";TrackModels", ctx, { filename: absSrc("js/track/scenery/models.js") });
   const records = [];
-  geom.lightPrimitive(records, { _mat: geom.MAT.FOLIAGE }, "cone", [[0, 0, -20], 4, 12, [.2, .4, .1], 7]);
+  models.lightPrimitive(records, { _mat: geom.MAT.FOLIAGE }, "cone", [[0, 0, -20], 4, 12, [.2, .4, .1], 7]);
   const track = { _lightOccluders: geom.lightIndex(records) };
   for (const samples of [1, 5, 9]) {
     const hidden = V.lightMap({ ...DAY, track, sunDir: [0, 0.1, -0.995] }, 852, 393, { visibilitySamples: samples });

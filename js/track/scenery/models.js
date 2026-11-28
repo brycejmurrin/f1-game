@@ -74,6 +74,72 @@ const TrackModels = (function () {
       _mat: 0, _lightBoxRecords: null,
     };
   }
+  // ── visor light occluders (#7388) ─────────────────────────────────────────
+  // Records accumulate straight into f32: TrackGeom.lightIndexSteps stored them as f32 anyway, so
+  // the boxes are bit-identical, and a plain array of ~4 M doubles (spa) is neither grown nor copied.
+  // A class, not a closure: a stage buffer's records may ride a worker post, and structured
+  // clone copies own fields (as it copied the old plain array) where it refuses a function.
+  const LIGHT_STRIDE = 18;
+  class LightRecords {
+    constructor(est) { this._data = new Float32Array(LIGHT_STRIDE * (est > 0 ? est : 16)); this.n = 0; }
+    get length() { return this.n; }
+    _grow(need) {
+      let cap = this._data.length;
+      while (cap < this.n + need) cap = Math.ceil(cap * 1.5);
+      const next = new Float32Array(cap); next.set(this._data.subarray(0, this.n)); this._data = next;
+    }
+    push(a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16, a17) {
+      if (this.n + LIGHT_STRIDE > this._data.length) this._grow(LIGHT_STRIDE);
+      const d = this._data, n = this.n;
+      d[n] = a0; d[n + 1] = a1; d[n + 2] = a2; d[n + 3] = a3; d[n + 4] = a4; d[n + 5] = a5;
+      d[n + 6] = a6; d[n + 7] = a7; d[n + 8] = a8; d[n + 9] = a9; d[n + 10] = a10; d[n + 11] = a11;
+      d[n + 12] = a12; d[n + 13] = a13; d[n + 14] = a14; d[n + 15] = a15; d[n + 16] = a16; d[n + 17] = a17;
+      this.n = n + LIGHT_STRIDE;
+    }
+    append(source) {
+      const len = source.length, n = this.n;
+      if (n + len > this._data.length) this._grow(len);
+      if (source._data) this._data.set(source._data.subarray(0, len), n); else for (let i = 0; i < len; i++) this._data[n + i] = source[i];
+      this.n = n + len;
+    }
+  }
+  const lightRecords = (est) => new LightRecords(est);
+  // Math.min/max for the finite vertices emit() and the model validator admit (+ ty/tz: never -0).
+  const min3 = (a, b, c) => (a < b ? (a < c ? a : c) : (b < c ? b : c));
+  const max3 = (a, b, c) => (a > b ? (a > c ? a : c) : (b > c ? b : c));
+  // One record per triangle idx[from..to): 9 vertex coords, a zero row (a triangle, not an
+  // invertible box transform) and the bounds lightIndexSteps bins. No per-triangle array, no spread.
+  function lightTris(records, p, idx, from, to, transform) {
+    const cs = Math.cos(transform?.rotY || 0), sn = Math.sin(transform?.rotY || 0);
+    const scale = transform?.scale ?? 1, tx = transform?.x || 0, ty = transform?.y || 0, tz = transform?.z || 0;
+    const w = (n, a) => { const x = p[n] * scale, z = p[n + 2] * scale; return a === 0 ? x * cs + z * sn + tx : -x * sn + z * cs + tz; };
+    for (let i = from; i < to; i += 3) {
+      const a = idx[i] * 3, b = idx[i + 1] * 3, c = idx[i + 2] * 3;
+      const ax = w(a, 0), ay = p[a + 1] * scale + ty, az = w(a, 2);
+      const bx = w(b, 0), by = p[b + 1] * scale + ty, bz = w(b, 2);
+      const cx = w(c, 0), cy = p[c + 1] * scale + ty, cz = w(c, 2);
+      records.push(ax, ay, az, bx, by, bz, cx, cy, cz, 0, 0, 0,
+        min3(ax, bx, cx), min3(ay, by, cy), min3(az, bz, cz), max3(ax, bx, cx), max3(ay, by, cy), max3(az, bz, cz));
+    }
+  }
+  const lightMesh = (records, mesh, transform) => lightTris(records, mesh.pos, mesh.idx, 0, mesh.idx.length, transform);
+  // Opaque tree surfaces, not enclosing boxes: a FOLIAGE/WOOD cone, cylinder or frustum is its
+  // triangles in TrackGeom's light index. `from`: out.idx.length before the real emitter ran; the
+  // triangles it just wrote ARE the primitive, so they are read in place instead of drawn a second
+  // time (#7388). Nothing written there (an absorb-only region target, or no `from`) redraws.
+  const lightScratch = { pos: [], nrm: [], col: [], idx: [], mat: [] };
+  function lightPrimitive(records, out, kind, args, from) {
+    const mat = Math.floor((out._mat || 0) + 0.5), G = TrackGeom, M = G.MAT;
+    if (out._dryRun || (mat !== M.FOLIAGE && mat !== M.WOOD)) return;
+    if (from >= 0 && out.idx && out.idx.length > from) {
+      lightTris(records, out.pos._data || out.pos, out.idx._data || out.idx, from, out.idx.length, null);
+      return;
+    }
+    for (const key of ["pos", "nrm", "col", "idx", "mat"]) lightScratch[key].length = 0;
+    (kind === "cone" ? G.addCone : kind === "cyl" ? G.addCyl : G.addFrustum)(lightScratch, ...args);
+    lightMesh(records, lightScratch);
+  }
+
   function sealGeometry(geo) {
     if (!geo) return geo;
     if (geo.pos && typeof geo.pos.seal === "function") geo.pos = geo.pos.seal();
@@ -91,7 +157,7 @@ const TrackModels = (function () {
 
   function appendBuffer(target, source, id) {
     // Only published geometry contributes visor blockers; rejected staged models leave no phantom walls.
-    if (source._lightBoxRecords) appendAll(target._lightBoxRecords || (target._lightBoxRecords=[]), source._lightBoxRecords);
+    if (source._lightBoxRecords) appendAll(target._lightBoxRecords || (target._lightBoxRecords=lightRecords()), source._lightBoxRecords);
     const base = target.pos.length / 3;
     (target.__blocks || (target.__blocks = []))
       .push({ base, from: source, count: source.pos.length / 3, id: id || null });
@@ -913,6 +979,6 @@ const TrackModels = (function () {
       rec.box([-d * 0.10, yb + h / 2, sg * 0.055], [0.06, h, 0.02], col);  // flanges
   }
 
-  return { create, validateGeometry, scratch, sealGeometry, drapeKit, propsHi, HI_NEAR, wBeam, cPost };
+  return { create, validateGeometry, scratch, sealGeometry, lightRecords, lightPrimitive, lightMesh, drapeKit, propsHi, HI_NEAR, wBeam, cPost };
 })();
 Object.freeze(TrackModels);
