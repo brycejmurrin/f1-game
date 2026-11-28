@@ -106,6 +106,28 @@ test("REMEMBER LAST RACE SETUP: a stored raceDraft opens the next solo circuit i
   assert.equal(open("monza", false), 3, "no draft stored: the default 3 again");
 });
 
+test("#7319 R4: a one-off GP's MIXED weather does not carry into the next season round", () => {
+  const G = g.G, sb = g.sandbox || g.ctx;
+  const flow0 = G.flow, season0 = G.season;
+  try {
+    G.timeTrial = false; G.seasonMode = false; G.flow = "gp";
+    G.store.set("raceDraft", { laps: "3", weather: "dry", tod: "default", mixed: true });
+    open("spa", false);
+    assert.equal(G.raceChangeable, true, "the one-off GP is MIXED");
+    assert.ok(G.wxArcPlan, "…with a derived weather plan");
+    G.flow = "season"; G.season = sb.SeasonCal.load();
+    G.trackIdx = sb.SeasonCal.trackIndex(G.season.round || 0); G.openRaceSettings("select");
+    assert.equal(G.raceChangeable, false, "the season round stages its own (stable) conditions");
+    assert.equal(G.wxArcPlan, null, "no leftover changeable plan");
+    G.raceChangeable = true;
+    G.openRaceSettings("select");
+    assert.equal(G.raceChangeable, true, "a MIXED pick for this round survives re-opening the same round's sheet");
+  } finally {
+    G.store.rawDel("raceDraft");
+    G.flow = flow0; G.season = season0; G.raceChangeable = false; G.wxArcPlan = null;
+  }
+});
+
 function RaceSettingsPure() {
   const ctx = vm.createContext({});
   vm.runInContext(readFileSync(new URL("../../js/race/race-settings.js", import.meta.url), "utf8").replace(/^const RaceSettings\b/m, "var RaceSettings"), ctx);
@@ -788,7 +810,7 @@ test("a sprint's STRATEGY and FORECAST preview the sprint distance; the GP after
   } });
   try {
     const G = g2.G, S = vm.runInContext("SeasonCal", g2.ctx), T = vm.runInContext("Tracks", g2.ctx);
-    G.flow = "season"; G.timeTrial = false; G.raceTyreWear = "real"; G.raceChangeable = true;
+    G.flow = "season"; G.timeTrial = false; G.raceTyreWear = "real";
     const r = S.applyConfig(Object.assign(S.fresh(), { quali: false, sprint: true, laps: 5, trackIds: ["monza", "spa"] }));
     assert.ok(r.ok && r.season, "the sprint season applies");
     G.season = r.season; G.trackIdx = T.LIST.findIndex((d) => d.id === "monza");
@@ -799,6 +821,7 @@ test("a sprint's STRATEGY and FORECAST preview the sprint distance; the GP after
     const plans = [], planFor = G.pits.planFor;
     G.pits.planFor = function (...a) { plans.push(a[2]); return planFor.apply(this, a); };
     const paint = () => { plans.length = 0; asked.length = 0; G.raceLaps = 5; G.openRaceSettings("select"); };
+    G.openRaceSettings("select"); G.raceChangeable = true;   // the round stages stable (#7319 R4); MIXED is picked on its sheet
     paint();
     assert.equal(G.raceLaps, 5, "#rs-laps keeps the editable base distance");
     assert.ok(plans.length > 0 && asked.length > 0, `both previews painted (plan ${plans}, forecast ${asked})`);
