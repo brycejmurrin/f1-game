@@ -20,7 +20,15 @@ const I18nPseudo = (function () {
     let out = "";
     for (let i = 0; i < s.length; i++) {
       const ch = s[i];
-      if (ch === "\u0000") { out += ch; continue; }
+      if (ch === "\u0000") {
+        // Copy a whole hole sentinel through untouched: stretching its digit
+        // or closing NUL left the hole unrestorable (hunt #7490 row 40).
+        const end = s.indexOf("\u0000", i + 1);
+        if (end < 0) { out += ch; continue; } // stray NUL in the source text
+        out += s.slice(i, end + 1);
+        i = end;
+        continue;
+      }
       if (VOWELS.test(ch)) out += accent(ch);
       else out += ch;
       if (ch.trim() && (i % 3 === 2)) out += "~";
