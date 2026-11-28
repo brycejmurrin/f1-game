@@ -685,8 +685,11 @@ export function newestRun(json) {
  *  until the retest row refuses for breadth. Its other cars ride the next fold onto the tip. So does a `gate` failure
  *  whose only refused row is a retest too broad to run (`gateWhy` carries merge-gate's RETEST_BROAD word): a base too
  *  old to re-test is not the cars' red, and re-gating it can only grow the breadth. */
-export function trainDisposition({ manifest, cars, ciConclusion, gate, ciRun = null, stuck = null, gateWhy = "" }) {
+export function trainDisposition({ manifest, cars, ciConclusion, gate, ciRun = null, stuck = null, gateWhy = "", unread = [] }) {
   if (!manifest) return { close: true, outcome: "stale", why: "no manifest" };
+  // #7254 row 2: a car whose pulls/<n> read failed (a transient 403/404/5xx) is unknown, never "moved": closing would
+  // delete a healthy train's branch. The train waits; the next build reads it again.
+  if (unread.length) return { close: false, unreadable: true, why: `car${unread.length > 1 ? "s" : ""} ${unread.map((u) => `#${u.pr} (${u.error})`).join(" ")} unreadable, waiting` };
   const moved = manifest.cars.filter((c) => { const p = cars.get(c.pr); return !p || (!p.merged_at && (String(p.head?.sha || "").toLowerCase() !== c.head || !labelNames(p.labels).includes("land") || p.state !== "open")); });
   if (moved.length) return { close: true, outcome: "stale", why: `car${moved.length > 1 ? "s" : ""} ${moved.map((c) => `#${c.pr}`).join(" ")} moved, closed or lost land` };
   const merged = manifest.cars.filter((c) => cars.get(c.pr)?.merged_at);
@@ -848,7 +851,15 @@ function openTrain({ request, cwd, now, head, base, cars, dropped = [], rebased 
   const pr = request("pulls", { method: "POST", body: { title, head: ref, base: DEPLOY, body: trainBody({ base, cars, dropped, rebased, note, onto }) } });
   if (pr.error) return { error: `open PR: ${pr.error}` };
   const lab = request(`issues/${pr.json.number}/labels`, { method: "POST", body: { labels: onto ? [TRAIN_LABEL] : ["land", TRAIN_LABEL] } });
-  if (lab.error) return { error: `labels on #${pr.json.number}: ${lab.error}` };
+  if (lab.error) {
+    // #7254 row 3: an unlabeled train/ PR is no train to land.yml and gets no gate, so the builder would wait on it as
+    // "still running" forever. Undo it now; a failed undo is swept by unlabeledTrain on a later build.
+    const why = `its labels failed (${lab.error})`;
+    const c = request(`pulls/${pr.json.number}`, { method: "PATCH", body: { state: "closed", body: `${trainBody({ base, cars, dropped, rebased, note, onto })}\n<!-- merge-train-result ${JSON.stringify({ outcome: "stale", why })} -->` } });
+    const d = c.error ? null : request(`git/refs/heads/${ref}`, { method: "DELETE" });
+    const undo = c.error ? `; not closed: ${c.error}` : d.error ? `; closed, branch not deleted: ${d.error}` : "; closed and its branch deleted";
+    return { error: `labels on #${pr.json.number}: ${lab.error}${undo}` };
+  }
   return { number: pr.json.number, ref };
 }
 
@@ -869,6 +880,18 @@ function openTrain({ request, cwd, now, head, base, cars, dropped = [], rebased 
  * job runs PR code with a write token or a secret. */
 
 /** A speculative stacked PR: a `train/` head, a manifest with `onto`, no `land`. Pure. */
+/** Minutes an open train/ PR may lack `train` or `land` before the build closes it stale (#7254 row 3): openTrain
+ *  labels it in the very next call, so anything older is an orphan of a failed label POST (or a removed label). */
+export const UNLABELED_TRAIN_MIN = 10;
+/** Why an open non-stack train/ PR is an unlabeled orphan to close stale, else "". An unreadable age keeps it. Pure. */
+export function unlabeledTrain(p, now) {
+  const names = labelNames(p?.labels);
+  const missing = [TRAIN_LABEL, "land"].filter((n) => !names.includes(n));
+  const at = Date.parse(p?.created_at || "");
+  if (!missing.length || !Number.isFinite(at) || now - at <= UNLABELED_TRAIN_MIN * 60_000) return "";
+  return `an unlabeled train (no ${missing.map((n) => `\`${n}\``).join(" or ")} after ${Math.floor((now - at) / 60_000)} min): no gate runs on it, so it would wait forever`;
+}
+
 export function isStackPr(p) {
   return String(p?.head?.ref || "").startsWith(TRAIN_PREFIX) && !labelNames(p?.labels).includes("land") && Boolean(trainManifest(p?.body)?.onto);
 }
@@ -1112,8 +1135,8 @@ export async function main(argv, { request = api, cwd = ROOT, log = console.log,
     const trains = open.rows.filter((p) => String(p.head?.ref || "").startsWith(TRAIN_PREFIX) && !isStackPr(p));
     for (const t of trains) {
       const m = trainManifest(t.body);
-      const cars = new Map();
-      for (const c of m?.cars || []) { const r = request(`pulls/${c.pr}`); if (!r.error) cars.set(c.pr, r.json); }
+      const cars = new Map(), unread = [];
+      for (const c of m?.cars || []) { const r = request(`pulls/${c.pr}`); if (r.error) unread.push({ pr: c.pr, error: r.error }); else cars.set(c.pr, r.json); }
       const runs = request(`commits/${t.head.sha}/check-runs?check_name=CI&per_page=20`);
       const ci = (runs.json?.check_runs || []).find((r) => r.app?.slug === "github-actions");
       const ciConclusion = ci?.status === "completed" ? ci.conclusion : "";
@@ -1124,8 +1147,11 @@ export async function main(argv, { request = api, cwd = ROOT, log = console.log,
         else ciRun = newestRun(wr.json);
       }
       const g = gateStatus(t.head.sha, request);
-      let d = trainDisposition({ manifest: m, cars, ciConclusion, gate: g.state, gateWhy: g.why, ciRun, stuck: g.state === "success" ? stuckInputs(t, g, request, now) : null });
+      const orphan = unlabeledTrain(t, now);
+      let d = orphan ? { close: true, outcome: "stale", why: orphan }
+        : trainDisposition({ manifest: m, cars, ciConclusion, gate: g.state, gateWhy: g.why, ciRun, unread, stuck: g.state === "success" ? stuckInputs(t, g, request, now) : null });
       if (!d.close) {
+        if (d.unreadable) log(`  train #${t.number}: ${d.why}`);
         if (!running) { running = t; runNoteOf = runNote; }
         // #6652 nit 3: one train at a time; a second one still running is named, never skipped silently.
         else log(`= merge-train ignored #${t.number} — a second open train still running; this run follows #${running.number} (one train at a time)`);
@@ -1155,7 +1181,7 @@ export async function main(argv, { request = api, cwd = ROOT, log = console.log,
     else if (st) { log(st.msg); return st.code; }
     if (running) return stackBuild({ request, cwd, log, now, max, running, screenFile, note: runNoteOf, carGate });
   }
-  let screen = null;
+  let screen = null, screenTip = "";
   if (build && screenFile !== null) {
     let text = null;
     try { text = fs.readFileSync(screenFile, "utf8"); } catch { /* missing: refused below */ }
@@ -1163,16 +1189,20 @@ export async function main(argv, { request = api, cwd = ROOT, log = console.log,
     if (!screen) { log(`= merge-train error — no valid screen verdict at ${screenFile || "(no path)"} (the train-screen job failed?): no train opened`); return 1; }
     if (screen.skip) { log(`= merge-train idle — the screen skipped (${screen.skip}); the next run screens and builds`); return 0; }
     if (screen.rebase) { log(`= merge-train idle — the screen measured the rebase of ${screen.rebase}, which is no longer stacked; the next run screens onto the tip`); return 0; }
+    screenTip = screen.tip;
     if (screen.stack) {
       // #6652 nit 4: N merged between the screen and this build. When the tip's tree is still N's head's tree (nothing
       // else merged), the screen's folds are the folds onto the tip, so the build goes on now instead of idling a cycle.
-      const why = stackedScreenOnTip({ screen, request, git: gitIn(cwd) });
+      const { why, tip } = stackedScreenOnTip({ screen, request, git: gitIn(cwd) });
+      screenTip = tip;
       if (why) { log(`= merge-train idle — the screen was stacked on train #${screen.stack.pr}, which is no longer running (${why}); the next run screens onto the tip`); return 0; }
       log(`  the screen was stacked on train #${screen.stack.pr}, merged since with the tip's tree its head's: its verdicts hold onto the tip`);
     }
   }
   const plan = await planTrain({ request, cwd, max, now, log: build ? log : () => {}, carGate, acceptFor: screen ? () => screenAccept(screen) : null });
   if (plan.error) { log(`= merge-train error — ${plan.error}`); return 1; }
+  // #7254 row 1: the screen's verdicts hold only for folds onto the tip it measured (the rebase path's `s.tip !== tip`).
+  if (screen && plan.tip !== screenTip) { log(`= merge-train idle — the screen measured the tip ${screenTip.slice(0, 8)}, the tip is ${plan.tip.slice(0, 8)} now; the next run screens onto it`); return 0; }
   for (const d of plan.dropped) log(`  - #${d.pr}: ${d.why}`);
   const line = `cars=${plan.cars.map((c) => `#${c.pr}`).join(",") || "none"} cap=${plan.cap} tip=${plan.tip.slice(0, 12)} head=${plan.head.slice(0, 12)}`;
   if (!build) { log(`= merge-train plan — ${line}${plan.running.length ? ` (train #${plan.running.join(",")} is open: --build waits for it)` : ""}${plan.enough ? "" : " (too few cars: no train)"}`); return 0; }
@@ -1183,20 +1213,22 @@ export async function main(argv, { request = api, cwd = ROOT, log = console.log,
   return 0;
 }
 
-/** #6652 nit 4: "" when a screen stacked on train N still holds onto the deploy tip — N merged and the tip's tree is N's
- *  head's tree (its merge commit, nothing after it) — else why not. Fetches the deploy branch. */
+/** #6652 nit 4: { why: "", tip } when a screen stacked on train N still holds onto the deploy tip `tip` — N merged
+ *  and the tip's tree is N's head's tree (its merge commit, nothing after it) — else { why, tip: "" }. Fetches the
+ *  deploy branch. */
 function stackedScreenOnTip({ screen, request, git }) {
+  const no = (why) => ({ why, tip: "" });
   const n = request(`pulls/${screen.stack.pr}`);
-  if (n.error) return `#${screen.stack.pr} unreadable: ${n.error}`;
-  if (!n.json?.merged_at) return `#${screen.stack.pr} closed unmerged`;
+  if (n.error) return no(`#${screen.stack.pr} unreadable: ${n.error}`);
+  if (!n.json?.merged_at) return no(`#${screen.stack.pr} closed unmerged`);
   const tipR = request(`branches/${encodeURIComponent(DEPLOY)}`);
   const tip = String(tipR.json?.commit?.sha || "").toLowerCase();
-  if (!SHA.test(tip)) return `deploy tip: ${tipR.error || "no sha"}`;
+  if (!SHA.test(tip)) return no(`deploy tip: ${tipR.error || "no sha"}`);
   const f = git(["fetch", "--quiet", "--no-tags", "origin", `+refs/heads/${DEPLOY}:refs/remotes/origin/${DEPLOY}`]);
-  if (f.status !== 0) return `fetch ${DEPLOY}: ${String(f.stderr || "").trim().split("\n")[0]}`;
+  if (f.status !== 0) return no(`fetch ${DEPLOY}: ${String(f.stderr || "").trim().split("\n")[0]}`);
   const tree = (c) => String(git(["rev-parse", "--verify", "-q", `${c}^{tree}`]).stdout || "").trim();
   const a = tree(tip), b = tree(screen.stack.head);
-  return a && a === b ? "" : `the tip ${tip.slice(0, 8)} moved past #${screen.stack.pr}'s merge`;
+  return a && a === b ? { why: "", tip } : no(`the tip ${tip.slice(0, 8)} moved past #${screen.stack.pr}'s merge`);
 }
 
 /** The build while train `running` is still running and nothing is stacked on it: fold the cars a screen measured on
