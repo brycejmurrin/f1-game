@@ -382,6 +382,27 @@ test("a garage still waits for a fresh capture draw even when a previous photo e
   assert.equal(await b.api.capture(), true);
 });
 
+test("a first capture after a shader warm waits a frame and retries instead of refusing (#7514)", async () => {
+  const b = boot();
+  b.api.open({source: "garage"});
+  let calls = 0;
+  b.G.gfx.renderCaptureFrame = draw => { if (calls++ === 0) return false; draw(); return true; };
+  assert.equal(await b.api.capture(), true, "the first tap captures");
+  assert.equal(calls, 2, "one skipped draw, one retry");
+  assert.match(b.dom.byId("ps-message").textContent, /^Captured /);
+  assert.equal(b.order.filter(action => action === "read").length, 1, "at most one pixel read");
+});
+
+test("a capture draw that never lands gives up after the bounded retries (#7514)", async () => {
+  const b = boot();
+  b.api.open({source: "garage"});
+  let calls = 0;
+  b.G.gfx.renderCaptureFrame = () => { calls++; return false; };
+  assert.equal(await b.api.capture(), false);
+  assert.equal(calls, 8, "eight frames, then the refusal");
+  assert.equal(b.order.filter(action => action === "read").length, 0);
+});
+
 function chooseSamples(b, count) {
   const row = b.dom.byId("ps-samples");
   row.value = String(count);

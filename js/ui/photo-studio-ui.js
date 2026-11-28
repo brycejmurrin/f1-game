@@ -5,6 +5,12 @@ const PhotoStudioBody = (function () {
 const DB = "apex26.photoLibrary", LIMIT = 6;
 const ASPECTS = { scene: 0, wide: 16 / 9, square: 1, portrait: 4 / 5 };
 const CAPTURE_MS = 8000;   // a frame readback that has not come back by then never will (a hidden tab, a stalled loop)
+const CAPTURE_RETRY_FRAMES = 8, CAPTURE_RETRY_MS = 1000;   // a capture draw skipped by a shader warm is retried this long
+// One frame, or a timer where rAF is paused (a hidden tab), whichever comes first.
+const nextFrame = () => new Promise(resolve => {
+  const timer = setTimeout(resolve, CAPTURE_RETRY_MS / CAPTURE_RETRY_FRAMES);
+  requestAnimationFrame(() => { clearTimeout(timer); resolve(); });
+});
 // TIME and WEATHER are the engine's own discrete sets (js/race/weather-arc.js VALID, setTimeOfDay): no continuous clock exists.
 const TODS = [["dawn", "Dawn"], ["day", "Day"], ["dusk", "Dusk"], ["night", "Night"], ["default", "Track default"]];
 const WXS = [["dry", "Dry"], ["overcast", "Overcast"], ["fog", "Fog"], ["wet", "Wet"], ["rain", "Rain"], ["storm", "Storm"]];
@@ -931,7 +937,12 @@ function create(G, deps) {
     const pending = gfx && gfx.softPresent && gfx.softPresent() && gfx.awaitSoftPresent ? Promise.allSettled([gfx.awaitSoftPresent(15000)]) : null;
     const draws = pass ? pass.draws : 0;
     if (gfx && gfx.renderCaptureFrame && deps.renderFrame) {
-      if (!gfx.renderCaptureFrame(deps.renderFrame)) throw new Error("The scene is still getting ready");
+      // A shader warm skips the draw right after a race load or a time change: wait a frame and retry (#7514).
+      for (let tries = 1, t0 = Date.now(); !gfx.renderCaptureFrame(deps.renderFrame); tries++) {
+        if (tries >= CAPTURE_RETRY_FRAMES || Date.now() - t0 >= CAPTURE_RETRY_MS) throw new Error("The scene is still getting ready");
+        await nextFrame();
+        if (!st.open || (pass && activePass !== pass)) throw new Error("Capture cancelled");
+      }
     } else if (deps.renderFrame) deps.renderFrame();
     if (pass && pass.draws === draws) throw new Error("The scene is not ready to sample");
     rendered?.();
