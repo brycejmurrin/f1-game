@@ -523,7 +523,7 @@ const PhonePad = (function () {
                   open();
                   return;
                 }
-                phase = "lost";
+                phase = "lost"; active = transport = null;
                 say("Phone disconnected — press STEER THIS GAME WITH A PHONE for a new code.", true);
                 Log.info("input", "phone pad lost");
                 if (ui.lost) { try { ui.lost(); } catch (e) { /* ui's problem */ } }

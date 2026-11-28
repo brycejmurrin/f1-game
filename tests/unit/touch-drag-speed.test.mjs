@@ -54,7 +54,7 @@ function boot() {
   const canvas = Object.assign(el(), { addEventListener: (t, f) => { (canvasL[t] ||= []).push(f); } });
   Input.init(canvas);
   const onCanvas = (t, e) => (canvasL[t] || []).forEach((f) => f(Object.assign({ preventDefault() {} }, e)));
-  return { Input, onCanvas };
+  return { Input, onCanvas, sb };
 }
 
 const REF = 41.7;
@@ -172,4 +172,15 @@ test("touchSpeedFromSlider: notch 1 is off, notch 10 is full, monotonic", () => 
   for (let v = 1; v < 10; v++) assert.ok(f(v + 1) > f(v), `not increasing at notch ${v}`);
   assert.match(src, /(?:store|numStore)\.get\("touchDragSpeed", 1\)/, "OPT-IN: an absent key is notch 1, the fixed range");
   assert.match(src, /wireTune\("pm-touchdragspeed", "touchDragSpeed", 1,/);
+});
+
+test("#7368 A6: a 0×0 frame at the first read is not cached; the real long edge is picked up without a resize", () => {
+  const r = boot();
+  r.Input.reset();
+  r.Input.setSteerMode("touch");
+  r.sb.innerWidth = 0; r.sb.innerHeight = 0;           // a hidden / not-yet-laid-out frame
+  const hidden = r.Input.debugState().touchRangePx;
+  assert.ok(Math.abs(hidden - 844 * 0.12) < 1e-9, `the 844 fallback while 0×0, got ${hidden}`);
+  r.sb.innerWidth = 1000; r.sb.innerHeight = 500;      // laid out — no resize event fires
+  assert.equal(r.Input.debugState().touchRangePx, BASE, "the real long edge, not the cached fallback");
 });
