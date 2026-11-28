@@ -163,17 +163,14 @@ const TrackGraph = (function () {
     // those same wrappers is geometry that exists nowhere in the world.
     // Closure-scoped rather than `this`-relative so a destructured or spread model
     // record still resolves.
-    function model(key, build) {
-      let m = models.get(key);
-      if (m) return m;
-      const ops = [];
-      build(recorder(ops));
+    // The lazily baked canonical mesh of one op list, with its handed/signed
+    // variants cached (a model, or one colour part of a model — see splitOf).
+    function canonical(key, ops) {
       let geo, aabb;
       const variants = new Map();
       const meshOf = () => (geo === undefined ? (geo = bakeCanonical(ops)) : geo);
-      m = {
-        key, ops, uses: 0,
-        hasRadial: ops.some((o) => o.op === "cyl" || o.op === "cone" || o.op === "frustum"),
+      return {
+        key, ops,
         nodeColored: ops.some((o) => o.col === NODE_COLOR),
         get geo() { return meshOf(); },
         geoFor(variant) {
@@ -187,8 +184,53 @@ const TrackGraph = (function () {
         get aabb() { return aabb === undefined ? (aabb = aabbOf(meshOf())) : aabb; },
         get verts() { const g = meshOf(); return g ? g.pos.length / 3 : 0; },
       };
+    }
+
+    function model(key, build) {
+      let m = models.get(key);
+      if (m) return m;
+      const ops = [];
+      build(recorder(ops));
+      m = canonical(key, ops);
+      m.uses = 0;
+      m.hasRadial = ops.some((o) => o.op === "cyl" || o.op === "cone" || o.op === "frustum");
       models.set(key, m);
       return m;
+    }
+
+    // #7385 S4. Every backend multiplies EVERY vertex of an instanced batch by
+    // its per-instance colour (tsl-lit.js albedoIn, glsl-lit.js vCol, the WGX
+    // lit chunk), while replay() tints only the NODE_COLOR ops. So a model
+    // that mixes the two (a pine's brown trunk under a tinted crown, an LED
+    // board's bezels) drew its fixed parts multiplied by the tint: Monza's
+    // pine trunk [0.30, 0.22, 0.13] came out [0.024, 0.057, 0.016]. A mixed
+    // model is therefore drawn as two parts: the tinted ops under the model's
+    // own key (with colours), and the fixed ops as an untinted batch. Fixed
+    // parts with identical ops are SHARED across models (every pine variant
+    // has the same trunk), keyed `<family>|fixed|<hash>` so a family-prefix
+    // consumer (detail.js crowd options, batch-visible-probe) still matches.
+    const parts = new Map();      // fixed-op signature -> canonical record
+    const partKeys = new Set();
+    function sigHash(str) {
+      let h = 0x811c9dc5;
+      for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = __M.imul(h, 0x01000193); }
+      return (h >>> 0).toString(36);
+    }
+    function splitOf(m) {
+      if (m._split !== undefined) return m._split;
+      const colored = m.ops.filter((o) => o.col === NODE_COLOR);
+      const fixed = m.ops.filter((o) => o.col !== NODE_COLOR);
+      if (!colored.length || !fixed.length) return (m._split = null);
+      const sig = JSON.stringify(fixed);
+      let f = parts.get(sig);
+      if (!f) {
+        const base = `${m.key.split("|")[0]}|fixed|${sigHash(sig)}`;
+        let key = base;
+        for (let n = 2; partKeys.has(key); n++) key = `${base}~${n}`;
+        partKeys.add(key);
+        parts.set(sig, (f = canonical(key, fixed)));
+      }
+      return (m._split = { colored: canonical(m.key, colored), fixed: f });
     }
 
     function replay(m, place, emit, out) {
@@ -417,7 +459,7 @@ const TrackGraph = (function () {
     // leaves BOTH lists here — it is already in the soup.
     function batches(opts) {
       const instancedOnly = !!(opts && opts.instancedOnly);
-      const byModel = new Map();
+      const byPart = new Map();   // canonical record (a model, or one part of a mixed one) -> variant -> nodes
       const bakeOnly = [];
       for (const node of nodes) {
         const m = models.get(node.model);
@@ -426,20 +468,22 @@ const TrackGraph = (function () {
         const s = node.s;
         const nonUniformXZ = !!s && __M.abs(__M.abs(s[0]) - __M.abs(s[2])) > 1e-9;
         if (!node.full || (m.hasRadial && nonUniformXZ)) { bakeOnly.push(node); continue; }
-        let variants = byModel.get(node.model);
-        if (!variants) byModel.set(node.model, (variants = new Map()));
         const variant = variantOf(node);
-        let list = variants.get(variant);
-        if (!list) variants.set(variant, (list = []));
-        list.push(node);
+        const split = splitOf(m);
+        for (const part of split ? [split.colored, split.fixed] : [m]) {
+          let variants = byPart.get(part);
+          if (!variants) byPart.set(part, (variants = new Map()));
+          let list = variants.get(variant);
+          if (!list) variants.set(variant, (list = []));
+          list.push(node);
+        }
       }
 
       const out = [];
-      for (const [key, variants] of byModel) for (const [variant, list] of variants) {
-        const m = models.get(key);
+      for (const [part, variants] of byPart) for (const [variant, list] of variants) {
         const count = list.length;
         const matrices = new Float32Array(count * 16);
-        const colors = m.nodeColored ? new Float32Array(count * 3) : null;
+        const colors = part.nodeColored ? new Float32Array(count * 3) : null;
         for (let i = 0; i < count; i++) {
           const n = list[i], o = n.o, r = n.r, u = n.u, t = n.t, s = n.s;
           const sx = s ? __M.abs(s[0]) : 1, sy = s ? __M.abs(s[1]) : 1, sz = s ? __M.abs(s[2]) : 1;
@@ -457,7 +501,7 @@ const TrackGraph = (function () {
             colors[i * 3] = c[0]; colors[i * 3 + 1] = c[1]; colors[i * 3 + 2] = c[2];
           }
         }
-        out.push({ model: key, variant, geo: m.geoFor(variant), verts: m.verts, count, matrices, colors });
+        out.push({ model: part.key, variant, geo: part.geoFor(variant), verts: part.verts, count, matrices, colors });
       }
       meshBatches(out);   // in BOTH sets: a mesh placement is recorded only when its triangles were withheld
       // Deterministic order: a backend uploading these must not have its draw

@@ -94,13 +94,17 @@ test("lobed crowns preserve canonical/fused normals, sway and finite recipe budg
     const height = 17.6;
     assert.equal(f.nature.tree(variant, 1, 24, height, [.2,.35,.18], { crown:"lobed",variant }), true);
     const batches = f.graph.batches().batches;
-    assert.equal(batches.length, 1);
+    // #7385 S4: the brown trunk is its own untinted batch, the crown keeps the tint.
+    assert.equal(batches.length, 2);
+    const trunk = batches.find((b) => b.model.startsWith("tree-lobed|fixed|")), crown = batches.find((b) => b !== trunk);
+    assert.ok(trunk && trunk.colors === null && crown.colors, "trunk untinted, crown tinted");
     assert.equal(f.graph.stats().nodes, 1);
-    const geo = batches[0].geo;
-    assert.equal(geo.idx.length / 3, mobile ? 39 : 51);
-    assert.equal(f.out.nrm.length, geo.nrm.length);
-    for (let i = 0; i < geo.nrm.length; i++)
-      assert.ok(Math.abs(f.out.nrm[i] - geo.nrm[i]) < 1e-9, `normal ${i}`);
+    assert.equal((trunk.geo.idx.length + crown.geo.idx.length) / 3, mobile ? 39 : 51);
+    // fused order is trunk then crown, the recipe's op order
+    const nrm = [...trunk.geo.nrm, ...crown.geo.nrm];
+    assert.equal(f.out.nrm.length, nrm.length);
+    for (let i = 0; i < nrm.length; i++)
+      assert.ok(Math.abs(f.out.nrm[i] - nrm[i]) < 1e-9, `normal ${i}`);
     assert.ok(f.out.pos.every(Number.isFinite));
     assert.ok(f.out.mat.some(m => m > 6 && m < 6.5), "foliage retains per-vertex wind weight");
     for (let i = 0; i < f.out.nrm.length; i += 3)
