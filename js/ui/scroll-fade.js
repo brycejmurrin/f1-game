@@ -180,7 +180,8 @@ window.ScrollFade = (function () {
   // paintAll(root): measure only the regions under `root` (the screen layer that
   // changed). No root = the whole document (resize, init, refresh()).
   function paintAll(root) {
-    if (!root) { timer = 0; pendingRoots = null; pendingFull = false; }
+    // A full paint covers the pending 48 ms flush: cancel it, or it runs a second flush (#7497 row 4).
+    if (!root) { clearTimeout(timer); timer = 0; pendingRoots = null; pendingFull = false; }
     else if (pendingRoots) pendingRoots.delete(root);
     // A tab or picker rebuild detaches its old subtree with no resize or
     // screen flip, so settle() never runs; without this the observers keep
@@ -282,8 +283,10 @@ window.ScrollFade = (function () {
       for (const el of watched) contentMo.observe(el, { childList: true, subtree: true });
     }
   }
-  let settleSoon = 0;
-  let settleLate = 0;
+  // The 120/400 ms repaints, one pair per settled root (null = the whole
+  // document). One shared pair let a second screen's settle cancel the first
+  // screen's late repaints (#7497 row 3). A full settle covers every root.
+  const settleTimers = new Map();
   // Viewport / scale / explicit refresh paint in the same frame as layout, so
   // the fade never describes the pre-scale column (ui-scale.spec counts zoom
   // within six frames; the sf-* mask transitions are paint-only, #3606). Screen
@@ -297,10 +300,9 @@ window.ScrollFade = (function () {
     } else {
       schedule(root);
     }
-    if (settleSoon) clearTimeout(settleSoon);
-    if (settleLate) clearTimeout(settleLate);
-    settleSoon = setTimeout(() => { settleSoon = 0; paintAll(root); }, 120);
-    settleLate = setTimeout(() => { settleLate = 0; paintAll(root); }, 400);
+    const key = root || null;
+    for (const [k, t] of settleTimers) if (!key || k === key) { t.forEach(clearTimeout); settleTimers.delete(k); }
+    settleTimers.set(key, [setTimeout(() => paintAll(key), 120), setTimeout(() => { settleTimers.delete(key); paintAll(key); }, 400)]);
   }
 
   const ro = typeof ResizeObserver === "function" ? new ResizeObserver(scheduleViewport) : null;
