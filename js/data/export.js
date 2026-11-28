@@ -175,7 +175,7 @@ const DataExport = (function () {
           if (e && e.cancelled) throw e;
           const msg = e && e.message || String(e);
           // On 429 wait 90 s then retry once — longer than OpenF1's sliding window
-          if (!retrying && (e.status === 429 || /429/.test(msg))) {
+          if (!retrying && ((e && e.status === 429) || /429/.test(msg))) {
             log("· rate limited for " + key + " — waiting 90 s…");
             return sleepCk(90000).then(function () { return tryMeeting(m, true); });
           }
