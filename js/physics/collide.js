@@ -284,6 +284,8 @@ const Collide = (() => {
 
   const _lim = { r: 0, l: 0, laneMin: 0, side: 0 }, _postLim = { r: 0, l: 0, minOut: 0, side: 0 };
   const _prevPos = { s: 0, x: 0 };
+  const _faceLim = { r: 0, l: 0, laneMin: 0, side: 0 };
+  const FACE_DROP = 1.5;   // m: WallEndFace's threshold — a limit that tightens more in one step is an end face
   _lim.laneMin = 0.5; _lim.laneMin = 0;   // born Double, like _traf
 
   function create(G, collideFx, ownsPose = () => false) {
@@ -866,7 +868,20 @@ const Collide = (() => {
         let prev = null;
         if (c === player) { _prevPos.s = _preColS; _prevPos.x = _preColX; prev = _prevPos; }
         else if (!c.human && Number.isFinite(c._preColS) && Number.isFinite(c._preColX)) { _prevPos.s = c._preColS; _prevPos.x = c._preColX; prev = _prevPos; }
-        const lim = ContactGeometry.wallLimits(track, c.s, c.x, _lim, _postLim, prev);
+        let lim = ContactGeometry.wallLimits(track, c.s, c.x, _lim, _postLim, prev);
+        // A shove past a wall END FACE (#7399 row 1, decision A): the pin at the new s snapped a car held at
+        // the face 8.4 m sideways; WallEndFace never sees it (shiftLong leaves _prevS). Hold the face: undo
+        // the shove along s (prog and the banked _pushD with it) and keep x, legal at the pre-shove s.
+        if (c === player && c.s !== _preColS && (c.x > lim.r || c.x < -lim.l)) {
+          const right = c.x > lim.r;
+          ContactGeometry.wallLimits(track, _preColS, c.x, _faceLim, _postLim, prev);
+          const oldLim = right ? _faceLim.r : _faceLim.l;
+          if (oldLim - (right ? lim.r : lim.l) > FACE_DROP && Math.abs(c.x) <= oldLim) {
+            const d = wrapDelta(_preColS - c.s, track.total);
+            c.s = _preColS; c.prog += d; c._pushD = (c._pushD || 0) + d;
+            lim = ContactGeometry.wallLimits(track, c.s, c.x, _lim, _postLim, prev);
+          }
+        }
         if (c.x > lim.r) c.x = lim.r; else if (c.x < -lim.l) c.x = -lim.l;
         if (lim.laneMin > 0 && c.x * lim.side < lim.laneMin) c.x = lim.laneMin * lim.side;
         if (!c.human && (c.s !== c._preColS || c.x !== c._preColX)) {
