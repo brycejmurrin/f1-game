@@ -70,6 +70,10 @@ test("a renderer that is not desktop-class refuses APEX; an unknown one (pre-boo
   assert.equal(no.Q.capId("apex", false), "extreme");
   no.Q.set("apex", { noReload: true });
   assert.deepEqual({ ...no.data }, { gfxPreset: "extreme" }, "GLX / WGX / a software adapter stay on EXTREME");
+  const stored = quality({ ...APEX_ON }, { backend: "webgl2" }).Q;
+  assert.equal(stored.presetDefault("contactSS", stored.current()), false, "a stored APEX the renderer refuses reads as EXTREME");
+  const denied = new Proxy({}, { has: () => true, get: () => { throw new Error("storage denied"); } });
+  assert.equal(quality({ ...APEX_ON }, undefined, denied).Q.feature("contactSS"), false, "a throwing raw read is off, not a crash");
   assert.equal(quality({}, {}).Q.apexBlocked(), false);
   for (const backend of ["webgl2", "webgpu", "three"]) assert.equal(quality({}, { backend }).Q.apexBlocked(), true, backend + " without apexTier");
   assert.equal(quality({}, { backend: "three", apexTier: true }).Q.apexBlocked(), false);
@@ -103,6 +107,7 @@ for (const f of ["js/render/shared/light-budget.js", "js/lighting/knobs.js", "js
 test("contactLong: 16 taps, ordered, inside 1 m; full strength through today's 0.2 m, fading to 0", () => {
   const C = globalThis.TLXShaders.contactLong;
   assert.deepEqual([C.STEPS, C.REACH, C.FULL], [16, 1, 0.2]);
+  assert.ok(0.05 + C.REACH * C.SLOPE >= Math.sin(8 * Math.PI / 180) * C.REACH, "the reject forgives an 8 degree normal error at full reach");
   for (const j of [0, 0.5, 0.999]) {
     let prev = 0;
     for (let i = 0; i < C.STEPS; i++) {

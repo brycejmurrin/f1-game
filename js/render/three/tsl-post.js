@@ -23,9 +23,11 @@
   // LONG CONTACT SHADOWS (APEX `contactSS`, #7411): the sun contact march at STEPS taps out to REACH metres, in
   // place of the shipped 5 x 0.04 m. dist() spaces the taps quadratically (short steps at the contact, long ones at
   // the far end); weight() is full strength through the shipped 0.2 m reach and fades to 0 at REACH, so a far
-  // occluder gives a soft edge. The CPU twin of contactLongT below (tests/unit/apex-tier.test.mjs).
+  // occluder gives a soft edge. SLOPE widens the coplanar reject with distance: the shipped 0.05 m bias forgives a
+  // depth-derived normal that is ~14 degrees off over 0.2 m but only ~3 over 1 m, and open tarmac then shadows itself
+  // (measured on the first stills, PR #7458). The CPU twin of contactLongT below (tests/unit/apex-tier.test.mjs).
   const contactLong = Object.freeze({
-    STEPS: 16, REACH: 1.0, LIN: 0.2, FULL: 0.2,
+    STEPS: 16, REACH: 1.0, LIN: 0.2, FULL: 0.2, SLOPE: 0.12,
     dist(i, jitter) { const u = (i + 0.25 + 0.75 * jitter) / this.STEPS; return this.REACH * u * (this.LIN + (1 - this.LIN) * u); },
     weight(d) { const t = Math.min(1, Math.max(0, (d - this.FULL) / (this.REACH - this.FULL))); return 1 - t * t * (3 - 2 * t); },
   });
@@ -342,7 +344,7 @@
                 .or(quv.y.lessThan(0.0)).or(quv.y.greaterThan(1.0)), () => { Break(); });
               const B = ssaoViewPos(quv).toVar();
               const dz = B.z.sub(q.z).toVar();
-              If(dz.greaterThan(0.015).and(dz.lessThan(0.5)).and(dot(N, B.sub(P)).greaterThan(aboveBias)), () => {
+              If(dz.greaterThan(0.015).and(dz.lessThan(0.5)).and(dot(N, B.sub(P)).greaterThan(aboveBias.add(dist.mul(C.SLOPE)))), () => {
                 sh.assign(max(smoothstep(C.FULL, C.REACH, dist).oneMinus().mul(ssaoU.contact).oneMinus(), 0.0));
                 Break();
               });

@@ -103,8 +103,10 @@ function feature(name, building = false, ignoreShed = false) {
   if (optInEffects.has(name)) return option(name, false);
   if (APEX[name]) {
     if (phoneDetail()) return false;
-    const o = gstore()?.raw("apex26.gfxx." + name);
-    return o === "0" ? false : o === "1" || option(name, apexPreset());
+    try {
+      const o = gstore()?.raw("apex26.gfxx." + name);
+      return o === "0" ? false : o === "1" || option(name, apexPreset());
+    } catch (_) { return false; }
   }
   const need = FEATURES[name];
   if (!need) return false;
@@ -404,7 +406,7 @@ if (typeof document !== "undefined") {
 // PRESETS / label stay module-local (UI + current() use them).
 // cycle / PHONE_MAX_ID stay exported — unit seams (quality-preset-phone).
 return {
-  init, set, cycle, current: () => current().id, defaultId, refresh: () => paintGfx(""),
+  init, set, cycle, current: () => shownId(), defaultId, refresh: () => paintGfx(""),
   maxId, capId, isIPhone, isWeakPhone, PHONE_MAX_ID, PHONE_ULTRA_NOTE, EXTREME_NOTE, APEX_NOTE, APEX_BLOCKED_NOTE, APEX, apexBlocked,
   hasShedExtras: () => detail() > 0 || (!phoneDetail() && SHED_ORDER.some(name => overrides()[name] === true)),
   shedFeature: name => SHED_ORDER.includes(name) && feature(name, false, true) && !feature(name),
