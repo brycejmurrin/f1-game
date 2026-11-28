@@ -182,3 +182,31 @@ test("a car striking the lane side of the pit-wall nose stops at the nose (#5775
   CG.wallLimits(tr, f.s, f.x, lim, post);
   assert.equal(WEF.apply(f, tr, lim, 1 / 60), false, "AI: no hold");
 });
+
+// #7399 row 1 (Bryce's decision A, 2026-11-28): held at a face and punted from behind. The contact
+// shove moved s past the face (shiftLong leaves _prevS) and the post-contact pin snapped x to the new
+// limit: 8.4 m in one step on this planted face. The collision path now holds the face too.
+test("a player held at a wall end face and hit from behind stays at the face (#7399)", () => {
+  const tr = g.G.track;
+  const face = widestFace(tr);
+  const a = g.apex;
+  a.incident({ flags: { r2Airborne: false, r3Contact: false, c1Pileup: false } });
+  const x0 = face.side * (face.prev - 0.5);
+  for (const gap of [4, 4.5]) {                      // AI nose into the player's tail, closing at +20 m/s
+    a.jump((face.s - 0.3) / tr.total, 0, x0);
+    a.setInput({ steer: 0, throttle: false, brake: true });
+    a.aiPlace(0, (face.s - 0.3 - gap) / tr.total, 20, x0);
+    let prevX = a.probe().x, maxDx = 0, vMax = 0, sMax = -Infinity;
+    for (let i = 0; i < 40; i++) {
+      a.step(1 / 60, 1);
+      const p = a.probe();
+      maxDx = Math.max(maxDx, Math.abs(p.x - prevX)); prevX = p.x;
+      vMax = Math.max(vMax, p.speed); sMax = Math.max(sMax, p.s);
+    }
+    a.clearInput();
+    assert.ok(vMax > 1, "anti-vacuity: the AI hit the player (peak " + vMax.toFixed(1) + " m/s, gap " + gap + ")");
+    assert.ok(maxDx < 1.5, "max per-step |dx| " + maxDx.toFixed(2) + " m (gap " + gap + "; the old pin snapped " + (face.drop - 0.5).toFixed(1) + " m)");
+    assert.ok(Math.abs(prevX - x0) < 0.5, "kept x at the face: " + prevX.toFixed(2) + " vs " + x0.toFixed(2));
+    assert.ok(sMax < face.s, "never carried past the face: s " + sMax.toFixed(2) + " vs face " + face.s);
+  }
+});
