@@ -324,6 +324,8 @@ function garageCtxHarness() {
     setupPreviewSpin: false, ambientClock: { value: 0 }, garageNow: () => 0, reducedMotion: () => false,
   };
   const ctx = vm.createContext(sandbox);
+  // garageCtx derives the bay hour through GarageExperience.isNight (#7443): load the real module.
+  vm.runInContext(read("js/garage/experience.js"), ctx, { filename: absSrc("js/garage/experience.js") });
   const garageCtx = vm.runInContext("(function () {" + src.slice(start, end) + ";return garageCtx; })()", ctx);
   return { garageCtx, calls, store, setCareer(c) { career = c; } };
 }
