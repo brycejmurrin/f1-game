@@ -793,6 +793,8 @@
     "// marshalPost style roofs seat on walls and the signal pole chains to the",
     "// hut (ground-audit unsupported on monaco/spa/suzuka kiosk posts). ~0.1 s.",
     "tests/unit/marshal-post-grounding.test.mjs",
+    "// #7519: pack id range, flat ids, layer count and blend literals pinned across GLSL/WGSL/TSL (text).",
+    "tests/unit/mat-pack-parity.test.mjs",
     "tests/unit/mcp-cli.test.mjs",
     "tests/unit/mcp-debugger-tools-boot.test.mjs",
     "tests/unit/mcp-http-origin.test.mjs",
