@@ -383,11 +383,10 @@ function vantage(track, mode, s, x, spd, now, extra) {
   const t = cvA.t, r = cvA.r;
   const aheadPt = _vAheadPt;   // hoisted, see _vAheadPt
   // Curvature of the bend we're approaching (speed-scaled look-ahead) — drives the
-  // broadcast cams to the OUTSIDE of the corner so they shoot across the apex.
-  // ONLY those three read it, and Tracks.curvature is a real sample-and-difference,
-  // so computing it unconditionally spent that every frame in chase, cockpit, hood,
-  // tcam, rear, drift, low, overhead and reverse — i.e. in every mode anyone
-  // actually races in — to throw the answer away.
+  // broadcast cams (heli, side, cinematic) to the OUTSIDE of the corner so they
+  // shoot across the apex, and the bend hang of chase, far, drift, overhead and
+  // reverse. Those eight modes read it; Tracks.curvature is a real
+  // sample-and-difference, so the onboard and the other rigs skip it.
   let kA = 0;
   if (mode === "heli" || mode === "side" || mode === "cinematic"
       || mode === "chase" || mode === "far" || mode === "drift"

@@ -355,3 +355,15 @@ test("pit-entry shot: reduced motion, an uncalled stop, a paused race and the PI
   optIn.G.player.s = 110; optIn.ExtraRigs.tickPitAuto(optIn.G);
   assert.ok(!optIn.ExtraRigs.pitEntryShot(), "PIT WALL auto-cut owns the lane");
 });
+
+// #7350 R1: switching the PIT WALL auto opt-in ON during the shot ends it, or _pe froze PIT WALL's eye all session.
+test("pit-entry shot: turning PIT WALL auto on mid-shot ends the shot and releases the camera", () => {
+  const r = pitEntryRig();
+  r.G.player.s = 110; r.ExtraRigs.tickPitAuto(r.G);
+  assert.ok(r.ExtraRigs.pitEntryShot(), "the shot is on air");
+  r.G.store = { get: (k, d) => (k === "pitCamAuto" ? true : d), set() {} };
+  r.now.t = 500; r.ExtraRigs.tickPitAuto(r.G);
+  assert.ok(!r.ExtraRigs.pitEntryShot(), "the shot is over");
+  assert.equal(r.calls.at(-1).owner, "pit-entry");
+  assert.equal(r.calls.at(-1).release, true, "the camera was handed back");
+});

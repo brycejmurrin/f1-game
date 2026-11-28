@@ -27,7 +27,7 @@ function load() {
     Tracks: { sample(_t, s, out) { out.p[0] = 0; out.p[1] = 0; out.p[2] = s; out.t[0] = 0; out.t[2] = 1; out.r[0] = 1; out.r[2] = 0; } },
   });
   vm.runInContext(source.replace(anchor,
-    "return { setFrameLights, appendCarTailLights, glowFade, viewLights, rankStats, resetRankStats, release, pool: () => _tlPool.slice(), sel: () => _tlSel.slice(), hshLen: () => _hshC.length, growHsh: (o) => _hshOf(o) };"), ctx,
+    "return { setFrameLights, appendCarTailLights, glowFade, viewLights, rankStats, resetRankStats, release, pool: () => _tlPool.slice(), sel: () => _tlSel.slice(), hshLen: () => _hshC.length, hshTable: () => _hshC, growHsh: (o) => _hshOf(o) };"), ctx,
     { filename: absSrc("js/lighting/frame-lights.js") });
   return vm.runInContext("FrameLights", ctx);
 }
@@ -64,4 +64,19 @@ test("release() drops the flicker hash table grown for a dense night grid", () =
   assert.equal(api.hshLen(), 4096, "capacity grows by lamp count");
   api.release();
   assert.equal(api.hshLen(), 0, "track switch must not keep the peak hash allocation");
+});
+
+// #7350 L1: a lit session with an empty lamp set returns early every frame; release() there must not re-allocate.
+test("an empty lamp set releases once, then allocates nothing on later frames", () => {
+  const api = load();
+  const frame = {}, track = { _lights: [] };
+  api.setFrameLights(frame, track, [], [0, 0, 0], 1, [0, 0, 1], 0);
+  const h1 = api.hshTable();
+  api.setFrameLights(frame, track, [], [0, 0, 0], 1, [0, 0, 1], 0);
+  assert.equal(frame.lights, null);
+  assert.equal(api.hshTable(), h1, "the second empty frame kept the same (empty) table: release() was a no-op");
+  api.growHsh(15 * 10);
+  assert.ok(api.hshLen() > 0);
+  api.release();
+  assert.equal(api.hshLen(), 0, "an explicit release still frees a held table");
 });
