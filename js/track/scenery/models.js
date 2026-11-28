@@ -332,8 +332,10 @@ const TrackModels = (function () {
       }
       const frame = ctx.frameAt ? ctx.frameAt(spec.frac || 0) : null;
       if (!frame || !finiteArray(frame.c, 3) || !finiteArray(frame.r, 3) ||
-          !finiteArray(frame.u, 3) || !finiteArray(frame.t, 3) || !Number.isFinite(frame.hw))
+          !finiteArray(frame.u, 3) || !finiteArray(frame.t, 3) || !Number.isFinite(frame.hw)) {
+        diagnostics.invalid.push({ id, required: !!spec.required, reason: "invalid frame" });
         return false;
+      }
       if (ctx.supportClear && !ctx.supportClear(frame, spec)) {
         diagnostics.unsafe.push({ id, required: !!spec.required, reason: "support footprint rejected" });
         return false;
@@ -384,10 +386,16 @@ const TrackModels = (function () {
         frame.c[2] + frame.r[2] * offset + frame.u[2] * h,
       ];
       const stage = emptyBuffer();
-      if (!box(stage, at(lift), [span, thickness, depth], spec.color, [frame.r, frame.u, frame.t])) return false;
+      if (!box(stage, at(lift), [span, thickness, depth], spec.color, [frame.r, frame.u, frame.t])) {
+        diagnostics.invalid.push({ id, required: !!spec.required, reason: "invalid deck box" });
+        return false;
+      }
       if (soffit && !box(stage, at(clearance + soffit.thickness / 2),
           [span * soffit.spanScale, soffit.thickness, depth * soffit.depthScale],
-          soffit.color, [frame.r, frame.u, frame.t])) return false;
+          soffit.color, [frame.r, frame.u, frame.t])) {
+        diagnostics.invalid.push({ id, required: !!spec.required, reason: "invalid soffit box" });
+        return false;
+      }
       if (spec.supports !== false && ctx.groundHeight && ctx.groundPoint) {
         const sw = (spec.supportWidth != null ? spec.supportWidth : 0.8) * 0.9;
         const lat = supportGap + sw / 2 + 0.12;
@@ -610,7 +618,11 @@ const TrackModels = (function () {
 
     function groundedSegments(spec) {
       spec = spec || {};
-      if (!Array.isArray(spec.points) || spec.points.length < 2 || !ctx.groundHeight) return false;
+      if (!Array.isArray(spec.points) || spec.points.length < 2 || !ctx.groundHeight) {
+        diagnostics.invalid.push({ id: spec.id || "grounded-segments", required: !!spec.required,
+          reason: !ctx.groundHeight ? "no groundHeight" : "points missing or fewer than 2" });
+        return false;
+      }
       const posBefore = out.pos.length;
       const height = spec.height || 1;
       const width = spec.width || 0.25;
@@ -686,7 +698,12 @@ const TrackModels = (function () {
       if (superseded && spec.id)
         diagnostics.suppressed.push({ id: spec.id, required: false,
           reason: superseded + " chord(s) superseded by the pit complex" });
-      if (!emitted) return false;
+      if (!emitted) {
+        // All chords pit-superseded is already logged as `suppressed` above.
+        if (!superseded) diagnostics.invalid.push({ id: spec.id || "grounded-segments", required: !!spec.required,
+          reason: "no grounded chord emitted" });
+        return false;
+      }
       // Real vertex count (buffer delta) — see groundPatch above.
       diagnostics.emitted.push({ id: spec.id || "grounded-segments", vertices: (out.pos.length - posBefore) / 3, groundedSegments: true });
       return true;

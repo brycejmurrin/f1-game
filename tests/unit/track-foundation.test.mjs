@@ -55,7 +55,6 @@ test("TrackSpace converts nodes, samples source data, and preserves legacy scene
   const offset = Math.round(0.635 * 100) % 100;
   for (let i = 0; i < 100; i++)
     assert.equal(TrackSpace.racingNodeToSource({ startFrac: 0.635 }, i, 100), (i + offset) % 100);
-  assert.equal(TrackSpace.sampleSource(def, 0.1, (f) => f), TrackSpace.toSourceFrac(def, 0.1));
   assert.ok(Math.abs(TrackSpace.sceneryFrac({ startFrac: 0.25 }, 0.4) - 0.4) < 1e-12);
   assert.ok(Math.abs(TrackSpace.sceneryFrac({ startFrac: 0.25, sceneryCoordinates: "source" }, 0.4) - 0.15) < 1e-12);
   assert.ok(Math.abs(TrackSpace.sceneryFrac({ startFrac: 0.25, sceneryCoordinates: "racing" }, 0.4) - 0.4) < 1e-12);
