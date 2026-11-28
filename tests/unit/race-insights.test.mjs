@@ -772,3 +772,15 @@ test('#5888: older saved bests move to their circuit and team; a raw-metre braki
   assert.equal(JSON.stringify(api.mastery('lap')), '{"best":90,"completed":5}', 'two tune classes merge: best kept, runs summed');
   assert.equal(api.mastery('braking'), null, 'raw-metre braking is not compared with the scaled score');
 });
+// #7503: update() fills one scratch row in place; previous and tyreStart are copies, so the edges still fire.
+test('update reuses one scratch current row and still reads edges against the previous sample', () => {
+  const { api, c, G, tick } = fixture();
+  tick({ prog: 10, penalty: 0 }); const first = api._scratch();
+  tick({ prog: 20, penalty: 5, contactT: 1, offroad: true, pitState: 'in' }); const second = api._scratch();
+  assert.equal(first, second, 'the same reference across calls');
+  assert.deepEqual({ ...second }, { time: G.raceT, prog: 20, lap: 1, sector: 0, energy: 1, wear: 0, stint: 0, tyre: 'soft',
+    penalty: 5, warnings: 0, invalid: false, pit: 'in', contact: true, off: true, retired: false });
+  assert.deepEqual(Array.from(api.journal(), e => e.kind), ['penalty', 'contact', 'surface', 'pit']);
+  tick({ prog: 30 }); assert.equal(api.journal().length, 4, 'a held state is not a new edge');
+  assert.equal(c.prog, 30);
+});

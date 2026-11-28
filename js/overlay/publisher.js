@@ -17,9 +17,20 @@ const OverlayPublisher = (function () {
     return Array.isArray(rgb) && rgb.length >= 3
       ? "rgb(" + rgb.slice(0, 3).map((v) => Math.round(Math.max(0, Math.min(1, +v || 0)) * 255)).join(",") + ")" : "";
   }
+  // Memo per team id, cleared when the table (its identity or length) changes; a hit
+  // re-checks the slot and the three colour channels, so a livery edit in place still shows.
+  const memo = new Map();
+  let memoTeams = null, memoLen = -1;
   function teamColour(teamId, teams) {
-    const t = Array.isArray(teams) ? teams.find((x) => x && x.id === teamId) : null;
-    return t ? css(t.color) : "";
+    if (!Array.isArray(teams)) return "";
+    if (teams !== memoTeams || teams.length !== memoLen) { memo.clear(); memoTeams = teams; memoLen = teams.length; }
+    const m = memo.get(teamId), t = m && m.i >= 0 ? teams[m.i] : null, c = t && t.color;
+    if (m && (m.i < 0 || (t === m.t && t.id === teamId && c === m.c && Array.isArray(c) && c[0] === m.r && c[1] === m.g && c[2] === m.b))) return m.s;
+    const i = teams.findIndex((x) => x && x.id === teamId), hit = i >= 0 ? teams[i] : null, col = hit && hit.color;
+    const arr = Array.isArray(col);
+    const str = hit ? css(col) : "";
+    memo.set(teamId, { i, t: hit, c: col, r: arr ? col[0] : NaN, g: arr ? col[1] : NaN, b: arr ? col[2] : NaN, s: str });
+    return str;
   }
 
   // THE BATTLE from the brief rows' own intervals. field() brief rows carry no

@@ -108,6 +108,7 @@ const RaceInsights = (function () {
     let previous = null, events = [], sequence = 0, laps = [], sector = null, energy = [[], [], []];
     let lapEnergy = null, lastLapEnergy = null;
     let tyreStart = null, drill = null, lastDrill = null, distance = 0, lapClean = false, weather = null, attempts = {};
+    const cur = {}, prevRow = {}, tyreRow = {};   // update()'s scratch rows (see update)
     let paceRef = null, paceWin = [];   // the car ahead, and the rolling pace read on it (samplePace)
     function event(kind, text) {
       boundedPush(events, { seq: ++sequence, time: G.raceT || 0, lap: G.player ? G.player.lap : 0, kind, text }, 128);
@@ -558,24 +559,26 @@ const RaceInsights = (function () {
     }
     function update(c) {
       if (!c || !G.track || G.state !== "race") return;
-      const now = G.raceT, current = { time: now, prog: c.prog, lap: c.lap, sector: G.sectorIdx,
-        energy: c.energy, wear: c.tyreWear || 0, stint: c.tyreStints || 0, tyre: c.tyre && c.tyre.id,
-        penalty: c.penalty || 0, warnings: c.cutWarn || 0, invalid: !!c.incidentInvalidLap,
-        pit: !c.pitState || c.pitState === "none" ? "track" : c.pitState, contact: (c.contactT || 0) > 0, off: !!c.offroad, retired: !!c.retired };
+      // `current` is one scratch row filled in place; `previous` and `tyreStart` outlive the call, so they are copies.
+      const now = G.raceT, current = cur;
+      current.time = now; current.prog = c.prog; current.lap = c.lap; current.sector = G.sectorIdx;
+      current.energy = c.energy; current.wear = c.tyreWear || 0; current.stint = c.tyreStints || 0; current.tyre = c.tyre && c.tyre.id;
+      current.penalty = c.penalty || 0; current.warnings = c.cutWarn || 0; current.invalid = !!c.incidentInvalidLap;
+      current.pit = !c.pitState || c.pitState === "none" ? "track" : c.pitState; current.contact = (c.contactT || 0) > 0; current.off = !!c.offroad; current.retired = !!c.retired;
       if (previous && (now < previous.time || current.prog < previous.prog - 10)) { previous = null; sector = tyreStart = null; laps = []; energy = [[], [], []]; lapEnergy = lastLapEnergy = null; lapClean = false; failDrill("position jumped"); }
       if (!previous) {
-        previous = current; tyreStart = current; sector = { ...current, valid: false };
+        previous = Object.assign(prevRow, current); tyreStart = Object.assign(tyreRow, current); sector = { ...current, valid: false };
         // The first sample cannot measure a sector, but its inputs and contact
         // still belong to the attempt; discarding it could award dirty mastery.
         observeDrill(c, current); return;
       }
       const wet = G.trackWetness ? G.trackWetness() : 0;
-      if (weather != null && Math.abs(wet - weather) > .05) { laps = []; energy = [[], [], []]; lapEnergy = lastLapEnergy = null; sector.valid = false; tyreStart = current; weather = wet; }
+      if (weather != null && Math.abs(wet - weather) > .05) { laps = []; energy = [[], [], []]; lapEnergy = lastLapEnergy = null; sector.valid = false; tyreStart = Object.assign(tyreRow, current); weather = wet; }
       if (weather == null) weather = wet;
       const dt = now - previous.time, ds = current.prog - previous.prog;
       if (dt <= 0) return;
       if (ds >= 0 && ds <= Math.max(20, Math.abs(c.speed) * dt * 2)) distance += ds;
-      else { sector.valid = false; lapClean = false; lapEnergy = lastLapEnergy = null; tyreStart = current; failDrill("position jumped"); }
+      else { sector.valid = false; lapClean = false; lapEnergy = lastLapEnergy = null; tyreStart = Object.assign(tyreRow, current); failDrill("position jumped"); }
       if (current.penalty > previous.penalty) event("penalty", "+" + (current.penalty - previous.penalty) + "s time penalty");
       if (current.warnings > previous.warnings) event("limits", "Track-limits warning " + current.warnings);
       if (current.invalid && !previous.invalid) {
@@ -591,7 +594,7 @@ const RaceInsights = (function () {
         if (current.pit !== "track") { energy = [[], [], []]; lapEnergy = lastLapEnergy = null; sector.valid = false; }
       }
       if (current.tyre !== previous.tyre || current.stint !== previous.stint || current.wear < previous.wear) {
-        tyreStart = current; laps = []; energy = [[], [], []]; lapEnergy = lastLapEnergy = null; sector = { ...current, valid: false }; event("tyres", "New stint: " + (current.tyre || "unknown compound"));
+        tyreStart = Object.assign(tyreRow, current); laps = []; energy = [[], [], []]; lapEnergy = lastLapEnergy = null; sector = { ...current, valid: false }; event("tyres", "New stint: " + (current.tyre || "unknown compound"));
       }
       const underCaution = (G.cautionLevel ? G.cautionLevel() : 0) > 0;
       if (current.contact || current.off || current.invalid || current.pit !== "track" || underCaution) { sector.valid = false; lapClean = false; lapEnergy = lastLapEnergy = null; }
@@ -616,7 +619,7 @@ const RaceInsights = (function () {
       // fight is fair, and asking for it at arming time would be too late.
       samplePace(c);
       observeDrill(c, current);
-      previous = current;
+      previous = Object.assign(prevRow, current);
     }
     function forecast() {
       const c = G.player, total = G.track && G.track.total;
@@ -693,7 +696,7 @@ const RaceInsights = (function () {
       return rows;
     }
     function summary() { return { distance, drill: drill ? { mode: drill.mode, done: drill.done, clean: drill.clean, changes: drill.changes, reason: drill.reason, phase: drill.phase, apexProg: drill.apexProg, gateProg: drill.gateProg } : null, lastDrill: lastDrill ? { ...lastDrill, ...(lastDrill.recovery ? { recovery: { ...lastDrill.recovery } } : {}) } : null }; }
-    return { update, reset, event, settle, startDrill, forecast, network, summary, mastery, debrief, journal: () => events.map(e=>({...e})),
+    return { update, _scratch: () => cur, reset, event, settle, startDrill, forecast, network, summary, mastery, debrief, journal: () => events.map(e=>({...e})),
       attempts: mode => (attempts[mode] || []).map(a => ({ ...a })), brakingRef };
   }
   return Object.freeze({ create, DRILLS, needsRivals, normalizeMasteryEntries });

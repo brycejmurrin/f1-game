@@ -706,3 +706,23 @@ test('saved bests print positive in each drill\'s own unit (start, slipstream an
   });
   assert.deepEqual(shown, ['+2 places', '12 m closed', '12.0s held']);
 });
+// #7503: the trace is a fixed 600-slot ring of reused rows; every reader sees the newest 600 in time order.
+test('the driving trace keeps the newest 600 samples in time order once the ring wraps', async () => {
+  const { coach, c, ctx, nodes, tick, enable } = fixture();
+  enable();
+  const seen = [];
+  for (let k = 0; k < 1600; k++) { c.speed = k; tick(.05); const r = coach.trace(); if (r.length) seen.push(r[r.length - 1]); }
+  const rows = coach.trace();
+  assert.equal(rows.length, 600);
+  const all = [...new Map(seen.map(r => [r.time, r])).values()];   // every sample, deduped by time
+  assert.ok(all.length > 700, 'the ring wrapped: ' + all.length + ' samples');
+  assert.deepEqual(Array.from(rows), all.slice(-600), 'the newest 600 rows, oldest first, each row intact');
+  assert.ok(rows.every((r, i) => !i || r.time > rows[i - 1].time));
+  assert.notEqual(coach.trace()[0], rows[0], 'trace() hands out copies');
+  let exported;
+  Object.assign(ctx, { Blob, URL: { createObjectURL(b) { exported = b; return 'blob:t'; }, revokeObjectURL() {} }, setTimeout() {},
+    document: { body: { appendChild() {} }, createElement: () => ({ click() {}, remove() {} }) } });
+  nodes.get('pm-driving-trace').onclick();
+  assert.deepEqual(JSON.parse(await exported.text()).rows, JSON.parse(JSON.stringify(rows)), 'the download reads the same time order');
+  coach.reset(); assert.equal(coach.trace().length, 0);
+});
