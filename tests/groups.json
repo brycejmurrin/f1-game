@@ -907,6 +907,8 @@
     "tests/unit/pause-key-tools.test.mjs",
     "tests/unit/pause-taps.test.mjs",
     "tests/unit/penalty-why.test.mjs",
+    "// Batch #7478 (hunt #7477 rows 2-3): rainFill without 3-arg Math.hypot, same streaks; Wind.sync one scratch object, base values. VM, ~0.2 s.",
+    "tests/unit/perf-batch-7478.test.mjs",
     "tests/unit/perf-frametime.test.mjs",
     "tests/unit/perf-governor-chase.test.mjs",
     "tests/unit/perf-governor-upper.test.mjs",
