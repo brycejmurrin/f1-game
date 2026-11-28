@@ -749,7 +749,7 @@ _Module index over 34 directories, in load order. `tag` = a `<script>` in index.
 | `agentview-corners.js` | `AgentCorners` | LAZY_AGENT | AgentCorners: the corner table of the agent view (buildCorners, roadShapeAt, peakFracs, corners, nextCorner, upcomingCorners). |
 | `agentview.js` | `AgentView` | LAZY_AGENT | AgentView: the agent-facing JSON view of the running game. __apex is a dev console: ~180 flat hooks, each answering one narrow question, most of them … |
 | `apex-net.js` | `ApexNet` | LAZY_AGENT | ApexNet: the netplay and VS FRIEND lobby hooks of the window.__apex API (net, netLoopback, netPeer*, netTick, lobby*). |
-| `apex-cam.js` | `ApexCam` | LAZY_AGENT | ApexCam: camera hooks of window.__apex (camera, flyby, free-cam, orbit). |
+| `apex-cam.js` | `ApexCam` | LAZY_AGENT | ApexCam: camera hooks of window.__apex (camera, flyby, free-cam, orbit, garage). |
 | `apex-track.js` | `ApexTrack` | LAZY_AGENT | ApexTrack: track-geometry hooks of window.__apex. |
 | `apex-lobby.js` | `ApexLobby` | LAZY_AGENT | ApexLobby: session and field hooks of window.__apex. |
 | `apex-play.js` | `ApexPlay` | LAZY_AGENT | ApexPlay: the def() registry for NEW __apex hooks (#6962, #6920 U4.4). |
