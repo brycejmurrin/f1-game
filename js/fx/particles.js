@@ -749,6 +749,8 @@ const Particles = (function () {
   // the new cursor. One drop = 6 vertices of [cornerX, cornerY, x, y, z, r, g,
   // b, size 0, alpha]: the corners are expanded HERE, along the apparent
   // velocity (half-length) and across it (half-width, facing the eye).
+  // No 3-argument Math.hypot in here: it allocates per call in V8 (#7478; source-pinned).
+  const len3 = (x, y, z) => Math.sqrt(x * x + y * y + z * z);
   function rainFill(out, p) {
     if (!_rainN || !_rainOn || !_rainEyeOk) return p;
     const LT = _lt();
@@ -760,22 +762,22 @@ const Particles = (function () {
     const shearW = (LT.rainShearWind != null ? LT.rainShearWind : 0.9) / 0.9;
     const shearL = (LT.rainShearLen != null ? LT.rainShearLen : 2.0) / 2.0;
     const cvx = _camVel[0] * shearW, cvy = _camVel[1] * shearW, cvz = _camVel[2] * shearW;
-    const camSpeed = Math.hypot(_camVel[0], _camVel[1], _camVel[2]) * shearL;
+    const camSpeed = len3(_camVel[0], _camVel[1], _camVel[2]) * shearL;
     const ex = _rainEye[0], ey = _rainEye[1], ez = _rainEye[2];
     const cr = RAIN_COL[0], cg = RAIN_COL[1], cb = RAIN_COL[2];
     const shown = _rainLastShown;
     for (let i = 0; i < shown; i++) {
       const s = _rspd[i] * _rainSpeedScale;
       const tx = _rox[i], ty = _roy[i], tz = _roz[i];           // eye → drop
-      const dist = Math.hypot(tx, ty, tz);
+      const dist = len3(tx, ty, tz);
       if (dist < 0.4) continue;                                 // inside the lens
       // apparent velocity = drop velocity − camera velocity
       const vx = s * _windX - cvx, vy = -s - cvy, vz = s * _windZ - cvz;
-      const vm = Math.hypot(vx, vy, vz) || 1;
+      const vm = len3(vx, vy, vz) || 1;
       const dx = vx / vm, dy = vy / vm, dz = vz / vm;
       // width axis: across the streak AND across the eye ray, so the quad faces the camera
       let rx = dy * tz - dz * ty, ry = dz * tx - dx * tz, rz = dx * ty - dy * tx;
-      const rl = Math.hypot(rx, ry, rz);
+      const rl = len3(rx, ry, rz);
       if (rl < 1e-6) continue;                                  // streak points at the eye
       rx /= rl; ry /= rl; rz /= rl;
       const halfLen = Math.min(3.0, 0.5 * RAIN_EXPO * _rlen[i] * _rainLenScale * (s + camSpeed));

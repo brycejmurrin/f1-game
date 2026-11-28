@@ -94,7 +94,9 @@ const Wind = (function () {
     const m = MEAN[wx(w)];
     return (m[0] + (m[1] - m[0]) * p.draw) * p.site;
   }
-  /** The gust envelope at t (0..1) and its peak (m/s) for weather w: one per GUST_SLOT window at most. */
+  /** The gust envelope at t (0..1) and its peak (m/s) for weather w: one per GUST_SLOT window at most.
+   *  Returns the envelope and leaves peak and off in _gPk/_gOff: no object per physics step (#7478). */
+  let _gPk = 0, _gOff = 0;
   function gustAt(p, w, t, mean) {
     const k = Math.floor(t / GUST_SLOT);
     let best = 0, peak = 0, off = 0;
@@ -108,28 +110,33 @@ const Wind = (function () {
       const pk = mean * GUST_K[wx(w)] * (0.4 + 0.6 * h01(p.seed, j, 24));
       if (e * pk > best * peak || peak === 0) { best = e; peak = pk; off = (h01(p.seed, j, 25) - 0.5) * 0.6; }
     }
-    return { env: best, peak, off };
+    _gPk = peak; _gOff = off;
+    return best;
   }
   /** The wind at race time t under `mean` (m/s): { dir, ms, gust, gustMs, mean }. Pure. `ms` is the AIR's
-   *  speed (m/s), named apart from a car's `.speed` (tools/check/vstd-lint.mjs). */
-  function at(p, t, mean, w) {
+   *  speed (m/s), named apart from a car's `.speed` (tools/check/vstd-lint.mjs).
+   *  `o` defaults to a fresh object; sync() passes its module scratch, so a physics step allocates nothing (#7478). */
+  function at(p, t, mean, w, o = {}) {
     t = Number.isFinite(t) ? t : 0;
     const m = mean * (1 + 0.2 * Math.sin(2 * Math.PI * t / 420 + p.ph3));
     const dir = p.dir0 + WANDER * Math.sin(2 * Math.PI * t / 600 + p.ph1) + 0.4 * WANDER * Math.sin(2 * Math.PI * t / 170 + p.ph2);
-    const g = gustAt(p, w == null ? p.weather : w, t, m);
-    const gMs = g.env * g.peak;
+    const env = gustAt(p, w == null ? p.weather : w, t, m);
+    const gMs = env * _gPk;
     // The gust adds along its own slightly-off direction; the vector sum is the wind.
-    const ax = m * Math.sin(dir) + gMs * Math.sin(dir + g.off), az = m * Math.cos(dir) + gMs * Math.cos(dir + g.off);
+    const ax = m * Math.sin(dir) + gMs * Math.sin(dir + _gOff), az = m * Math.cos(dir) + gMs * Math.cos(dir + _gOff);
     let ms = Math.hypot(ax, az);
     const k = ms > MAX_SPEED ? MAX_SPEED / ms : 1;
     ms *= k;
-    return { dir: ms > 0 ? Math.atan2(ax, az) : dir, ms, wx: ax * k, wz: az * k, gust: g.env, gustMs: gMs * k, mean: m };
+    o.dir = ms > 0 ? Math.atan2(ax, az) : dir; o.ms = ms; o.wx = ax * k; o.wz = az * k; o.gust = env; o.gustMs = gMs * k; o.mean = m;
+    return o;
   }
 
   // ── The current race's wind (cached per clock tick) ───────────────────────
   let _p = null, _seedK = NaN, _trackK, _t = -1, _mean = 0, _tMean = 0;
   let _st = null, _pin = null;
   const CALM = Object.freeze({ on: false, dir: 0, ms: 0, wx: 0, wz: 0, gust: 0, gustMs: 0, mean: 0, kmh: 0, fromDeg: 0 });
+  // sync()'s answer, refilled in place every step (#7478): every caller reads it within the step.
+  const _sync = { on: true };
   /** Advance the current wind to race time t; returns state(). Cheap when t has not moved. */
   function sync(seed, weather, trackId, t) {
     if (LEVELS[level] === 0) { _st = CALM; return CALM; }
@@ -145,8 +152,7 @@ const Wind = (function () {
     const dt = Math.max(0, t - _tMean);
     _mean += (target - _mean) * (1 - Math.exp(-dt / WEATHER_TAU));
     _tMean = t; _t = t;
-    const a = at(_p, t, _mean, w);
-    a.on = true;
+    const a = at(_p, t, _mean, w, _sync);
     a.kmh = Math.round(a.ms * 3.6);
     // Meteorological convention for UI/radio: the compass bearing it blows FROM (0 = from +z).
     a.fromDeg = Math.round((((a.dir + Math.PI) * 180 / Math.PI) % 360 + 360) % 360);
