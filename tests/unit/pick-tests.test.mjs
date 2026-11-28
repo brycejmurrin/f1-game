@@ -374,3 +374,19 @@ test("pick() is the one router: every tracked path gets the former EXTRA_ROUTES 
   const ctl = pick(["controller.html"]);
   assert.ok(ctl.has("tiny") && ctl.has("input"), `controller.html names tiny + input: ${[...ctl.keys()]}`);
 });
+
+test("audio files with their own audio-unit rule do not inherit the js/audio/ catch-all (#7474)", () => {
+  // Rules UNION, so the directory catch-all used to add ui + lifecycle-unit to five files whose own
+  // rule says their suite is audio-unit alone: ~423 s of browser specs for an audio-only PR.
+  for (const f of ["battle-earcon", "voice-pack", "rivals", "crowd", "ers-layer"]) {
+    const sel = pick([`js/audio/${f}.js`]);
+    assert.ok(sel.has("audio-unit"), `js/audio/${f}.js must still route to audio-unit`);
+    assert.ok(!sel.has("ui"), `js/audio/${f}.js must not route to ui (got ${[...sel.keys()].join(",")})`);
+    assert.ok(!sel.has("lifecycle-unit"), `js/audio/${f}.js must not route to lifecycle-unit`);
+  }
+  // The rest keep ui: the rules that name it, and any audio file with no narrow rule.
+  const unnamed = "zz-new-layer"; // a fixture name, not a real file
+  for (const f of ["panel", "spotify", "radio-voice", "announcer", "engine", unnamed])
+    assert.ok(pick([`js/audio/${f}.js`]).has("ui"), `js/audio/${f}.js must still route to ui`);
+  assert.ok(pick([`js/audio/${unnamed}.js`]).has("lifecycle-unit"), "an unnamed audio file keeps the catch-all");
+});

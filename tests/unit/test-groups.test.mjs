@@ -116,6 +116,26 @@ test("the topical browser groups are a DISJOINT partition of the specs", () => {
   assert.deepEqual(dups, [], "a spec is named by two topical browser groups — pick-tests would run it twice");
 });
 
+// Specs a group runs through its own `cmd` rather than its `files` list. This list may only SHRINK (#7474).
+const SPECS_RUN_BY_CMD = new Map([
+  ["material-shimmer.spec.js", "test:shimmer (APEX_SHIMMER=1 cmd)"],
+]);
+
+test("every spec on disk belongs to some tests/groups.json group", () => {
+  // A spec no group names is never selected by any change: it rots green. Globs expand the same
+  // way as the partition test above (a `*` is one [a-z0-9_-] run).
+  const { groups } = JSON.parse(read("tests/groups.json"));
+  const onDisk = fs.readdirSync(path.join(ROOT, "tests", "specs")).filter((f) => f.endsWith(".spec.js"));
+  const patterns = Object.values(groups).flatMap((g) => (g && g.files) || [])
+    .filter((f) => /^tests\/specs\/[^/]+\.spec\.js$/.test(f))
+    .map((f) => new RegExp("^" + path.basename(f).replace(/[.]/g, "\\.").replace(/\*/g, "[a-z0-9_-]*") + "$"));
+  assert.ok(patterns.length > 50, `only ${patterns.length} spec entries read from tests/groups.json — the shape changed`);
+  const orphans = onDisk.filter((f) => !patterns.some((re) => re.test(f)) && !SPECS_RUN_BY_CMD.has(f));
+  assert.deepEqual(orphans, [], "a spec on disk is in no tests/groups.json group — add it to one, or it is never selected");
+  const stale = [...SPECS_RUN_BY_CMD.keys()].filter((f) => !onDisk.includes(f) || patterns.some((re) => re.test(f)));
+  assert.deepEqual(stale, [], "SPECS_RUN_BY_CMD names a spec that is gone or now in a group's files — drop it (the list only shrinks)");
+});
+
 /* Pull one "## N. Heading" section out of the doc, so a table elsewhere in the
    file cannot be mistaken for the one being checked. */
 function section(doc, heading) {

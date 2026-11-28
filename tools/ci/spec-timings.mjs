@@ -290,6 +290,16 @@ export function mergeRows(db, rows, { env = "local", keep = KEEP } = {}) {
   return { db, added, duplicates, collapsed, rejected, specs: new Set([...runs.values()].map((a) => a.spec)).size };
 }
 
+/** Drop every key whose spec file is gone from `root` (#7474): a renamed or deleted spec otherwise
+ *  keeps billing in the record forever. Returns the pruned keys. A root with no tests/specs/ at all
+ *  (a sparse or wrong checkout) prunes nothing rather than emptying the history. */
+export function pruneMissing(db, { root = ROOT } = {}) {
+  if (!db || !db.specs || !fs.existsSync(path.join(root, "tests", "specs"))) return [];
+  const gone = Object.keys(db.specs).filter((k) => !fs.existsSync(path.join(root, k)));
+  for (const k of gone) delete db.specs[k];
+  return gone;
+}
+
 /** Union two histories sample by sample (identity = run second + bucket, the
  *  same rule `push` dedupes on), newest `keep` per series. The committed file
  *  and the `bot/spec-timings` side branch each hold samples the other lacks;
@@ -528,11 +538,13 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   }
   const db = loadDb(into, { strict: true });
   const r = mergeRows(db, rows, { env, keep });
+  const pruned = pruneMissing(db);
   const dry = argv.includes("--dry-run");
   if (!dry) saveDb(db, into);
   if (json) {
     console.log(JSON.stringify({ env, keep, dryRun: dry, sources: read,
-      added: r.added, duplicates: r.duplicates, collapsed: r.collapsed, rejected: r.rejected, specs: r.specs }, null, 2));
+      added: r.added, duplicates: r.duplicates, collapsed: r.collapsed, rejected: r.rejected, specs: r.specs,
+      pruned: pruned.length, prunedSpecs: pruned }, null, 2));
   } else {
     for (const s of read) console.error(`read ${s.rows} test row(s) from ${s.file}`);
     if (!sources.length) console.error("no junit.xml under artifacts/ — pass paths explicitly");
@@ -541,5 +553,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
       (r.duplicates ? `; ${r.duplicates} already recorded` : "") +
       (r.collapsed ? `; ${r.collapsed} row(s) were one run seen twice` : "") +
       (r.rejected ? `; ${r.rejected} row(s) with an invalid spec or test name dropped` : ""));
+    console.log(`${dry ? "would prune" : "pruned"} ${pruned.length} spec(s) no longer on disk` +
+      (pruned.length ? `: ${pruned.join(", ")}` : ""));
   }
 }

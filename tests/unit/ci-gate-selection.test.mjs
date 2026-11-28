@@ -28,15 +28,23 @@ test("every path a ci.yml change filter names still exists", () => {
   // groups are left alone; they are patterns, not citations.
   const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
   const dead = [];
+  let filters = 0, checked = 0;
   for (const m of ciWorkflow.matchAll(/grep -qE '\^\(([^']+)\)'/g)) {
+    filters++;
     for (const branch of m[1].split("|")) {
       const b = branch.replace(/\$$/, "");
       if (/[[\](){}*+?^]/.test(b)) continue;             // a pattern, not a path
       const rel = b.replace(/\\\./g, ".");
       if (!/^[\w.\-/]+$/.test(rel)) continue;
+      checked++;
       if (!fs.existsSync(path.join(ROOT, rel))) dead.push(rel);
     }
   }
+  // Floors (#7474): a reformatted filter line would match nothing and pass on nothing.
+  // 2 filter lines and 12 literal branches when written; they may only grow.
+  const RE = "/grep -qE '\\^\\(([^']+)\\)'/ in this test";
+  assert.ok(filters >= 2, `only ${filters} ci.yml change filter line(s) matched ${RE} — update the regex to the new filter format`);
+  assert.ok(checked >= 12, `only ${checked} literal filter branch(es) checked (floor 12) — update ${RE} to the new filter format`);
   assert.deepEqual(dead, [],
     "a ci.yml change filter names a path that does not exist — the job it gates can never be selected by it");
 });
