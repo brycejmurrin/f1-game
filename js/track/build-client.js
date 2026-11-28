@@ -229,7 +229,6 @@ const TrackBuildClient = (function () {
     // Drop the memo so restoring defaults cannot reuse a diagnostic-era request.
     if (typeof Tracks !== "undefined" && Tracks.diagnosticBuild && Tracks.diagnosticBuild()) { _last = null; return null; }
     const prepare = gfx.trackPrepareConfig ? gfx.trackPrepareConfig() : null;
-    // The page's desktop detail level rides the config and the key (no GfxQuality in the worker).
     // The page's desktop detail level rides the build message (post); it is boot-time (GfxQuality.detail), so a
     // page's requests share one level and the key need not carry it.
     const key = [JSON.stringify(prepare), def.id, opts.night, opts.gridSlots, !!opts.chunkRibbons, !!gfx.mobileTier].join("|");

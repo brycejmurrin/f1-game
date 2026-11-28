@@ -603,7 +603,7 @@ test("Escape/back is one behaviour: every layer names its own door, and every do
     if (id === "thumb-trainer") continue; // thumb-trainer.test.mjs: data-esc-close names its BACK
     if (id === "hud-arrange-bar") {
       assert.match(read("js/ui/hud-arrange.js"), /setAttribute\("data-esc-close", "hud-arrange-cancel"\)/);
-      assert.match(read("js/ui/hud-arrange.js"), /mk\("Cancel", "Discard HUD edits", \(\) => setEditing\(false, true, false\), "hud-arrange-cancel"\)/);
+      assert.match(read("js/ui/hud-arrange.js"), /mk\("Cancel", "Cancel: discard HUD edits", \(\) => setEditing\(false, true, false\), "hud-arrange-cancel"\)/);
       continue;
     }
     const tag = openTag(id);

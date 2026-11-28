@@ -76,6 +76,8 @@ var BattleEarcon = (function () {
     }
     function ready() { return !!clips && generation === currentGen(); }
     function busy() {
+      // A rebuilt context restarts the clock: an old-clock `end` would read busy for as long as the dead one ran.
+      if (active && generation !== currentGen()) stop();
       if (active && audio.now() >= active.end) { active = null; owned.delete(stop); }
       return !!active;
     }

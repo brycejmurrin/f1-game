@@ -617,6 +617,7 @@ test("LAZY_AUDIO: after the inert stub, create() re-primes on the next valid ges
   ctx.document = doc;
   ctx.MutationObserver = function () { this.observe = () => {}; };
   ctx.GameAudio = { setRadioDuck() {} };
+  vm.runInContext(read("js/ui/platform-session.js"), ctx, { filename: absSrc("js/ui/platform-session.js") });
   vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: absSrc("js/audio/radio-voice.js") });
   const RV = vm.runInContext("RadioVoice", ctx);
   const G = { soundOn: true, state: "race", store: { get: (_k, d) => d, set: () => {} } };

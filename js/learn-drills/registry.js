@@ -33,6 +33,9 @@ const DrillRegistry = (function () {
     defs.set(d.id, d);
     return d;
   }
+  let foreign = false;
+  /** A drill host outside this registry (the Thumb drill) marks itself live, so launch() refuses meanwhile. */
+  const hold = on => { foreign = !!on; };
   const get = id => defs.get(id) || null;
   const ids = () => [...defs.keys()];
   const forLesson = lesson => [...defs.values()].filter(d => d.lesson === lesson);
@@ -79,6 +82,7 @@ const DrillRegistry = (function () {
     function launch(id, variant) {
       const d = defs.get(id);
       if (!d || current || G.state !== "menu" || G.netPlay.active()) return false;
+      if (foreign) return false;   // another drill host (the Thumb drill) is live: one at a time
       const s = d.setup;
       const track = Tracks.LIST.findIndex(def => def.id === s.track);
       if (track < 0) return false;
@@ -184,14 +188,14 @@ const DrillRegistry = (function () {
       r.medal = typeof d.medals === "function" ? d.medals(r, a.history.slice()) : DrillCard.medalOf(r, d.medals);
       a.history.push(r);
       const saved = DrillCard.record(G.store, d.id + "|" + r.variant, r);
-      r.best = saved.row.best;
+      r.best = saved.row ? saved.row.best : undefined;
       r.improved = saved.improved;
       a.result = lastResult = r;
       a.run = null;
-      Log.info("ui", "drill " + d.id + " " + r.value.toFixed(1) + " " + r.unit + " " + (r.medal || "no medal"));
+      Log.info("ui", "drill " + d.id + " " + Number(r.value).toFixed(1) + " " + r.unit + " " + (r.medal || "no medal"));
       const vs = d.variants || [], k = vs.findIndex(v => v.id === a.variant), nv = vs.length > 1 ? vs[(k + 1) % vs.length] : null;
       const next = nv ? { label: nv.cta || "TRY " + nv.label.toUpperCase(), run: () => rerun(nv.id) } : null;
-      DrillCard.show(r, { retry, back: () => G.quitToMenu(), next });
+      DrillCard.show(r, { retry, back: () => G.quitToMenu(), next, paused: () => !!G.paused });
       return r;
     }
 
@@ -199,6 +203,13 @@ const DrillRegistry = (function () {
      *  A run is the goal's RaceInsights drill, finished once after this host saw it live: RETRY, the RECOVER key and
      *  REWIND restart it, and a backward jump in progress starts a new accumulator. */
     function tick() {
+      try { return drillTickBody(); } catch (e) {
+        Log.warn("ui", "drill tick failed: " + (e && e.message || e));
+        if (current) current.run = null;   // drop the run: the next tick starts a fresh accumulator
+        return null;
+      }
+    }
+    function drillTickBody() {
       const a = current;
       if (!a || !a.d.goal || G.state !== "race" || !hooks.insights) return null;
       const insights = hooks.insights(), p = G.player;
@@ -233,6 +244,6 @@ const DrillRegistry = (function () {
     };
   }
 
-  return { define, get, ids, forLesson, create, physOf };
+  return { define, get, ids, forLesson, create, physOf, hold };
 })();
 Object.freeze(DrillRegistry);
