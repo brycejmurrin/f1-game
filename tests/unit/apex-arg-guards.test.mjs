@@ -38,7 +38,10 @@ test("careerGrant() maps a non-finite amount to the default grant", () => {
   const api = loadApex({ track: {} }, { Career: { grant: (n) => { got.push(n); return 1; } } });
   for (const v of [Infinity, NaN, "x"]) api.careerGrant(v);
   api.careerGrant(250);
-  assert.deepEqual(got, [undefined, undefined, undefined, 250]);
+  // A finite 0 or negative passes through, so Career.grant refuses it (#7366)
+  // instead of granting the default.
+  api.careerGrant(0); api.careerGrant(-5);
+  assert.deepEqual(got, [undefined, undefined, undefined, 250, 0, -5]);
 });
 
 test("setSpeed / spin / nudge / aim / setLap refuse non-finite input and leave the player alone", () => {
