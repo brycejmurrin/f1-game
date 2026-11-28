@@ -1720,6 +1720,31 @@ test("SPAN WIDTH m: one hwZone on the span's control points, merged on repeat, c
   assert.ok(b.D.state().design.hwZones.length <= 24);
 });
 
+// #7316: a zone wider than its turn (a corner reshaped shorter, or an imported
+// wide zone) showed its angle on BANK °, yet FLAT kept it and a new angle
+// stacked a second zone: the keep filter ignored the zone's own width.
+test("BANK °: FLAT clears a zone wider than its turn, and a new angle replaces it", () => {
+  const b = bootScreen();
+  openGreen(b);
+  const v0 = b.D.preview(), d0 = b.D.state().design;
+  const c = b.ctx.TrackInsight.corners(v0.tr, d0.pts, null, v0.turns)[1], L = v0.tr.total;
+  const off = c.lenM / 2 + 10, widthM = Math.round(2 * off + 40);
+  assert.ok(widthM <= 600, "the wide zone fits the 600 m cap");
+  b.D.load(Object.assign({}, d0, { bankZones: [{ frac: b.ctx.TrackZones.wrap01((c.sApex + off) / L), angleDeg: 8, widthM }] }));
+  b.D.preview();
+  turnsList(b).children[1].click();
+  const pick = turnsList(b).parentNode.children.find((e) => e.getAttribute && e.getAttribute("role") === "group");
+  assert.equal(rowOf(pick, "BANK °").children[2].textContent, "8°", "the stepper reads the wide zone as this turn's");
+  assert.equal(b.D.setCornerBank(2, 0), true, "FLAT is an edit");
+  assert.deepEqual(plain(b.D.state().design.bankZones), [], "FLAT removed the wide zone");
+  b.D.undo();
+  assert.equal(b.D.state().design.bankZones.length, 1);
+  assert.equal(b.D.setCornerBank(2, 6), true);
+  const z = b.D.state().design.bankZones;
+  assert.equal(z.length, 1, "a new angle replaces the wide zone, not a second overlapping one");
+  assert.equal(z[0].angleDeg, 6);
+});
+
 test("BANK °: the SELECTED TURN banks its apex — {frac, angleDeg, widthM: the corner's length}; over 5.7° is FIA amber; 0 flattens it; TURNS reads it back", () => {
   const b = bootScreen();
   openGreen(b);
