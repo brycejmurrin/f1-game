@@ -170,3 +170,16 @@ test("a long march that fails to build falls back to today's chain", async (t) =
   assert.equal(fell.key, "tlx-post-ssao");
   assert.equal(fell.wgsl, off.wgsl);
 });
+
+test("a failed long march is retried without it on the SAME rung: the desktop tier survives", () => {
+  const A = globalThis.TLXShaders.postAttempts, HI = { gtao: true }, EX0 = { agx: true, velTex: null, giTemporal: false };
+  assert.deepEqual(A(HI, EX0, false), [[HI, EX0], [HI, null], [null, null]], "without contactSS: today's ladder");
+  assert.deepEqual(A(null, null, false), [[null, null]]);
+  const on = A(HI, EX0, true);
+  assert.deepEqual(on.map(([hi, ex]) => [hi === HI, !!(ex && ex.agx), !ex || ex.contactSS !== false]), [
+    [true, true, true], [true, true, false], [true, false, true], [true, false, false], [false, false, true], [false, false, false]]);
+  // The first build a march-only failure accepts keeps hi AND the extras.
+  const survivor = on.find(([, ex]) => ex && ex.contactSS === false);
+  assert.deepEqual([survivor[0], survivor[1].agx], [HI, true]);
+  assert.equal(EX0.contactSS, undefined, "the caller's extras are not mutated");
+});
