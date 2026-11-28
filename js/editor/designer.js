@@ -274,15 +274,16 @@ const TrackDesigner = (function () {
   function applyStamp(i0, i1, kind) {
     const k = kind || tool;
     if (!TrackStamps.KINDS[k]) { message("Pick a shape tool first (STRAIGHT, CORNER, HAIRPIN, CHICANE, S-BEND)", true); return false; }
-    if (!design.pts.length || design.pts.length < 3) {
-      // A first stamp on an empty sheet: a loop from the shape itself, closed by the splice.
-      const seed = TrackRandom.generate(design.seed, { targetL: 3800 }).pts;
-      commit(Object.assign({}, design, { pts: seed }), "seed");
+    let base = design.pts;
+    if (!base.length || base.length < 3) {
+      // A first stamp on an empty sheet: a loop from the shape itself, closed by the
+      // splice. Splice the seed first and commit once, so a refused splice leaves nothing.
+      base = TrackRandom.generate(design.seed, { targetL: 3800 }).pts;
       i0 = 0; i1 = 0;
     }
     if (!(i0 >= 0)) i0 = Math.max(0, sel);
     const p = kind ? Object.assign({}, TrackStamps.KINDS[k].params, params) : stampParams();
-    const r = TrackStamps.splice(design.pts, i0, i1 == null ? i0 : i1, k, p);
+    const r = TrackStamps.splice(base, i0, i1 == null ? i0 : i1, k, p);
     if (!r.ok) { message(r.reason, true); return false; }
     sel = r.sel[1]; span = -1;
     commit(Object.assign({}, design, { pts: r.pts }), "stamp:" + k);

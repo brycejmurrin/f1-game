@@ -3711,3 +3711,39 @@ test("bridge panel: removing another bridge drops the EDIT index so apply cannot
   panel.refresh({ design: Object.assign({}, shrunk, { bridges: [shrunk.bridges[1], shrunk.bridges[0]] }), sel: 3 });
   assert.equal(apply.hidden, true, "a reorder leaves edit mode");
 });
+
+test("a first stamp on an empty sheet whose splice is refused leaves no seed loop and no undo entry (#7317 row 8)", () => {
+  // The sheet stays empty when open's RANDOMISE finds no clean loop in 12 tries.
+  const b = bootScreen(), rand = b.ctx.TrackRandom;
+  b.ctx.TrackRandom = Object.assign({}, rand, { generateValid: () => ({ ok: false, pts: [] }) });
+  b.D.init(b.G, { custom: b.C, root: b.root }); b.D.open();
+  b.ctx.TrackRandom = rand;
+  const before = b.D.state();
+  assert.ok(before.design.pts.length < 3, "a fresh screen starts on an empty sheet");
+  const orig = b.ctx.TrackStamps, seen = [];
+  b.ctx.TrackStamps = Object.assign({}, orig, { splice: (pts) => { seen.push(pts.length); return { ok: false, reason: "no room to rejoin the loop here" }; } });
+  assert.equal(b.D.applyStamp(-1, null, "corner"), false, "the refused stamp reports failure");
+  b.ctx.TrackStamps = orig;
+  assert.ok(seen[0] >= 3, "the splice was tried on the seed loop");
+  const after = b.D.state();
+  assert.deepEqual(plain(after.design.pts), plain(before.design.pts), "the seed loop is not left on the sheet");
+  assert.equal(after.undo, before.undo, "no orphan seed undo entry");
+  assert.equal(b.D.applyStamp(-1, null, "corner"), true, "an accepted first stamp still seeds and stamps");
+  assert.ok(b.D.state().design.pts.length >= 3);
+  assert.equal(b.D.state().undo, before.undo + 1, "seed and stamp are one undo entry");
+});
+
+test("bridge panel measures the lap once per loop, not on every commit that keeps pts (#7317 row 6)", () => {
+  const { panel, ctx } = bootBridgePanel();
+  const orig = ctx.TrackValidate; let builds = 0;
+  ctx.TrackValidate = Object.assign({}, orig, { build: (d) => { builds++; return orig.build(d); } });
+  const d = design();
+  panel.refresh({ design: d, sel: 3 });
+  assert.equal(builds, 1, "the first refresh measures the lap");
+  panel.refresh({ design: Object.assign({}, d, { bridges: [{ s: 0.4, halfM: 160, rise: 8 }] }), sel: 3 });
+  panel.refresh({ design: Object.assign({}, d, { heights: d.pts.map(() => 0) }), sel: 4 });
+  assert.equal(builds, 1, "a bridge or height commit keeps pts and skips the full build");
+  panel.refresh({ design: Object.assign({}, d, { pts: d.pts.map((p) => [p[0] * 1.1, p[1] * 1.1]) }), sel: 3 });
+  assert.equal(builds, 2, "a new loop is measured again");
+  ctx.TrackValidate = orig;
+});
