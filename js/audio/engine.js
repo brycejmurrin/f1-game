@@ -2181,11 +2181,11 @@ var GameAudio = (function () {
     const idle = (typeof PhysicsConsts !== "undefined" && PhysicsConsts.IDLE_RPM) || 5000;
     const max = (typeof PhysicsConsts !== "undefined" && PhysicsConsts.MAX_RPM) || 15000;
     const rev = clamp01(((player.rpm || idle) - idle) / Math.max(1, max - idle));
-    setEngine(rev, 0, false, 0, player.gear, {
-      slip: 1, ax: 0, onKerb: false, wet: !!o.wet, tow: 0,
-      deploy: 0, energy: player.energy ?? 1, ersDeploy: player.ersDeploy ?? 0.5,
-    });
+    const a = _gridArg;   // one record rewritten in place (the _scrubArg pattern): this runs every countdown step
+    a.wet = !!o.wet; a.energy = player.energy ?? 1; a.ersDeploy = player.ersDeploy ?? 0.5;
+    setEngine(rev, 0, false, 0, player.gear, a);
   }
+  const _gridArg = { slip: 1, ax: 0, onKerb: false, wet: false, tow: 0, deploy: 0, energy: 1, ersDeploy: 0.5 };
 
   // INSTANT REPLAY (pause menu). tickBody's paused branch returns before the
   // race block that feeds setEngine/setRivals, so a scrubbed replay played in

@@ -40,6 +40,7 @@ const RenderRate = (function () {
   // The menus' vsync interval (GOVERNOR-RATIONALE §gov-43).
   const VSYNC_MIN_MS = 4, VSYNC_CREEP = 0.0005;
   let vsyncMs = 16.7;
+  let skipMs = 0;            // the bare vsync: the rAF interval after a SKIPPED rAF (0 = none seen)
   let fast = 0;
   let half = false;          // auto-mode: the display is fast enough to halve
   let phase = 0;
@@ -63,7 +64,7 @@ const RenderRate = (function () {
     if (!mobile) {
       try { setDesktopTarget(localStorage.getItem("apex26.desktopFpsTarget")); } catch (_) { /* use display refresh */ }
     }
-    credit = 0; live = 0; sCredit = 1; vsyncMs = 16.7;
+    credit = 0; live = 0; sCredit = 1; vsyncMs = 16.7; skipMs = 0;
     ema = 16.7; fast = 0; half = false; phase = 0; accDt = 0; accMs = 0; skipped = 0; drawn = 0; last = true;
   }
 
@@ -130,6 +131,13 @@ const RenderRate = (function () {
     if (!racing && !presenting && ms > 0 && ms <= MAX_SANE_MS && Math.abs(ms - ema) < ema * 0.2)   // a steady cadence, not a catch-up burst
       { const c = Math.max(VSYNC_MIN_MS, ms, ema); vsyncMs = c < vsyncMs ? c : vsyncMs + (c - vsyncMs) * VSYNC_CREEP; }
     targetBudgetMs = desktop ? 1000 / desktop : 0;
+    // A gated phone (half, or a 45/30 tier) draws at a cadence slower than its vsync: judge a drawn
+    // frame against that cadence, not the bare vsync the cheap frames pulled the floor to (#7402).
+    if (!last && ms > 0 && ms <= MAX_SANE_MS) skipMs = skipMs ? skipMs + (ms - skipMs) * EMA_A : ms;
+    if (!desktop && racing && !presenting && active()) {
+      const tier = tierRate();
+      targetBudgetMs = tier ? 1000 / tier : 2 * (skipMs || vsyncMs);
+    }
     if (!(ms > 0) || ms > MAX_SANE_MS) {
       accDt = 0; accMs = 0; credit = 0;
       const step = Number.isFinite(dt) && dt > 0 ? dt : 0;

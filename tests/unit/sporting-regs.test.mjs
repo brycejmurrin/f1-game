@@ -303,7 +303,7 @@ test("game.js hands the pass watch its stricken-car predicate", () => {
   assert.match(src, /blueWatch\.tick\(player, ranked/);
   assert.match(src, /blueWatch\.reset\(\)/);
   assert.match(src, /jumpStartPenalty\.tickAtGreen\(c\)/);
-  assert.match(src, /jumpStartPenalty\.tickReaction\(c\)/);
+  assert.match(src, /jumpStartPenalty\.tickReaction\(cars\[i\]\)/);
   assert.match(src, /JumpStartPenalty\.create\(G/);
   const jmp = readFileSync(join(ROOT, "js/race/jump-start-penalty.js"), "utf8");
   assert.match(jmp, /SportingRegs\.jumpStartEarlyThrottle/);
