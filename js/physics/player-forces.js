@@ -117,7 +117,10 @@ const PlayerForces = (function () {
     // transfer still uses faded axEstSm (no fake unload at vmax).
     // vStd via G.vTop: pace-scaled threshold for the THR_VK / |v| term.
     const vAbs = Math.abs(c.speed);
-    const vStdNow = vAbs * (PC.VMAX || 72) / Math.max(vTopNow, 0.05);
+    // One floored divisor for every vTopNow ratio below (#7399 row 13): a no-op on
+    // every reachable value (vTop() floors PACE at 0.05), a finite answer at 0.
+    const vTopSafe = Math.max(vTopNow, 0.05);
+    const vStdNow = vAbs * (PC.VMAX || 72) / vTopSafe;
     // BRAKING WINS over the throttle, exactly as it does in game.js's speed
     // integrator and axEstTarget: a held pedal (auto-throttle, tilt/touch, or W
     // under the brake) makes no drive thrust while braking, so it must not
@@ -128,7 +131,7 @@ const PlayerForces = (function () {
       ? clamp(THR_VK / Math.max(vStdNow, 1), THR_FLOOR, THR_CAP)
           * (c.human ? throttleLvl : 1) * gearMult + Math.max(0, deploy) / LONG_GRIP
       : 0;
-    const longBudget = LONG_GRIP * weatherGrip;
+    const longBudget = Math.max(LONG_GRIP * weatherGrip, 1e-6);   // divided below; > 0.3 in play (#7399 row 13)
     const decel = Math.max(0, -(c.axEstSm ?? 0));
     const cdNow = COAST_DRAG * (1 - coastCut * (c.aeroX || 0));
     // The pedal's share of a deceleration: 0 while coasting (engine braking
@@ -158,7 +161,7 @@ const PlayerForces = (function () {
     // loss of grip at exactly the speed where aero load is doing the most work.
     // ...and the same wake penalty the AI pays (dirtyAirMul): following costs
     // downforce for everyone, or the assist is a cheat in one direction.
-    const aeroGrip = (1 + DOWNFORCE * aeroDf * Math.min(1, (vAbs / vTopNow) ** 2))
+    const aeroGrip = (1 + DOWNFORCE * aeroDf * Math.min(1, (vAbs / vTopSafe) ** 2))
       * dirtyMul;
     c._dirtyAirMul = dirtyMul;      // read-only coach evidence: actual applied wake multiplier
     c._coachAssisted = Math.abs(assistDelta) + Math.abs(lineDelta) > 1e-6;
@@ -169,7 +172,7 @@ const PlayerForces = (function () {
     const dmg = ctx.damage;
     let dmgF = 1, dmgR = 1;
     if (dmg) {
-      const load = DOWNFORCE * aeroDf * Math.min(1, (vAbs / vTopNow) ** 2);
+      const load = DOWNFORCE * aeroDf * Math.min(1, (vAbs / vTopSafe) ** 2);
       dmgF = (1 + load * dmg.aeroF) / (1 + load) * dmg.grip;
       dmgR = (1 + load * dmg.aeroR) / (1 + load) * dmg.grip;
     }
