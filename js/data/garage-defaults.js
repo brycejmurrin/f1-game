@@ -109,7 +109,6 @@ const GarageDefaults = (function () {
     has: (k) => Object.prototype.hasOwnProperty.call(DEF, k),
     get: (k) => copy(DEF[k]),
     keys: () => Object.keys(DEF),
-    meta: () => META,
     file,
   });
 })();

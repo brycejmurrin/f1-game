@@ -99,14 +99,20 @@ const TrackSceneryData = (function () {
   // list, took `i % 0` = NaN into the colour lookup) for that circuit alone.
   // The theme row is the base; the circuit's row overrides field by field, and
   // an empty resolved palette keeps the theme's.
+  // The read fields are checked too (#7367): `kinds: []` took `% 0` into the
+  // kind pick, and a prototype name ("constructor") passed `table[n]`.
   function resolveCityStyle(raw, theme) {
     if (!raw) return null;
     const base = THEME_DEF[theme] || THEME_DEF.modern;
+    const arr = Array.isArray, r = raw;
     const pick = (names, table, dflt) => {
-      const out = (names || []).map((n) => table[n]).filter(Boolean);
+      const out = (arr(names) ? names : []).map((n) => Object.hasOwn(table, n) && table[n]).filter(Boolean);
       return out.length ? out : dflt;
     };
-    return Object.assign({}, base, raw, { neon: pick(raw.neon, NC, base.neon), dayPal: pick(raw.dayPal, DC, base.dayPal) });
+    const two = (v, d) => (arr(v) && v.length === 2 && v.every(Number.isFinite) ? v : d);
+    return Object.assign({}, base, r, { neon: pick(r.neon, NC, base.neon), dayPal: pick(r.dayPal, DC, base.dayPal),
+      kinds: arr(r.kinds) && r.kinds.length ? r.kinds : base.kinds, neonKinds: arr(r.neonKinds) ? r.neonKinds : base.neonKinds,
+      fh: two(r.fh, base.fh), bh: two(r.bh, base.bh), bias: Number.isFinite(r.bias) ? r.bias : base.bias });
   }
 
   const THEME_DEF = {

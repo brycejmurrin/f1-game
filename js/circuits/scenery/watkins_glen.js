@@ -8,19 +8,15 @@
   function (api) {
       const { K, lapBounds, out, MAT, n, pyMin, hash, every, anchor, vadd, onTrack, seat,
         pine, tree, bush, ridge, grandstandEx, spectatorHill, sponsorHoarding,
-        broadcastCompound, gantry, marshalPost, waterBand, terrainYAt, foundation,
+        broadcastCompound, gantry, marshalPost, waterBand, groundAt, foundation,
         indexSolid, fence, guardrail, tyreWall, groundPatch, modelGroup,
         addBox, addCyl, addFrustum, forestEdge, bakedModel } = api;
 
       // Sample the rendered ribbon under a footprint and lift the anchor so no
       // prim top sits under terrain (ground-audit bury). Same pattern as Vegas lots.
       const liftToTerrain = (a0, halfR, halfT) => {
-        let hi = a0.c[1];
-        for (const fr of [-halfR, 0, halfR]) for (const ft of [-halfT, 0, halfT]) {
-          const q = vadd(vadd(a0.c, a0.r, fr), a0.t, ft);
-          const g = terrainYAt(q[0], q[2]);
-          if (g != null && g > hi) hi = g;
-        }
+        const hi = Math.max(a0.c[1], groundAt(a0.c[0], a0.c[2], {
+          size: [2 * halfR, 2 * halfT], basis: [a0.r, a0.u, a0.t], pick: "hi", fallback: a0.c[1] }));
         const lift = hi - a0.c[1] > 0.03 ? hi - a0.c[1] + 0.04 : 0;
         return Object.assign({}, a0, { c: vadd(a0.c, a0.u, lift) });
       };
@@ -465,8 +461,7 @@
           for (let i = 0; i < CAMP_TENT_OFFSETS.boot.length; i++) {
             const [dr, dt] = CAMP_TENT_OFFSETS.boot[i];
             const p = vadd(vadd(a.c, a.r, dr), a.t, dt);
-            const gy = terrainYAt(p[0], p[2]);
-            const foot = [p[0], gy != null ? Math.min(gy, a.c[1] + 0.15) : p[1], p[2]];
+            const foot = [p[0], Math.min(groundAt(p[0], p[2], { fallback: p[1] }), a.c[1] + 0.15), p[2]];
             seat.prism(stage, foot, [4.4, 2.6, 5.4], cols[i % cols.length], b);
           }
           stage._mat = MAT.RUST;
@@ -493,8 +488,7 @@
         // (2026-11-18) the road here is ~12 m up a hill the pasture 92 m out
         // does not share, and a road-height anchor hung the silo 16 m up.
         const a0 = anchor(K(0.28), 1, 92), b = [a0.r, a0.u, a0.t];
-        const gyF = terrainYAt(a0.c[0], a0.c[2]);
-        const a = gyF == null ? a0 : Object.assign({}, a0, { c: [a0.c[0], gyF, a0.c[2]] });
+        const a = Object.assign({}, a0, { c: [a0.c[0], groundAt(a0.c[0], a0.c[2], { fallback: a0.c[1] }), a0.c[2]] });
         modelGroup("glen-dairy-farm", {
           center: vadd(a.c, a.u, 8), size: [28, 22, 48], basis: b,
         }, (stage) => {
@@ -506,8 +500,8 @@
           stage._mat = MAT.WOOD;
           seat.box(stage, vadd(vadd(a.c, a.t, -15.2), a.u, 6.5), [4.0, 1.4, 0.4], [0.36, 0.32, 0.28], b);
           stage._mat = MAT.CONCRETE;
-          const silo0 = vadd(a.c, a.r, 10), gyS = terrainYAt(silo0[0], silo0[2]);
-          const silo = gyS == null ? silo0 : [silo0[0], gyS, silo0[2]];
+          const silo0 = vadd(a.c, a.r, 10);
+          const silo = [silo0[0], groundAt(silo0[0], silo0[2], { fallback: silo0[1] }), silo0[2]];
           // Footing sunk 1 m: the pasture falls away under the silo, so a flush base hung 0.7 m off the grass.
           seat.cyl(stage, vadd(silo, a.u, -1), 2.6, 16, [0.30, 0.40, 0.34], 10, b);   // glazed tile
           stage._mat = MAT.METAL;
@@ -517,8 +511,7 @@
           for (let i = 0; i < 8; i++) {
             const p0 = vadd(vadd(a.c, a.r, -10), a.t, (i - 3.5) * 5);
             // Posts follow the pasture, which rises toward the road here; seat each one on the grass.
-            const g = terrainYAt(p0[0], p0[2]);
-            const p = g == null ? p0 : [p0[0], g - 0.3, p0[2]];
+            const p = [p0[0], groundAt(p0[0], p0[2], { fallback: p0[1] }) - 0.3, p0[2]];
             seat.box(stage, p, [0.2, 1.7, 0.2], [0.44, 0.38, 0.30], b);
             addBox(stage, vadd(p, a.u, 1.35), [0.14, 0.14, 5], [0.44, 0.38, 0.30], b);
           }
@@ -540,17 +533,15 @@
           for (let i = 0; i < CAMP_TENT_OFFSETS.climb.length; i++) {
             const [dr, dt] = CAMP_TENT_OFFSETS.climb[i];
             const p = vadd(vadd(a.c, a.r, dr), a.t, dt);
-            const gy = terrainYAt(p[0], p[2]);
-            const foot = [p[0], gy != null ? Math.min(gy, a.c[1] + 0.15) : p[1], p[2]];
+            const foot = [p[0], Math.min(groundAt(p[0], p[2], { fallback: p[1] }), a.c[1] + 0.15), p[2]];
             seat.prism(stage, foot, [5.0, 2.8, 6.0], cols[i % cols.length], b);
           }
           stage._mat = MAT.METAL;
           // Period travel trailers — rounded aluminium, ribbed along the body.
           for (const [dr, dt] of [[15, -13], [15, 12]]) {
             const p0 = vadd(vadd(a.c, a.r, dr), a.t, dt);
-            const gy = terrainYAt(p0[0], p0[2]);
             // Cap bury was from seating under a rising lip — clamp to anchor.
-            const y = gy != null ? Math.max(gy, a.c[1] - 0.1) : p0[1];
+            const y = Math.max(groundAt(p0[0], p0[2], { fallback: p0[1] }), a.c[1] - 0.1);
             const p = [p0[0], y, p0[2]];
             seat.box(stage, p, [2.8, 2.5, 7], [0.80, 0.80, 0.78], b);
             addFrustum(stage, vadd(p, a.u, 2.55), 1.4, 1.0, 0.6, [0.86, 0.86, 0.84], 6, b);
@@ -580,14 +571,10 @@
         modelGroup("glen-rv-camp", {
           center: vadd(a.c, [0, 1, 0], 2), size: [40, 16, 74], basis: b,
         }, (stage) => {
-          const lowest = (p, hw2, hl) => {
-            let y = Infinity;
-            for (const dr of [-hw2, hw2]) for (const dt of [-hl, 0, hl]) {
-              const q = vadd(vadd(p, r, dr), t, dt), g = terrainYAt(q[0], q[2]);
-              if (g != null && g < y) y = g;
-            }
-            return y;
-          };
+          // Lowest grass under the rig's footprint: foundation's 3x3 samples. The
+          // hand-rolled sampler read only the two long edges (2x3); the centre
+          // column can only seat a rig lower, never float it (parity exact, #7333).
+          const lowest = (p, hw2, hl) => groundAt(p[0], p[2], { size: [2 * hw2, 2 * hl], basis: b, pick: "lo" });
           for (let i = 0; i < RIGS.length; i++) {
             const [dr, dt, len] = RIGS[i], h = hash(i * 29 + 7);
             const p0 = vadd(vadd(a.c, r, dr), t, dt);
@@ -615,7 +602,7 @@
           // Two flagpoles between the rows — stars-and-stripes reduced to
           // a red/white field and a blue canton, both touching the pole.
           for (const [dr, dt] of [[-1, -9], [0, 16]]) {
-            const p0 = vadd(vadd(a.c, r, dr), t, dt), gy = terrainYAt(p0[0], p0[2]);
+            const p0 = vadd(vadd(a.c, r, dr), t, dt), gy = groundAt(p0[0], p0[2]);
             if (gy == null) continue;
             const foot = [p0[0], gy - 0.4, p0[2]];
             stage._mat = MAT.METAL;
@@ -662,7 +649,7 @@
           seat.box(stage, vadd(a.c, a.u, 4.55), [0.55, 0.3, 13.4], WEATHERED, b);
           // The toll / ticket booth off to one side: a small gabled clapboard hut.
           const booth = vadd(a.c, a.t, 11);
-          booth[1] = terrainYAt(booth[0], booth[2]) ?? booth[1];
+          booth[1] = groundAt(booth[0], booth[2], { fallback: booth[1] });
           seat.box(stage, booth, [3.2, 2.8, 3.2], [0.58, 0.56, 0.50], b);
           seat.box(stage, vadd(vadd(booth, a.r, -1.7), a.u, 1.4), [0.2, 1.1, 1.2], SIGN, b);  // service window
           stage._mat = MAT.ROOF;

@@ -98,6 +98,19 @@ test("future schemas are rejected before any normalization, including large vers
   }
 });
 
+// #7366: a freeMoney escrow stamps `taken: 0` so the met-brief refund pays back
+// nothing; the cleaner keeps that stamp and drops any other value.
+test("briefStake keeps a taken:0 stamp only on a paid-in escrow", () => {
+  const SM = load();
+  const clean = (stake) => JSON.parse(JSON.stringify(SM.migrateCareer({
+    v: SM.CAREER_V, flavour: "driver", team: "haas", money: 100, briefStake: stake }).briefStake));
+  const base = { year: 2026, round: 3, committed: true, escrow: 50 };
+  assert.deepEqual(clean({ ...base, taken: 0 }), { ...base, taken: 0 });
+  assert.deepEqual(clean({ ...base, taken: 50 }), base, "the paid default is not stamped");
+  assert.deepEqual(clean({ ...base, taken: "0" }), base);
+  assert.deepEqual(clean({ ...base, escrow: 0, taken: 0 }), { ...base, escrow: 0 }, "no escrow, no stamp");
+});
+
 test("digit-only string versions use their actual rung and malformed explicit versions are refused", () => {
   const SM = load();
   const current = {

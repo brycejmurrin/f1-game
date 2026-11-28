@@ -138,7 +138,9 @@ const TelemetryDrill = (function () {
       r.medal = medals(r) || j.medal;
       r.value = Math.max(r.value, r.analysis.window.loss);
       if (!S.solved || j.medal === "silver" || S.solved.medal !== "silver") S.solved = { window: r.analysis.window, medal: j.medal, total: r.analysis.total };
-      DrillCard.record(G.store, "telemetry|" + (r.variant || "classic"), r);
+      // finish() already saved this run: re-score it (n unchanged) and refresh the card's best/improved.
+      const saved = DrillCard.record(G.store, "telemetry|" + (r.variant || "classic"), r, true);
+      if (saved && saved.row) { r.best = saved.row.best; r.improved = !!(r.improved || saved.improved); }
     }
     const found = label(r.analysis.cause);
     r.verdict = !j.near ? "Not there: the gap grows fastest " + r.analysis.window.from + "–" + r.analysis.window.to + " m. Scrub again."

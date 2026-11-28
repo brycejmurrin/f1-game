@@ -397,7 +397,8 @@ const InputPadMenu = (function () {
 
   /* DESTRUCTIVE CONTROLS (W26): a paired phone may walk every menu, but reset/delete/import/
      erase/wipe/clear/remove/forget need a tap on this screen. data-destructive opts in ("false"
-     out); else id/class/name/aria-label/text are matched; a file picker always counts. */
+     out); else id/class/name/aria-label/text are matched, camelCase split first (the regex is /i,
+     so resetAll would glue the keyword to a letter, #7368); a file picker always counts. */
   const DESTRUCTIVE_RE = /(?:^|[^a-z])(reset|delete|del|import|erase|wipe|clear|remove|forget)(?![a-z])/i;
   function isDestructive(el) {
     if (!el || typeof el !== "object") return false;
@@ -407,7 +408,7 @@ const InputPadMenu = (function () {
     if (el.tagName === "INPUT" && String(el.type || "").toLowerCase() === "file") return true;
     const cls = typeof el.className === "string" ? el.className : "";
     const words = [el.id, cls, el.name, attr("aria-label"), el.textContent].filter((v) => typeof v === "string").join(" ");
-    return DESTRUCTIVE_RE.test(words);
+    return DESTRUCTIVE_RE.test(words.replace(/([a-z\d])([A-Z])/g, "$1 $2"));
   }
 
   return { create, isDestructive };

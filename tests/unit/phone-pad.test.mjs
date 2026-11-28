@@ -1438,6 +1438,7 @@ test("host(): a linked phone whose WIRE dies is hosted again on the SAME code; t
   pairs[1][0].close(); await settle();
   assert.equal(h.ctl.state().phase, "lost"); assert.equal(h.ui.lostN, 1);
   assert.match(h.ui.said.at(-1), /^!Phone disconnected/);
+  assert.equal(h.ctl.state().stats, null, "#7368 B3: a lost link reports no stats, like a rejected or re-hosted one");
   assert.equal(pairs.length, 2, "no room hosted again after a goodbye");
 
   // A re-link nobody answers ends when the room does (nostr HOST_TIMEOUT_MS): lost() once.

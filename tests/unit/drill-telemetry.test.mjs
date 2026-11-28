@@ -103,3 +103,23 @@ test("score: a crashed FIX IT run wins nothing back (review F1)", () => {
   assert.equal(r3.value, 0);
   assert.equal(T.medals({ ...r3, clean: false }), null);
 });
+
+test("THIS CORNER re-scores the run finish() saved: n stays 1, the card's best follows the pick (#7346 row 6)", () => {
+  const ctx = load(), T = vm.runInContext("TelemetryDrill", ctx);
+  vm.runInContext(readFileSync(abs("js/learn-drills/drill-card.js"), "utf8"), ctx, { filename: abs("js/learn-drills/drill-card.js") });
+  const disk = new Map(), store = { get: (k, d) => (disk.has(k) ? disk.get(k) : d), set: (k, v) => { disk.set(k, v); } };
+  const G = { player: null, raceT: 0 }, ref = trace();
+  T.score(G, { clean: true, seconds: 20 }, { ...ref });
+  const r = T.score(G, { clean: true, seconds: 20.3 }, { ...trace({ brakeAt: 580 }) });
+  Object.assign(r, { id: "telemetry", variant: "classic", medal: null });
+  // What registry.js finish() does with the run before the card shows.
+  const DrillCard = vm.runInContext("DrillCard", ctx), first = DrillCard.record(store, "telemetry|classic", r);
+  r.best = first.row.best; r.improved = first.improved;
+  const w = r.analysis.window;
+  const out = T.pick({ drills: () => ({ lastResult: () => r }), store }, (w.from + w.to) / 2, "brake");
+  assert.equal(out.medal, "silver");
+  const row = disk.get("learnMedals.v1")["telemetry|classic"];
+  assert.equal(row.n, 1, "one run, one count: the pick re-scores it");
+  assert.equal(row.medal, "silver");
+  assert.equal(r.best, row.best, "the card's best is the saved row's, not finish()'s stale one");
+});

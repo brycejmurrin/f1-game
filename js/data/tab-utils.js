@@ -14,6 +14,15 @@ const DataTabUtils = (function () {
     return team ? team.color : fallback;
   }
 
+  // A near-black team colour (luminance < 0.10) reads as a hole on the dark
+  // hub panel: swap in the team's second colour when it has one. One rule for
+  // STANDINGS' row bar and LIVE's code chip (Bryce's pick, #7422 row 4).
+  function teamShade(color, team) {
+    if (!color || !team || !team.color2) return color;
+    const lum = 0.2126 * color[0] + 0.7152 * color[1] + 0.0722 * color[2];
+    return lum < 0.10 ? team.color2 : color;
+  }
+
   function countsByDriver(entries) {
     const counts = {};
     entries.forEach(function (entry) {
@@ -47,6 +56,6 @@ const DataTabUtils = (function () {
   const LOCKOUT_MSG = "OpenF1's free feed pauses from 30 minutes before a session until 30 minutes after it ends. " +
     "Sessions already loaded on this device still open; live timing returns after the session.";
 
-  return { driverColor, countsByDriver, placeLabel, sessionSuffix, liveLockout, LOCKOUT_TITLE, LOCKOUT_MSG };
+  return { driverColor, teamShade, countsByDriver, placeLabel, sessionSuffix, liveLockout, LOCKOUT_TITLE, LOCKOUT_MSG };
 })();
 Object.freeze(DataTabUtils);

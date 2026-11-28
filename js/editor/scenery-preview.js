@@ -68,8 +68,8 @@ const DesignerSceneryPreview = (function () {
         if (onTrack(a.c[0], a.c[2], size[0] / 2 + 4)) return false;
         return add("water", a, size[0], size[2], c, ground, { angle: 0 });
       },
-      ridge: (x, z, y, a, len, w, h, c) => add("hill", { c: [x, y, z], r: [Math.cos(a), 0, Math.sin(a)] }, len, w * 2, c, ground),
-      mountain: (x, z, y, w, h, o = {}) => add("hill", { c: [x, y, z], r: [1, 0, 0] }, w, w * 0.7, o.rock || [0.4, 0.42, 0.4], ground, { snow: o.snowline < 1 }),
+      ridge: (x, z, y, a, len, w, h, c) => add("hill", { c: [x, y, z], r: [Math.cos(a), 0, Math.sin(a)] }, len, w, c, ground),
+      mountain: (x, z, y, w, h, o = {}) => add("hill", { c: [x, y, z], r: [1, 0, 0] }, w, w, o.rock || [0.4, 0.42, 0.4], ground, { snow: o.snowline < 1 }),
       house: (k, s, g, w, h, d, o = {}) => box("building", k, s, g, w, d, o.roof || o.wall || [0.60, 0.42, 0.32]),
       building: (k, s, g, w, h, d) => box("building", k, s, g, w, d, [0.58, 0.62, 0.66]),
       motorhome: (k, s, g, w, h, d, o = {}) => box("building", k, s, g, w, d, o.wall || [0.8, 0.82, 0.84]),

@@ -139,10 +139,13 @@ const SceneryStructures = (function () {
     // Continuous solid wall (concrete / pit wall) at clearance `gap` beyond the edge.
     const wall = (s0, s1, side, gap, h, col, thick, alt) => {
       const a = thick || 0.5;
-      if (alreadyLaid("wall", s0, s1, side, gap, `${a}|${h}|${(col || []).join(",")}`)) return;
+      // `alt` is part of the wall's identity: two runs that differ only in it
+      // are two walls, not a repeat (#7243 3d).
+      const altQ = alt || 0;
+      if (alreadyLaid("wall", s0, s1, side, gap, `${a}|${h}|${(col || []).join(",")}|${altQ}`)) return;
       ctx.noteSpan("wall", s0, s1, side, gap, { h });
       recordBarrier(s0, s1, side, gap);
-      let n = 0;
+      let slab = 0;   // not `n`: that is the node count in this scope
       along(s0, s1, 6, (k, spacing) => {
         const p = anchor(k, side, gap);
         if (SceneryGuards.refuseOnRoad(ctx, "wall", p.c[0], p.c[2], a / 2, () => `wall SUPPRESSED at k=${k} side=${side}: gap=${gap}`)) {
@@ -152,7 +155,7 @@ const SceneryStructures = (function () {
         const capCol = [wallCol[0] * 0.72, wallCol[1] * 0.72, wallCol[2] * 0.74];
         // `alt` (opt-in, metres): every other slab stands `alt` thicker, so slope-overlapped
         // neighbours never share a side plane (z-fight, coplanar-audit; TrackGeom.MIN_SEP).
-        const t = alt && (n++ & 1) ? a + alt : a;
+        const t = alt && (slab++ & 1) ? a + alt : a;
         ctx.instance(`wall|${t}|${h}|${wallCol.join(",")}`,
           { o: p.c, r: p.r, u: p.u, t: p.t, s: [1, 1, spacing] },
           (rec) => {
@@ -160,7 +163,7 @@ const SceneryStructures = (function () {
             rec.box([0, h, 0], [t * 1.1, 0.16, 1], capCol);            // coping rail on top
           },
           { kind: "wall", k, side });
-      }, `wall|${side}|${gap}|${a}|${h}|${(col || []).join(",")}`);
+      }, `wall|${side}|${gap}|${a}|${h}|${(col || []).join(",")}|${altQ}`);
     };
     const kitOf = ctx.kitOf;
 
@@ -583,9 +586,9 @@ const SceneryStructures = (function () {
       const POLE_LAT = 1.12;
       const polePos = vadd(p.c, p.r, side * POLE_LAT), panelAt = vadd(polePos, p.u, 3.3);
       const panel = vadd(vadd(vadd(panelAt, p.t, 0.525), p.u, 0.31), p.r, -side * 0.12);
-      ctx.note("marshalPost", [p.c[0], p.c[1] + 1.2, p.c[2]], [1.2, 2.4, 1.2], { k, side, panel });
+      const postRec = ctx.note("marshalPost", [p.c[0], p.c[1] + 1.2, p.c[2]], [1.2, 2.4, 1.2], { k, side, panel });
       const roof = (opts && opts.roofCol) || [0.95, 0.55, 0.08];
-      ctx.instance(`marshalPost|${st}|${side}|${roof.join(",")}`,
+      const landed = ctx.instance(`marshalPost|${st}|${side}|${roof.join(",")}`,
         { o: p.c, r: p.r, u: p.u, t: p.t }, (rec) => {
         // Explicit mat 0: an unstamped op inherited whatever a circuit closure
         // left in out._mat (zandvoort's stage: METAL/FABRIC) inline, while the
@@ -669,6 +672,9 @@ const SceneryStructures = (function () {
           rec.box([0, 0, 0], st === "container" ? [2.7, 0.2, 5.7] : [3.0, 0.2, 3.0], conc);
         }
       }, { kind: "marshalPost", k, side });
+      // A hut the graph dropped whole ships nothing: no record, no panel, no
+      // lamp and no blockAt for a car to stop at in empty air (#7243 3a).
+      if (!landed) { if (ctx.unnote) ctx.unnote(postRec); return; }
       flagQuad(panelAt, p.t, p.u, 1.05, 0.62, MARSHAL_PANEL, true);
       if (NIGHT) addBox(out, vadd(polePos, p.u, 4.12), [0.24, 0.24, 0.24], [1.32, 0.72, 0.28], b);
       // Solid hut, stopped at its INNER FACE, over at least one node either

@@ -513,3 +513,23 @@ test("an unrelated F1API.cancelAll() with the hub open retries the step instead 
   const parsed = JSON.parse(jsonFiles(unzip(await out.blob.arrayBuffer()))[0].data.toString("utf8"));
   assert.ok(Object.keys(parsed.circuits).length > 0);
 });
+
+// #7313 R2: the tryMeeting catch read e.status unguarded, so a null or
+// undefined rejection threw a TypeError there and ended the whole gather
+// instead of skipping the circuit and retrying it in the missed pass.
+test("a null rejection skips the circuit and the missed pass retries it", async () => {
+  let rejected = 0;
+  const out = await runExport(openF1Fetch(), (harness) => {
+    const api = harness.context.F1API;
+    const real = api.sessionsForMeeting;
+    api.sessionsForMeeting = function (...args) {
+      if (rejected++ === 0) return Promise.reject(null);
+      return real.apply(this, args);
+    };
+  });
+  assert.equal(rejected > 1, true, "the missed pass asked again");
+  assert.ok(out.status.split("\n").includes("· skip Bahrain: null"), out.status);
+  assert.equal(out.download.disabled, false, "the gather completed");
+  const parsed = JSON.parse(jsonFiles(unzip(await out.blob.arrayBuffer()))[0].data.toString("utf8"));
+  assert.ok(Object.keys(parsed.circuits).length > 0);
+});

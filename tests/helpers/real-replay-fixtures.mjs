@@ -44,7 +44,7 @@ export function loadReplayBroadcast(ctx) {
 }
 
 export function transportReplay(extra = {}, { completeSubject = false } = {}) {
-  const ctx = vm.createContext({ M4: { clamp: (v, a, b) => Math.max(a, Math.min(b, v)) },
+  const ctx = vm.createContext({ M4: { clamp: (v, a, b) => Math.max(a, Math.min(b, v)) }, PaceMath: { V_FALLBACK: 80 },   // PaceMath.V_FALLBACK: the vTop() a G without one reads
     Log: { info() {}, warn() {}, debug() {} },
     CamModes: { CAM_MODES: ["cockpit", "side", "heli", "chase", "tcam", "cinematic", "low"].map((id) => ({ id })) },
     Tracks: { sample: (_track, s, out) => { out.p = [s, 0, 0]; out.t = [1, 0, 0]; out.r = [0, 0, 1]; out.hw = 7; } }, ...extra });
@@ -91,7 +91,7 @@ export function directRadioReplay() {
 // The replay puppets' engines are voiced from c.speed x c.replayRate -> c.rpm (game.js updateCar: realRace.owns -> rpmFor(naturalGear(v), v);
 // a retired car returns before that line and keeps whatever c.rpm it last had).
 export function audioHarness() {
-  const ctx = vm.createContext({ M4: { clamp: (v, a, b) => Math.max(a, Math.min(b, v)) },
+  const ctx = vm.createContext({ M4: { clamp: (v, a, b) => Math.max(a, Math.min(b, v)) }, PaceMath: { V_FALLBACK: 80 },   // PaceMath.V_FALLBACK: the vTop() a G without one reads
     Log: { info() {}, warn() {}, debug() {} }, PhysicsConsts: { IDLE_RPM: 5000, MAX_RPM: 15000 },
     CamModes: { CAM_MODES: [{ id: "cockpit" }, { id: "heli" }] },
     Tracks: { sample: (_track, s, out) => { out.p = [s, 0, 0]; out.t = [1, 0, 0]; out.r = [0, 0, 1]; out.hw = 7; } } });

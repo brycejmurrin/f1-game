@@ -43,9 +43,20 @@ const CareerPlanning = (function () {
       const p = c().briefStake;
       if (p.escrow === STAKE) return STAKE;
       if (!api().freeMoney() && c().money < STAKE) { p.committed = false; return 0; }
-      c().money -= api().freeMoney() ? 0 : STAKE;
+      const taken = api().freeMoney() ? 0 : STAKE;
+      c().money -= taken;
       p.escrow = STAKE;
+      if (!taken) p.taken = 0; // stamped only when it differs from the paid default
       return STAKE;
+    }
+    // What escrow actually took off the balance, paid back on a met brief beside
+    // the stake win. Under freeMoney nothing was taken, so nothing is refunded:
+    // paying stake * 2 there netted +100 instead of +50 (#7366). A save from
+    // before `taken` was stamped paid the stake.
+    function refund(r) {
+      const p = c() && c().briefStake;
+      if (!stake(r) || p.escrow !== STAKE) return 0;
+      return p.taken === 0 ? 0 : STAKE;
     }
     function comparison() {
       const raw = ctx.raw();
@@ -147,7 +158,7 @@ const CareerPlanning = (function () {
       return sp && sp.end === c().season.round - 1 && (c().paidSponsors || []).includes(sp.idx) ? sp : null;
     }
     return { protection: ctx.protection, adopt: ctx.adopt, comparison, factory, cash, transition,
-      stake, stakeShort, chooseStake, escrow, sponsorOffers, chooseSponsor, lastSponsor };
+      stake, stakeShort, chooseStake, escrow, refund, sponsorOffers, chooseSponsor, lastSponsor };
   }
   // STAKE stays module-local (remapWeekend / create stake helpers).
   return { create, protect, missing, remapWeekend };

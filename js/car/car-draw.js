@@ -74,10 +74,13 @@ const CarDraw = (function () {
       if (!st) { st = new Map(); _lruStamp.set(order, st); }
       if (cache[key]) { st.set(key, ++_lruTick); return cache[key]; }
       const mesh = create();
+      // A null create (lost context) is not cached: its key would re-push onto
+      // `order` on every miss, and the duplicates could evict a live entry (#7365).
+      if (!mesh) return mesh;
       cache[key] = mesh;
       order.push(key);
       st.set(key, ++_lruTick);
-      const free = freeOne || ((m) => { if (m) freeBodyPair(m); });
+      const free = freeOne || freeBodyPair;   // freeBodyPair skips a null itself
       while (order.length > max) {
         let oi = 0, ot = Infinity;
         for (let i = 0; i < order.length; i++) {
@@ -915,6 +918,9 @@ const CarDraw = (function () {
           _decalTexBytes[key] = atlasBytes(canvas);
         }
         catch (e) {
+          // A texture made (or taken from the draft spares) before the throw is
+          // ours to free; never cache it half-built (#7365).
+          if (t) G.gfx.freeTexture(t), t = null;
           // Swallowed AND cached as null before: one transient miss stripped that
           // team's numbers/sponsors for the session, unlogged. Log and retry — but
           // this runs per drawn car per FRAME, so cache the null after 3 tries.
@@ -1863,12 +1869,7 @@ const CarDraw = (function () {
     const wheelMeshOrder = [];
     function freeWheelPair(m) {
       if (!m) return;
-      if (G.gfx.freeMesh) {
-        if (m.F) G.gfx.freeMesh(m.F);
-        if (m.R) G.gfx.freeMesh(m.R);
-        if (m.FFixed) G.gfx.freeMesh(m.FFixed);
-        if (m.RFixed) G.gfx.freeMesh(m.RFixed);
-      }
+      if (G.gfx.freeMesh) for (const k of ["F", "R", "FFixed", "RFixed"]) if (m[k]) G.gfx.freeMesh(m[k]);
     }
     function getPlayerWheelMeshes(car) {
       const team = car.team;
