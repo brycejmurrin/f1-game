@@ -219,3 +219,32 @@ test("apply returns one pooled bag (no per-tick allocation)", () => {
   assert.equal(a, b);
   assert.equal(b, c);
 });
+
+// #7399 row 14: a disengaged exit used to hand back the old capSm, so re-enabling
+// GRIP STEER at speed eased out of a stale cap for ~0.1 s instead of re-seeding.
+test("every disengaged exit resets capSm, so a re-engage re-seeds at the live cap (#7399 row 14)", () => {
+  const st = { speed: 45, vLat: 0, yawRate: 0, muF: 22, csFront: 130, af: 1.3, ar: 1.5, braking: false, shaped: 1, dt: 1 / 60 };
+  const stale = 0.01;
+  assert.equal(GS.apply(0.7, { ...st, capSm: stale }, 0).capSm, 0, "strength 0 exit");
+  assert.equal(GS.apply(0.7, { ...st, speed: 0, capSm: stale }, 1).capSm, 0, "rest exit");
+  assert.equal(GS.apply(0.7, { ...st, speed: 1, capSm: stale }, 1).capSm, 0, "below-V_LO exit");
+  const fresh = GS.apply(0.7, { ...st, capSm: 0 }, 1).capSm;
+  const afterOff = GS.apply(0.7, { ...st, capSm: GS.apply(0.7, { ...st, capSm: stale }, 0).capSm }, 1).capSm;
+  assert.equal(afterOff, fresh, "re-engage after OFF matches a fresh seed");
+});
+
+test("forPlayer at OFF clears the car's smoothed cap (#7399 row 14)", () => {
+  const opts = { muF: 22, csFront: 130, af: 1.3, ar: 1.5, braking: false, shaped: 1, dt: 1 / 60 };
+  const mk = () => ({ vLat: 0, yawRateCur: 0, speed: 45, gripSteerCapSm: 0 });
+  GS.setLevel(10);
+  const ref = mk();
+  const want = GS.forPlayer(0.7, ref, opts);
+  const c = mk();
+  c.gripSteerCapSm = 0.01;                 // stale cap from an earlier engaged spell
+  GS.setLevel(1);
+  assert.equal(GS.forPlayer(0.7, c, opts), 0.7, "OFF stays identity");
+  assert.equal(c.gripSteerCapSm, 0, "OFF drops the stale cap");
+  GS.setLevel(10);
+  assert.equal(GS.forPlayer(0.7, c, opts), want, "first frame back on matches a fresh car");
+  GS.setLevel(1);
+});
