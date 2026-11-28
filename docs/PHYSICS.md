@@ -1379,6 +1379,7 @@ into a copy of `player-forces.js` and require red). Files with hits that are not
 - `js/learn-drills/grip.js` — **surface** — the same one-shot `begin()` placement.
 - `js/learn-drills/harvest.js` — **surface** — the same one-shot `begin()` placement.
 - `js/learn-drills/lines.js` — **surface** — the same one-shot `begin()` placement.
+- `js/learn-drills/sim-drill.js` — **surface** — the same one-shot placement of the strategy drills' AI car (`place()`, run by `begin()` and each round's restaging); the player's car is parked, no steer.
 - `js/learn-drills/taper.js` — **surface** — the same one-shot `begin()` placement.
 - `js/learn-drills/telemetry.js` — **surface** — the same one-shot `begin()` placement.
 - `js/learn-drills/torque.js` — **surface** — the same one-shot `begin()` placement.

@@ -2526,7 +2526,7 @@ async function startRaceBody() {
   if (aeroDrill) {
     const rival = cars.find(c => c !== player && c.team === player?.team) || cars.find(c => c !== player);
     cars = [rival, player].filter(Boolean);
-    lapsTarget = 1;
+    lapsTarget = aeroDrill.d.setup.laps || 1;
   } else if (isQuali()) {
     // Keep the full field for the qualifying simulation. The player drives one lap.
     qualiField = cars;
