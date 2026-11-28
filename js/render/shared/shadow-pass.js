@@ -263,7 +263,7 @@ const ShadowPass = (function () {
       // of shadow texels (sBox/4 is SHADOW_SIZE/8 texels for any pow-2 map size).
       // A world-XZ grid with an unsnapped camera HEIGHT does not match the
       // sun-rotated texel grid, so every recentre would re-rasterise all shadow
-      // edges at a new sub-texel phase — a visible shimmer/jump each 16 m.
+      // edges at a new sub-texel phase — a visible shimmer/jump each step (sBox/4).
       if (G.track) {
         const sd = frame.sunDir;
         const up = Math.abs(sd[1]) > 0.98 ? _upX : _upY;
@@ -356,7 +356,7 @@ const ShadowPass = (function () {
           // Half-size box (default ±80 m / 160 m) snapped around the anchor;
           // sampleShadow fades shadows out by ANCHOR distance (uShadowCtr) well
           // inside its border. Bigger = more reach, smaller = crisper contacts
-          // (texel density = 2048/box).
+          // (texel density = sun map size / box: tlx-shadow.js sunMapSize).
           M4.orthoTo(_mLProj, -sBox, sBox, -sBox, sBox, 1.0, SUN_FAR);
           M4.mulTo(_mLVP, _mLProj, _mLView);
           G.gfx.shadowBegin(_mLVP);

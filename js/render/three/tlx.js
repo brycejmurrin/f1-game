@@ -349,7 +349,7 @@ const TLX = (function () {
       try {
         if (navigator.gpu && navigator.gpu.requestAdapter) {
           // The boot probe's adapter when it resolved one (renderer-boot.js): one GPU-process round trip fewer.
-          const ad = (opts && opts.adapter) || await navigator.gpu.requestAdapter(); checkInit();
+          const ad = (opts && opts.adapter) || await navigator.gpu.requestAdapter();
           _gpuAdapterOk = !!ad;
           if (ad) {
             const info = ad.info || null;
@@ -387,6 +387,7 @@ const TLX = (function () {
           }
         }
       } catch (_) { _softAdapter = false; /* sniff is best-effort; AUTO still tries WebGPU when gpu exists */ }
+      checkInit();   // outside the try: the sniff's catch would swallow a superseded init's throw
       // `!_gpuAdapterOk`, not just `!_hasGpu`. The two differ exactly when
       // navigator.gpu exists but requestAdapter() resolves null, and on that
       // path three binds WebGL WITHOUT THROWING — so the catch below never
@@ -1878,8 +1879,8 @@ const TLX = (function () {
       // 4 x 1024 RGBA32F lampTex, 64 KB, for ~235 lamps. So for that upload
       // only, the image reports height = the baked lamp count rounded up to 64
       // rows: the GPU texture keeps its full size (an initialised DataTexture is
-      // never re-created), rows past the count were zeroed by the bake and no
-      // colour refresh writes them, and the shader's textureLoad addressing is
+      // never re-created), rows past the count are never read (the grid's indices
+      // reference only the packed lamps; the bake leaves stale rows) and no colour refresh writes them, and the shader's textureLoad addressing is
       // unchanged. onUpdate restores the full height after every upload, and no
       // shrink happens while a full-height upload is owed (the texture's
       // creation, or a bake — it rewrites every row), so both see 4 x LG_LAMPS.
@@ -4056,7 +4057,7 @@ const TLX = (function () {
           let fin;
           const job = _rigWarm = { recs: todo, mirror, finished: new Promise((r) => { fin = r; }),
             done: (ok) => { clearTimeout(job.timer); if (_rigWarm === job) _rigWarm = null; fin(); resolve(ok); } };
-          job.timer = setTimeout(() => job.done(false), 20000);   // no present came (hidden tab): race entry never waits on it
+          job.timer = setTimeout(() => { if (job.started) return; job.done(false); }, 20000);   // no present came (hidden tab): race entry never waits on it; a started warm resolves itself
         });
       }
       function _captureRec(mesh, model, opts) {

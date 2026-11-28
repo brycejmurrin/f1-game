@@ -187,3 +187,31 @@ test("post SSR diagnostics agree with uploaded road/car gates and required camer
     assert.equal(post.needsDepth(opts, frame), expected);
   }
 });
+
+// #7504 (hunt #7437 row 19): create()'s checkInit() ran inside the adapter-sniff try, whose catch swallowed a
+// superseded init's throw. The REAL sniff block runs over a stub navigator.gpu.
+const FROM = "      let _gpuAdapterOk = false;\n";
+const TO = "      checkInit();   // outside the try";
+function sniffBlock() {
+  const a = tlx.indexOf(FROM), b = tlx.indexOf(TO, a);
+  assert.ok(a > 0 && b > a, "tlx.js adapter sniff moved — check this test, not the code");
+  return tlx.slice(a, tlx.indexOf("\n", b));
+}
+
+async function runSniff({ superseded }) {
+  const navigator = { gpu: { requestAdapter: async () => ({ info: { isFallbackAdapter: true }, limits: null }) } };
+  const fn = new Function("navigator", "opts", "_phoneHw", "PostCommon", "checkInit", `"use strict";
+    return (async () => { let _softAdapter = false;
+${sniffBlock()}
+    return { _softAdapter, _gpuAdapterOk }; })();`);
+  const checkInit = () => { if (superseded) throw new Error("init superseded"); };
+  return fn(navigator, {}, false, { isSoftwareRenderer: () => false }, checkInit);
+}
+
+test("row 19: a superseded init's checkInit throw rejects the create instead of being swallowed by the sniff catch", async () => {
+  await assert.rejects(runSniff({ superseded: true }), /init superseded/);
+  const live = await runSniff({ superseded: false });
+  assert.deepEqual(live, { _softAdapter: true, _gpuAdapterOk: true }, "control: a live init keeps the sniff's verdict");
+  const tryBody = sniffBlock().slice(0, sniffBlock().indexOf("} catch (_) { _softAdapter = false;"));
+  assert.doesNotMatch(tryBody, /checkInit\(\)/, "no checkInit inside the sniff try");
+});
