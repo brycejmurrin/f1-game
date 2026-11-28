@@ -95,14 +95,6 @@ const RealReplay = (function () {
     }
     return best;
   }
-  /** World (x, z) of a feed point under a fit. */
-  function mapPoint(fit, x, y, out) {
-    const yy = fit.refl * y, cos = Math.cos(fit.th), sin = Math.sin(fit.th);
-    out = out || [0, 0];
-    out[0] = cos * x - sin * yy + fit.tx; out[1] = sin * x + cos * yy + fit.ty;
-    return out;
-  }
-
   // ── Traces (pure with Tracks): a feed trace → progress along the circuit ──
   /** raw: Float32Array [t, x, y, …] (t seconds from lights out; x, y feed metres).
    *  Returns {t, prog, x, n, end}: prog is the unwrapped arc length so a lap is
@@ -638,7 +630,7 @@ const RealReplay = (function () {
         if (discontinuous || c.rPrevPx === undefined) { c.rPrevPx = c.px; c.rPrevPz = c.pz; c.rPrevS = c.s; c.rPrevX = c.x; c.rPrevHead = c.head; }
         c.retired = at.ended; c.finished = false;
         if (at.ended) { f.parked = true; c.dnf = f.d && f.d.dnf ? "dnf" : null; idle(c); c.dnfAt = null; }
-        const v = at.speed / (G.vTop ? G.vTop() : 90);   // a fraction of the top speed: the tacho reads the real car's pace, whatever PACE the sim runs at
+        const v = at.speed / (G.vTop ? G.vTop() : PaceMath.V_FALLBACK);   // a fraction of the top speed: the tacho reads the real car's pace, whatever PACE the sim runs at
         c.gear = v > 0.7 ? 8 : v > 0.45 ? 6 : v > 0.2 ? 4 : 2;
         c.braking = false;
       }
@@ -754,6 +746,6 @@ const RealReplay = (function () {
     return api;
   }
 
-  return { create, fitFrame, mapPoint, trackTrace, buildTraces, sampleAt, highlightsFor, reelFor, fmtLap, LEAD_S, HOLD_S, ENDED_S };
+  return { create, fitFrame, trackTrace, buildTraces, sampleAt, highlightsFor, reelFor, fmtLap, LEAD_S, HOLD_S, ENDED_S };
 })();
 Object.freeze(RealReplay);

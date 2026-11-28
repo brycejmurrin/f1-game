@@ -404,7 +404,8 @@ const SaveMigrate = (function () {
     }) : null;
     const stake = career.briefStake;
     career.briefStake = stake && Number.isInteger(stake.year) && Number.isInteger(stake.round) && stake.round >= 0
-      ? { year: stake.year, round: stake.round, committed: stake.committed === true, escrow: stake.escrow === 50 ? 50 : 0 } : null;
+      ? { year: stake.year, round: stake.round, committed: stake.committed === true, escrow: stake.escrow === 50 ? 50 : 0,
+        ...(stake.escrow === 50 && stake.taken === 0 ? { taken: 0 } : {}) } : null;
     const picks = career.sponsorPicks;
     career.sponsorPicks = {};
     if (picks && typeof picks === "object" && !Array.isArray(picks))

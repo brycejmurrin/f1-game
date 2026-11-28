@@ -194,7 +194,10 @@ const TrackBuildClient = (function () {
     const hrefs = pageUrls(files);
     try { if (typeof ScriptLoader !== "undefined" && ScriptLoader.warm) ScriptLoader.warm(hrefs); }
     catch (_) { /* the worker still warms its own list */ }
-    try { worker.postMessage({ type: "init", files: hrefs, base: location.href }); }
+    // `build`: the page's build number, so the worker's Assets asks for the pack manifest
+    // under the same `?b=` key the page does (sw.js answers that stale-first; #7388).
+    const build = typeof window !== "undefined" && window ? Number(window.__APEX_BUILD) || 0 : 0;
+    try { worker.postMessage({ type: "init", files: hrefs, base: location.href, build }); }
     catch (e) { failed("init " + e.message); }
     return ready;
   }

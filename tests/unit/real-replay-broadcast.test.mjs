@@ -215,11 +215,11 @@ test("BROADCAST towerAt: pools rows and skips rebuild when the timing-line sampl
     const snap = host(a);
     const b = B.towerAt(script, T1);
     assert.equal(b, a, "same pooled array when the discrete sample is unchanged");
-    assert.equal(B.towerSample(script, T0), B.towerSample(script, T1), "sample key stable between crossings");
     assert.deepEqual(host(b), snap, "pooled rows keep the same tower content across a skipped rebuild");
+    // towerAt owns the one sample hash: no second, test-only copy that could drift from it (#7319 R5).
+    assert.equal(B.towerSample, undefined, "towerSample is not exported");
     // Advance past the next leader crossing: sample and content must move.
     const T2 = lead.lapStart[32] + 1;
-    assert.notEqual(B.towerSample(script, T0), B.towerSample(script, T2), "a new timing line changes the sample");
     const c = B.towerAt(script, T2);
     assert.equal(c, a, "still the module pool");
     assert.equal(c[0].lap, 32, "leader lap advances after the next crossing");
@@ -520,7 +520,7 @@ test("WATCH broadcast: the running order's speeds are the cars' own, whatever th
   // same two cars must read the same battle as at 1x (c.speed is the trace's m/s; the rate rides c.replayRate).
   const grab = (rate) => {
     let seen = null;
-    const ctx = vm.createContext({ M4: { clamp: (v, a, b) => Math.max(a, Math.min(b, v)) },
+    const ctx = vm.createContext({ M4: { clamp: (v, a, b) => Math.max(a, Math.min(b, v)) }, PaceMath: { V_FALLBACK: 80 },   // PaceMath.V_FALLBACK: the vTop() a G without one reads
       Log: { info() {}, warn() {}, debug() {} },
       CamModes: { CAM_MODES: [{ id: "cockpit" }, { id: "heli" }] },
       ReplayBroadcast: { create: () => new Proxy({}, { get: (_t, k) => (k === "tick" ? (_dt, st) => { seen = st; } : () => ({})) }) },

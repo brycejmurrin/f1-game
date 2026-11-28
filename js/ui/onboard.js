@@ -33,7 +33,7 @@ const Onboard = (function () {
     if (!p || p.deploying || (p.otT > 0)) return false;
     const e = p.energy;
     if (!(e > PACK_FULL)) return false;
-    const vT = vTopFn ? vTopFn() : 80;
+    const vT = vTopFn ? vTopFn() : PaceMath.V_FALLBACK;
     const v = p.speed || 0;
     if (v < vT * 0.35) return false;
     const thr = p.throttleDemand != null ? p.throttleDemand : 0;

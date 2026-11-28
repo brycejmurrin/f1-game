@@ -14,6 +14,9 @@ const { createGame } = require("../../tools/lib/game-vm.cjs");
 import { ROOT, FIXTURE, TOTAL_REAL, host, line, transportReplay } from "../helpers/real-replay-fixtures.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 
+// The feed→world transform trackTrace applies, as an independent oracle (RealReplay exports no single-point mapper, #7319 R6).
+const mapPoint = (fit, x, y) => { const yy = fit.refl * y, cos = Math.cos(fit.th), sin = Math.sin(fit.th); return [cos * x - sin * yy + fit.tx, sin * x + cos * yy + fit.ty]; };
+
 test("Russell's real lap lands on the game's Baku centreline: mirrored, turned, forward, 5.9 km", async () => {
   const g = await createGame({ track: "baku" });
   try {
@@ -30,7 +33,7 @@ test("Russell's real lap lands on the game's Baku centreline: mirrored, turned, 
     const raw = Float32Array.from(ex.rows.flatMap((r) => [r[0] / 1000, r[1] / 10, r[2] / 10]));
     const tr = R.trackTrace(track, fit, raw);
     assert.equal(tr.n, ex.rows.length);
-    const point = R.mapPoint(fit, raw[114 * 3 + 1], raw[114 * 3 + 2]);
+    const point = mapPoint(fit, raw[114 * 3 + 1], raw[114 * 3 + 2]);
     const nearest = vm.runInContext("Tracks", g.ctx).project(track, point[0], point[1]);
     let gapError = tr.prog[114] - nearest.s; gapError -= track.total * Math.round(gapError / track.total);
     assert.ok(Math.abs(gapError) < 3, "the recorded 1.381s interval recovers its position: " + gapError);
@@ -92,7 +95,7 @@ test("frame-fit spatial search preserves exhaustive nearest matches, ties, and t
   } finally { g.close(); }
 });
 
-test("trackTrace reuses one transform while mapPoint still observes mutable fits", () => {
+test("trackTrace reuses one transform per trace and reads the fit on every call", () => {
   const source = fs.readFileSync(path.join(ROOT, "js/race/real-replay.js"), "utf8");
   const calls = { sin: 0, cos: 0 }, math = Object.create(Math);
   for (const key of ["sin", "cos"]) math[key] = (x) => { calls[key]++; return Math[key](x); };
@@ -103,14 +106,14 @@ test("trackTrace reuses one transform while mapPoint still observes mutable fits
   const actual = R.trackTrace(track, fit, raw);
   assert.deepEqual(calls, { sin: 1, cos: 1 }, "one trig pair per trace, independent of sample count");
   const expected = Array.from({ length: actual.n }, (_, i) => {
-    const w = R.mapPoint(fit, raw[i * 3 + 1], raw[i * 3 + 2]);
+    const w = mapPoint(fit, raw[i * 3 + 1], raw[i * 3 + 2]);
     return project(track, w[0], w[1]);
   });
   assert.deepEqual(Array.from(actual.prog), Array.from(Float32Array.from(expected.map((p) => p.s))), "unchanged projection floats");
   assert.deepEqual(Array.from(actual.x), Array.from(Float32Array.from(expected.map((p) => p.lat))), "unchanged lateral floats");
-  const first = Array.from(R.mapPoint(fit, 123, 456));
   fit.th += 0.25;
-  assert.notDeepEqual(Array.from(R.mapPoint(fit, 123, 456)), first, "public single-point transforms do not cache mutable fit angles");
+  assert.notDeepEqual(Array.from(R.trackTrace(track, fit, raw).prog), Array.from(actual.prog), "a mutated fit angle is read on the next trace, not cached");
+  assert.equal(R.mapPoint, undefined, "no test-only single-point mapper is exported (#7319 R6)");
 });
 
 test("WATCH projection recovers telemetry gaps on straights, corners and the lap seam", () => {

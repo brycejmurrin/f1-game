@@ -7,7 +7,7 @@ import { absSrc } from "../helpers/abs-src.mjs";
 
 let ctx0 = null;
 function fixture({ rate = 1, commentary = false, reel = false, radio = false, sound = false, volume = 0.8 } = {}) {
-  const ctx = vm.createContext({ M4: { clamp: (v, a, b) => Math.max(a, Math.min(b, v)) },
+  const ctx = vm.createContext({ M4: { clamp: (v, a, b) => Math.max(a, Math.min(b, v)) }, PaceMath: { V_FALLBACK: 80 },   // PaceMath.V_FALLBACK: the vTop() a G without one reads
     Log: { info() {}, warn() {}, debug() {} },
     Audio: class { constructor() { this.paused = true; } play() { this.paused = false; return Promise.resolve(); } pause() { this.paused = true; } },
     window: { addEventListener(t, f) { ctx0.keyHandler = f; }, removeEventListener() {} },

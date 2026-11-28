@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { absSrc } from '../helpers/abs-src.mjs';
+import { withM4 } from '../helpers/mat4-vm.mjs';
 const moduleSource = readFileSync(new URL('../../js/garage/entrance-motion.js', import.meta.url), 'utf8');
 function load(dataSource = '') {
   const ctx = vm.createContext({});
@@ -46,7 +47,7 @@ const arrivalSource = readFileSync(new URL('../../js/garage/arrival.js', import.
 // Reusing identical compiled source across these VM contexts caches a stale typeof lookup.
 let arrivalContextId = 0;
 function arrivalContext(authored = true) {
-  const ctx = vm.createContext({});
+  const ctx = withM4(vm.createContext({}));
   vm.runInContext(crewSource, ctx, { filename: absSrc('js/garage/crew-draw.js') });
   if (authored) {
     vm.runInContext(source, ctx, { filename: absSrc('js/data/garage-entrance-motion.js') });

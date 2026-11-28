@@ -12,6 +12,7 @@ import { makeDom } from "../helpers/mini-dom.mjs";
 import { seedDom } from "../helpers/seed-dom.mjs";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { withM4 } from "../helpers/mat4-vm.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (name) => fs.readFileSync(path.join(ROOT, name), "utf8");
@@ -73,7 +74,7 @@ function bootPanelOnAudioInner(radioGlobals = null) {
     ...(radioGlobals || {}),
   };
   sb.window = sb;
-  const ctx = vm.createContext(sb);
+  const ctx = withM4(vm.createContext(sb));
   seedLog(ctx);
   seedDom(ctx);
   vm.runInContext(read("js/ui/setting-row.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/ui/setting-row.js") });

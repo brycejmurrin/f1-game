@@ -107,3 +107,20 @@ test("registry tick: a throwing sample does not propagate and drops the run", ()
   assert.equal(host.tick(), null);
   assert.equal(host.state().live, false);
 });
+
+// #7414 (ledger #7346 row 10): a keyup lost to a blur (alt-tab, a system sheet) left the drill's arrow held.
+test("Thumb: a window blur releases a held arrow key, and stop() removes the blur listener", () => {
+  const on = {};
+  const win = { addEventListener(t, f) { (on[t] ||= new Set()).add(f); }, removeEventListener(t, f) { on[t]?.delete(f); } };
+  const fire = (t, e = {}) => { for (const f of on[t] || []) f({ type: t, ...e }); };
+  const { ctx } = load(["js/ui/thumb-trainer.js", "js/learn-drills/thumb-drill.js"], { MenuQuitTail: { keepFlow() {} }, window: win });
+  const { G } = makeG();
+  assert.equal(ctx.ThumbDrill.launch(G), true);
+  fire("keydown", { key: "ArrowLeft" });
+  assert.equal(ctx.ThumbDrill.state().arrow, -1, "the arrow is held");
+  fire("blur");
+  assert.equal(ctx.ThumbDrill.state().arrow, 0, "the blur released it: no keyup will come");
+  ctx.ThumbDrill.stop();
+  assert.equal(on.blur.size, 0, "stop() removed the blur listener");
+  assert.equal(on.keydown.size + on.keyup.size, 0);
+});

@@ -28,6 +28,7 @@ import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { symbolSource } from "../helpers/game-source.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { withM4 } from "../helpers/mat4-vm.mjs";
 import { announceLife } from "../helpers/announce-life.mjs";
 // VM timers are UNREF'd: they still fire while a test awaits, but a cue the
 // module schedules seconds ahead no longer holds the process open after the
@@ -59,7 +60,7 @@ function load({ api = true, voices = [], stored = {} } = {}) {
   const synth = api ? synthStub({ voices }) : null;
   ctx.window = api ? { speechSynthesis: synth, SpeechSynthesisUtterance: function (t) { this.text = t; } } : {};
   ctx.GameAudio = { setRadioDuck() {} };
-  vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: absSrc("js/audio/radio-voice.js") });
+  withM4(ctx); vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: absSrc("js/audio/radio-voice.js") });
   const RV = vm.runInContext("RadioVoice", ctx);
   const G = { soundOn: true, state: "race", store: { get: (k, d) => (saved.has(k) ? saved.get(k) : d), set: (k, v) => saved.set(k, v) } };
   return { RV, G, synth, saved, ctx };
@@ -472,7 +473,7 @@ function loadWithSynth(synth) {
   seedLog(ctx);
   ctx.window = { speechSynthesis: synth, SpeechSynthesisUtterance: function (t) { this.text = t; } };
   ctx.GameAudio = { setRadioDuck(on) { ducks.push(!!on); } };
-  vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: absSrc("js/audio/radio-voice.js") });
+  withM4(ctx); vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: absSrc("js/audio/radio-voice.js") });
   const RV = vm.runInContext("RadioVoice", ctx);
   const G = { soundOn: true, state: "race", store: { get: (k, d) => (k === "radioVoice" ? true : d), set: () => {} } };
   return { voice: RV.create(G), ducks };
@@ -533,7 +534,7 @@ test("an engine that ends an utterance inside speak() releases ownership without
   seedLog(ctx);
   ctx.window = { speechSynthesis: synth, SpeechSynthesisUtterance: function (t) { this.text = t; } };
   ctx.GameAudio = { setRadioDuck(on) { ducks.push(!!on); } };
-  vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: absSrc("js/audio/radio-voice.js") });
+  withM4(ctx); vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: absSrc("js/audio/radio-voice.js") });
   const RV = vm.runInContext("RadioVoice", ctx);
   const voice = RV.create({ soundOn: true, state: "race",
     store: { get: (k, d) => (k === "radioVoice" ? true : d), set: () => {} } });
@@ -618,7 +619,7 @@ test("LAZY_AUDIO: after the inert stub, create() re-primes on the next valid ges
   ctx.MutationObserver = function () { this.observe = () => {}; };
   ctx.GameAudio = { setRadioDuck() {} };
   vm.runInContext(read("js/ui/platform-session.js"), ctx, { filename: absSrc("js/ui/platform-session.js") });
-  vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: absSrc("js/audio/radio-voice.js") });
+  withM4(ctx); vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: absSrc("js/audio/radio-voice.js") });
   const RV = vm.runInContext("RadioVoice", ctx);
   const G = { soundOn: true, state: "race", store: { get: (_k, d) => d, set: () => {} } };
 
@@ -665,7 +666,7 @@ test("debug() separates what we asked for from what the engine started", async (
   seedLog(ctx);
   ctx.window = { speechSynthesis: synth, SpeechSynthesisUtterance: function (t) { this.text = t; } };
   ctx.GameAudio = { setRadioDuck() {} };
-  vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: absSrc("js/audio/radio-voice.js") });
+  withM4(ctx); vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: absSrc("js/audio/radio-voice.js") });
   const RV = vm.runInContext("RadioVoice", ctx);
   const voice = RV.create({ soundOn: true, state: "race",
     store: { get: (k, d) => (k === "radioVoice" ? true : d), set: () => {} } });
@@ -785,7 +786,7 @@ test("a preempt during the cue cancels the line waiting behind it", () => {
   const synth = synthStub({ voices: [{ name: "A", lang: "en-GB", localService: true }] });
   ctx.window = { speechSynthesis: synth, SpeechSynthesisUtterance: function (t) { this.text = t; } };
   ctx.GameAudio = { setRadioDuck() {} };
-  vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: absSrc("js/audio/radio-voice.js") });
+  withM4(ctx); vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: absSrc("js/audio/radio-voice.js") });
   const saved = new Map([["radioVoice", true]]);
   const v = vm.runInContext("RadioVoice", ctx).create({
     soundOn: true, state: "race",
@@ -902,7 +903,7 @@ test("the pause card and a hidden tab cut the SPOTTER channel too, not only the 
     addEventListener: (t, fn) => { listeners[t] = fn; },
   };
   ctx.MutationObserver = function (fn) { this.observe = (el) => observers.push({ el, fn }); };
-  vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: absSrc("js/audio/radio-voice.js") });
+  withM4(ctx); vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: absSrc("js/audio/radio-voice.js") });
   const G = { soundOn: true, state: "race", store: { get: (k, d) => d, set() {} } };
   vm.runInContext("RadioVoice", ctx).create(G);
   const onPause = observers.find((o) => o.el === pause);
@@ -947,7 +948,7 @@ test("a rotate-block pause that re-hides the card in the same task still halts r
     addEventListener() {},
   };
   ctx.MutationObserver = function (fn) { this.observe = (el) => observers.push({ el, fn }); };
-  vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: absSrc("js/audio/radio-voice.js") });
+  withM4(ctx); vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: absSrc("js/audio/radio-voice.js") });
   const G = { soundOn: true, state: "race", store: { get: (k, d) => (k === "radioVoice" ? true : k === "radioPack" ? true : d), set() {} } };
   const v = vm.runInContext("RadioVoice", ctx).create(G);
   assert.equal(v.say("BOX BOX BOX", 3, "info", 0.5), true);
@@ -1387,7 +1388,7 @@ function gateRig() {
   ctx.window = { speechSynthesis: synthStub(), SpeechSynthesisUtterance: function (t) { this.text = t; } };
   ctx.GameAudio = { setRadioDuck() {} };
   ctx.VoicePack = { create: () => ({ stop() {}, remaining: () => 0, ensure() {}, ensureStaged() {}, raceLoadGate: (on) => gates.push(on) }) };
-  vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: absSrc("js/audio/radio-voice.js") });
+  withM4(ctx); vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: absSrc("js/audio/radio-voice.js") });
   let phase = "build";
   const G = { soundOn: true, state: "menu", loadingScreen: { phase: () => phase }, store: { get: (k, d) => d, set() {} } };
   const v = vm.runInContext("RadioVoice", ctx).create(G);
@@ -1471,7 +1472,7 @@ function packRig({ soundOn = true, state = "menu", phase = null } = {}) {
   ctx.GameAudio = { setRadioDuck() {} };
   ctx.VoicePack = { create: () => ({ stop() {}, remaining: () => 0, ensure() {}, raceLoadGate() {},
     ensureStaged: (tiers) => staged.push(JSON.stringify(tiers)) }) };
-  vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: absSrc("js/audio/radio-voice.js") });
+  withM4(ctx); vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: absSrc("js/audio/radio-voice.js") });
   const G = { soundOn, state, loadingScreen: { phase: () => phase }, store: { get: (k, d) => (k === "radioVoice" ? true : d), set() {} } };
   return { v: vm.runInContext("RadioVoice", ctx).create(G), G, staged };
 }

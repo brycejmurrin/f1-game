@@ -479,8 +479,8 @@ const Input = (function () {
     navUp: () => padMenu.remoteNav("up"), navDown: () => padMenu.remoteNav("down"),
     navLeft: () => padMenu.remoteNav("left"), navRight: () => padMenu.remoteNav("right"),
     // A PHONE may not press RESET / DELETE / IMPORT (InputPadMenu.isDestructive):
-    // those take a tap on this screen. The XR controllers are the local player.
-    navSelect: () => padMenu.activate(remoteOwner === "xr" ? null : remoteGuard),
+    // those take a tap on this screen. The XR controllers (origin "xr") are the local player.
+    navSelect: (o) => padMenu.activate((o || remoteOwner) !== "xr" && remoteGuard),
     navBack: () => { padMenu.escape(); },
   };
   function remoteGuard(el) {
@@ -488,13 +488,13 @@ const Input = (function () {
     if (typeof Log !== "undefined") Log.info("input", "phone SELECT refused on a destructive control: tap it on this screen");
     return true;
   }
-  function remoteEvent(kind) {
+  function remoteEvent(kind, o) {
     const fn = REMOTE_EDGES[kind];
     if (!fn) return false;
     const menuEdge = kind === "pause" || kind.startsWith("nav");
     if (!menuEdge && remoteDrivingBlocked()) return false;
     if (!menuEdge) noteInputSource(remoteOwner === "phone" || !remStick ? "phone" : "controller");
-    return fn() !== false;
+    return fn(o) !== false;
   }
   // Forget the current remote command without tearing down the paired transport.
   // reset() uses this on blur/visibility loss; the next fresh sample can take
@@ -1401,12 +1401,13 @@ const Input = (function () {
   }
   // innerWidth/innerHeight force a synchronous style + layout when the tree is dirty, and this ran on
   // every touchmove (touchCmd and updateDragAnchor) before the frame (B·H11 trace). The long edge only
-  // changes on resize / rotation, so read it then.
+  // changes on resize / rotation, so read it then. A 0×0 (hidden) frame's fallback is never cached (#7368).
   let _viewLong = 0;
   function viewLong() {
     if (!_viewLong) {
-      const win = typeof window !== "undefined" ? window : null;
-      _viewLong = Math.max((win && win.innerWidth) || 844, (win && win.innerHeight) || 390);
+      const win = typeof window !== "undefined" ? window : null, w = win && win.innerWidth, h = win && win.innerHeight;
+      if (!(w && h)) return Math.max(w || 844, h || 390);
+      _viewLong = Math.max(w, h);
     }
     return _viewLong;
   }

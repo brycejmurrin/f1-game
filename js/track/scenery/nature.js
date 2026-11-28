@@ -255,7 +255,15 @@ const SceneryNature = (function () {
       const leanQ = lean <= 0 ? 0 : Math.round(lean / 0.4) * 0.4;
       const s = h / PINE_REF_H;
       const o = [a.c[0] - a.u[0] * 0.5, a.c[1] - a.u[1] * 0.5, a.c[2] - a.u[2] * 0.5];
+      // A left-side pine leans away from the track, so its r flips; t flips
+      // WITH it (a half-turn about u, not a mirror) so the frame stays one
+      // handedness and both sides share one instanced batch (#7385 S5: the
+      // mirrored frame cost Monza and Montreal 9 extra batches each). The
+      // shapes are symmetric under t -> -t (every ring starts on +r and a
+      // 6- or 7-gon is closed under negating its angles; the lean is along
+      // r), so this draws the same triangles as the mirror did.
       const r = side < 0 ? [-a.r[0], -a.r[1], -a.r[2]] : a.r;
+      const t = side < 0 ? [-a.t[0], -a.t[1], -a.t[2]] : a.t;
       // COPLANAR GUARD. Pines on neighbouring nodes share (nearly) one basis,
       // so two trees' same-aspect tier cones have PARALLEL side facets
       // (|n.y| ~0.57, inside ground-audit's flat check), and in a dense belt
@@ -269,9 +277,9 @@ const SceneryNature = (function () {
       const facets = [];
       {
         const H = PINE_REF_H, w0 = (sparse ? 2.3 : 2.7) * jQ, dy = H * (sparse ? 0.24 : 0.18) * jQ;
-        const W = (m) => [o[0] + s * (r[0] * m[0] + a.u[0] * m[1] + a.t[0] * m[2]),
-                          o[1] + s * (r[1] * m[0] + a.u[1] * m[1] + a.t[1] * m[2]),
-                          o[2] + s * (r[2] * m[0] + a.u[2] * m[1] + a.t[2] * m[2])];
+        const W = (m) => [o[0] + s * (r[0] * m[0] + a.u[0] * m[1] + t[0] * m[2]),
+                          o[1] + s * (r[1] * m[0] + a.u[1] * m[1] + t[1] * m[2]),
+                          o[2] + s * (r[2] * m[0] + a.u[2] * m[1] + t[2] * m[2])];
         let y = H * 0.3 + 0.5;
         for (let i = 0; i < tiers; i++, y += dy) {
           const w = w0 * (1 - i * (sparse ? 0.24 : 0.21)), lx = leanQ ? leanQ * (y / H) * 1.6 : 0;
@@ -316,7 +324,7 @@ const SceneryNature = (function () {
       if (dz) { o[1] -= dz; for (const F of facets) F[3] -= dz * F[1]; }
       const landed = ctx.instance(
         `pine|${sparse ? 1 : 0}|${tiers}|${leanQ}|${jQ}`,
-        { o, r, u: a.u, t: a.t, s: [s, s, s], col },
+        { o, r, u: a.u, t, s: [s, s, s], col },
         (rec) => {
           const H = PINE_REF_H;
           rec.mat(MAT.WOOD);
@@ -517,8 +525,12 @@ const SceneryNature = (function () {
         }
       }
       const b = [a.r, a.u, a.t];
-      if (spotTaken(a.c[0], a.c[2])) return;   // reserve only the successful site
+      // CHECK the spot here; RESERVE it only once the trunk has landed, as
+      // pine() does (#5699): a trunk the pit guard refuses must not hold its
+      // TREE_GAP spot and block a neighbour that would have stood (#7243 3b).
+      if (spotOccupied(a.c[0], a.c[2], false)) return;
       const reserve = () => {
+        spotTaken(a.c[0], a.c[2]);
         const parts = partsAt(a).map(palmFootprint);
         const minX = Math.min(...parts.map((f) => f.c[0] - f.ex)), maxX = Math.max(...parts.map((f) => f.c[0] + f.ex));
         const minZ = Math.min(...parts.map((f) => f.c[2] - f.ez)), maxZ = Math.max(...parts.map((f) => f.c[2] + f.ez));
@@ -924,9 +936,9 @@ const SceneryNature = (function () {
         const riserC = vadd(vadd(a.c, a.u, up), a.r, side * back);
         if (rejBox(riserC, [1.3, 1.5, len], b)) continue;
         placed++;
-        ctx.instance(`crowd-riser|${riser.join(",")}`,
-          { o: riserC, r: a.r, u: a.u, t: a.t, s: [1, 1, len] },
-          (rec) => { rec.mat(MAT.CONCRETE); rec.box([0, 0, 0], [1.3, 1.5, 1], riser); },
+        ctx.instance("crowd-riser",
+          { o: riserC, r: a.r, u: a.u, t: a.t, s: [1, 1, len], col: riser },
+          (rec) => { rec.mat(MAT.CONCRETE); rec.box([0, 0, 0], [1.3, 1.5, 1], TrackGraph.NODE_COLOR); },
           { kind: "crowdRiser", k, side }, { unguarded: true });
         out._mat = MAT.FABRIC;
         // The seated crowd reaches ~0.35 m over the riser rejBox passed as

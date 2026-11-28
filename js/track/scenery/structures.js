@@ -139,10 +139,13 @@ const SceneryStructures = (function () {
     // Continuous solid wall (concrete / pit wall) at clearance `gap` beyond the edge.
     const wall = (s0, s1, side, gap, h, col, thick, alt) => {
       const a = thick || 0.5;
-      if (alreadyLaid("wall", s0, s1, side, gap, `${a}|${h}|${(col || []).join(",")}`)) return;
+      // `alt` is part of the wall's identity: two runs that differ only in it
+      // are two walls, not a repeat (#7243 3d).
+      const altQ = alt || 0;
+      if (alreadyLaid("wall", s0, s1, side, gap, `${a}|${h}|${(col || []).join(",")}|${altQ}`)) return;
       ctx.noteSpan("wall", s0, s1, side, gap, { h });
       recordBarrier(s0, s1, side, gap);
-      let n = 0;
+      let slab = 0;   // not `n`: that is the node count in this scope
       along(s0, s1, 6, (k, spacing) => {
         const p = anchor(k, side, gap);
         if (SceneryGuards.refuseOnRoad(ctx, "wall", p.c[0], p.c[2], a / 2, () => `wall SUPPRESSED at k=${k} side=${side}: gap=${gap}`)) {
@@ -152,7 +155,7 @@ const SceneryStructures = (function () {
         const capCol = [wallCol[0] * 0.72, wallCol[1] * 0.72, wallCol[2] * 0.74];
         // `alt` (opt-in, metres): every other slab stands `alt` thicker, so slope-overlapped
         // neighbours never share a side plane (z-fight, coplanar-audit; TrackGeom.MIN_SEP).
-        const t = alt && (n++ & 1) ? a + alt : a;
+        const t = alt && (slab++ & 1) ? a + alt : a;
         ctx.instance(`wall|${t}|${h}|${wallCol.join(",")}`,
           { o: p.c, r: p.r, u: p.u, t: p.t, s: [1, 1, spacing] },
           (rec) => {
@@ -160,7 +163,7 @@ const SceneryStructures = (function () {
             rec.box([0, h, 0], [t * 1.1, 0.16, 1], capCol);            // coping rail on top
           },
           { kind: "wall", k, side });
-      }, `wall|${side}|${gap}|${a}|${h}|${(col || []).join(",")}`);
+      }, `wall|${side}|${gap}|${a}|${h}|${(col || []).join(",")}|${altQ}`);
     };
     const kitOf = ctx.kitOf;
 
@@ -276,7 +279,11 @@ const SceneryStructures = (function () {
       // Hi keys name the side: the W-beam and the C-post face the road, so they are handed.
       const hiK = HI ? `|hi|${side}` : "";
       const postKey = `guardrail-post|${st}|${postCol.join(",")}` + hiK;
-      const railKey = `guardrail-rail|${st}|${railCol.join(",")}` + hiK;
+      // A rail drawn in railCol alone takes its tint from the node (NODE_COLOR), so every colour
+      // shares one model; a profile that mixes postCol or a shade of railCol keeps it in the key.
+      const railSolid = HI ? st === "cable" : st !== "safer";
+      const rc = railSolid ? TrackGraph.NODE_COLOR : railCol;
+      const railKey = `guardrail-rail|${st}` + (railSolid ? "" : `|${railCol.join(",")}`) + hiK;
       const d = -side;
       // The on-track margin must stay BELOW the gap: a post anchored at hw+gap
       // sits (hw+gap)·cos(θ/2) from the neighbouring chord, so a fixed 0.5
@@ -310,7 +317,7 @@ const SceneryStructures = (function () {
             },
             { kind: "guardrail", k, side });
         ctx.instance(railKey,
-          Object.assign({ s: [1, 1, spacing] }, place),
+          Object.assign({ s: [1, 1, spacing] }, place, railSolid ? { col: railCol } : null),
           (rec) => {
             if (HI && (st === "doubleArmco" || st === "wArmco" || !RAIL_STYLES.has(st))) {
               if (st === "doubleArmco") { wBeam(rec, d, 0.62, 0.84, railCol); wBeam(rec, d, 1.16, 0.84, railCol); }
@@ -324,33 +331,33 @@ const SceneryStructures = (function () {
               rec.box([0, 0.965, 0], [0.34, 0.03, 1], dk);
             } else if (HI && st === "cable") {
               for (const y of [0.58, 0.76, 0.95])
-                rec.box([0, y, 0], [0.045, 0.045, 1], railCol);
+                rec.box([0, y, 0], [0.045, 0.045, 1], rc);
             } else if (HI && st === "safer") {             // steel tubes over the foam block
               rec.box([-d * 0.04, 0.66, 0], [0.26, 0.56, 1], postCol);
               for (const y of [0.46, 0.66, 0.86])
                 rec.box([d * 0.10, y, 0], [0.14, 0.16, 1], railCol);
               rec.box([0, 1.04, 0], [0.38, 0.10, 1], postCol);
             } else if (st === "doubleArmco") {                    // old European two-rail
-              rec.box([0, 0.62, 0], [0.18, 0.38, 1], railCol);
-              rec.box([0, 1.16, 0], [0.18, 0.38, 1], railCol);
+              rec.box([0, 0.62, 0], [0.18, 0.38, 1], rc);
+              rec.box([0, 1.16, 0], [0.18, 0.38, 1], rc);
             } else if (st === "wArmco") {                  // the W cross-section
-              rec.box([0, 0.72, 0], [0.20, 0.44, 1], railCol);
-              rec.box([-0.07, 0.72, 0], [0.09, 0.16, 1], railCol);
+              rec.box([0, 0.72, 0], [0.20, 0.44, 1], rc);
+              rec.box([-0.07, 0.72, 0], [0.09, 0.16, 1], rc);
             } else if (st === "jersey") {                  // poured concrete profile
-              rec.box([0, 0.26, 0], [0.60, 0.52, 1], railCol);
-              rec.box([0, 0.72, 0], [0.30, 0.46, 1], railCol);
+              rec.box([0, 0.26, 0], [0.60, 0.52, 1], rc);
+              rec.box([0, 0.72, 0], [0.30, 0.46, 1], rc);
             } else if (st === "cable") {                   // 1970s wire rope
               for (const y of [0.58, 0.95])
-                rec.box([0, y, 0], [0.07, 0.07, 1], railCol);
+                rec.box([0, y, 0], [0.07, 0.07, 1], rc);
             } else if (st === "safer") {                   // smooth tube over foam
-              rec.box([0, 0.70, 0], [0.34, 0.62, 1], railCol);
+              rec.box([0, 0.70, 0], [0.34, 0.62, 1], rc);
               rec.box([0, 1.04, 0], [0.38, 0.10, 1], postCol);
             } else {
-              rec.box([0, 0.7, 0], [0.18, 0.45, 1], railCol);                   // armco (default)
+              rec.box([0, 0.7, 0], [0.18, 0.45, 1], rc);                   // armco (default)
             }
           },
           { kind: "guardrail", k, side });
-      }, `guardrail|${side}|${gap}|${postKey}|${railKey}`);
+      }, `guardrail|${side}|${gap}|${postKey}|${railKey}|${railCol.join(",")}`);
     };
     // Stacked-tyre barrier with a coloured conveyor-belt cap.
     //   opts: { style: "stack"(default) | "tecpro" | "airfence", tyreCol }
@@ -367,7 +374,9 @@ const SceneryStructures = (function () {
       // omitted one let the circuit's first wall colour every later one.
       const slab = st === "tecpro" || st === "airfence";
       const stackKey = `tyre-stack|${st}|${tyre.join(",")}` + (slab ? `|${cap.join(",")}` : "") + (HI ? "|hi" : "");
-      const capKey = `tyre-cap|${st}|${(slab ? tyre : cap).join(",")}`;
+      // The belt is one box in one colour: the node carries it, so every cap colour shares a model.
+      const beltCol = slab ? tyre : cap;
+      const capKey = `tyre-cap|${st}`;
       const capHeight = st === "tecpro" ? 0.98 : st === "airfence" ? 1.14 : 0.95;
       // A belt runs along the offset row of stacks. On an inside bend those
       // centres can be metres closer together than the centreline stations.
@@ -431,14 +440,15 @@ const SceneryStructures = (function () {
         if (length < 1e-6) return;
         const t = norm(chord), r = norm(cross(t, p.u)), u = norm(cross(r, t));
         const o = top.map((v, i) => v / 2 + (prev[i] + next[i]) / 4);
-        ctx.instance(capKey, { o, r, u, t, s: [1, 1, length] },
+        ctx.instance(capKey, { o, r, u, t, s: [1, 1, length], col: beltCol },
           (rec) => {
-            if (st === "tecpro") rec.box([0, 0, 0], [1.7, 0.16, 1], tyre);
-            else if (st === "airfence") rec.box([0, 0, 0], [1.5, 0.14, 1], tyre);
-            else rec.box([0, 0, 0], [2.0, 0.3, 1], cap);
+            const NC = TrackGraph.NODE_COLOR;
+            if (st === "tecpro") rec.box([0, 0, 0], [1.7, 0.16, 1], NC);
+            else if (st === "airfence") rec.box([0, 0, 0], [1.5, 0.14, 1], NC);
+            else rec.box([0, 0, 0], [2.0, 0.3, 1], NC);
           },
           { kind: "tyreWall", k, side });
-      }, `tyreWall|${side}|${gap}|${stackKey}|${capKey}`);
+      }, `tyreWall|${side}|${gap}|${stackKey}|${capKey}|${beltCol.join(",")}`);
     };
     const gantry = (s, h, col, opts) => {
       const st = (opts && opts.style) || kitOf("gantry", "box");
@@ -583,9 +593,9 @@ const SceneryStructures = (function () {
       const POLE_LAT = 1.12;
       const polePos = vadd(p.c, p.r, side * POLE_LAT), panelAt = vadd(polePos, p.u, 3.3);
       const panel = vadd(vadd(vadd(panelAt, p.t, 0.525), p.u, 0.31), p.r, -side * 0.12);
-      ctx.note("marshalPost", [p.c[0], p.c[1] + 1.2, p.c[2]], [1.2, 2.4, 1.2], { k, side, panel });
+      const postRec = ctx.note("marshalPost", [p.c[0], p.c[1] + 1.2, p.c[2]], [1.2, 2.4, 1.2], { k, side, panel });
       const roof = (opts && opts.roofCol) || [0.95, 0.55, 0.08];
-      ctx.instance(`marshalPost|${st}|${side}|${roof.join(",")}`,
+      const landed = ctx.instance(`marshalPost|${st}|${side}|${roof.join(",")}`,
         { o: p.c, r: p.r, u: p.u, t: p.t }, (rec) => {
         // Explicit mat 0: an unstamped op inherited whatever a circuit closure
         // left in out._mat (zandvoort's stage: METAL/FABRIC) inline, while the
@@ -669,6 +679,9 @@ const SceneryStructures = (function () {
           rec.box([0, 0, 0], st === "container" ? [2.7, 0.2, 5.7] : [3.0, 0.2, 3.0], conc);
         }
       }, { kind: "marshalPost", k, side });
+      // A hut the graph dropped whole ships nothing: no record, no panel, no
+      // lamp and no blockAt for a car to stop at in empty air (#7243 3a).
+      if (!landed) { if (ctx.unnote) ctx.unnote(postRec); return; }
       flagQuad(panelAt, p.t, p.u, 1.05, 0.62, MARSHAL_PANEL, true);
       if (NIGHT) addBox(out, vadd(polePos, p.u, 4.12), [0.24, 0.24, 0.24], [1.32, 0.72, 0.28], b);
       // Solid hut, stopped at its INNER FACE, over at least one node either

@@ -74,10 +74,13 @@ const CarDraw = (function () {
       if (!st) { st = new Map(); _lruStamp.set(order, st); }
       if (cache[key]) { st.set(key, ++_lruTick); return cache[key]; }
       const mesh = create();
+      // A null create (lost context) is not cached: its key would re-push onto
+      // `order` on every miss, and the duplicates could evict a live entry (#7365).
+      if (!mesh) return mesh;
       cache[key] = mesh;
       order.push(key);
       st.set(key, ++_lruTick);
-      const free = freeOne || ((m) => { if (m) freeBodyPair(m); });
+      const free = freeOne || freeBodyPair;   // freeBodyPair skips a null itself
       while (order.length > max) {
         let oi = 0, ot = Infinity;
         for (let i = 0; i < order.length; i++) {
@@ -232,6 +235,7 @@ const CarDraw = (function () {
         noWheels: !!(extra && extra.noWheels),
         field: !!(extra && extra.noWheels),   // factory body — probe vs playerBodies
         silhouette: !!(extra && extra.silhouette),
+        caster: !!(extra && extra.caster),   // the team shadow caster: welded on position (#7436)
         seats: extra && extra.seats,   // body-only: teammates' bodies from this build (#4219)
         detail: extra && extra.silhouette ? 0 : carDetail().rival,   // meshHi rival (0 below ULTRA)
       });
@@ -295,7 +299,7 @@ const CarDraw = (function () {
     }
     function buildPendingTeamMesh() {
       const team = _pbTeam, num = _pbNum, setup = _pbSetup;
-      const extra = _pbKind === 1 ? { num, silhouette: true, setup }
+      const extra = _pbKind === 1 ? { num, silhouette: true, caster: true, setup }
         : _pbKind === 2 ? { noWheels: true, num, setup } : { num, setup };
       let data = _pbKind === 2 ? _seatData.get(_pbKey) : null;
       if (data) _seatData.delete(_pbKey);
@@ -914,6 +918,9 @@ const CarDraw = (function () {
           _decalTexBytes[key] = atlasBytes(canvas);
         }
         catch (e) {
+          // A texture made (or taken from the draft spares) before the throw is
+          // ours to free; never cache it half-built (#7365).
+          if (t) G.gfx.freeTexture(t), t = null;
           // Swallowed AND cached as null before: one transient miss stripped that
           // team's numbers/sponsors for the session, unlogged. Log and retry — but
           // this runs per drawn car per FRAME, so cache the null after 3 tries.
@@ -1509,7 +1516,7 @@ const CarDraw = (function () {
     function buildPendingCockpitShadow() {
       const team = _cbTeam, liv = deps.resolveLivery(team);
       const geom = Car3D.build(liv.c1, liv.c2,
-        { livery: liv, teamId: team.id, silhouette: true, noDriver: true, ownHalo: true, halo: _cbHalo, num: _cbNum,
+        { livery: liv, teamId: team.id, silhouette: true, caster: true, noDriver: true, ownHalo: true, halo: _cbHalo, num: _cbNum,
           parts: _cbParts });
       geom._casterOnly = true;   // a caster, unlike the lit shared rival body
       return G.gfx.createMesh(geom);
@@ -1862,12 +1869,7 @@ const CarDraw = (function () {
     const wheelMeshOrder = [];
     function freeWheelPair(m) {
       if (!m) return;
-      if (G.gfx.freeMesh) {
-        if (m.F) G.gfx.freeMesh(m.F);
-        if (m.R) G.gfx.freeMesh(m.R);
-        if (m.FFixed) G.gfx.freeMesh(m.FFixed);
-        if (m.RFixed) G.gfx.freeMesh(m.RFixed);
-      }
+      if (G.gfx.freeMesh) for (const k of ["F", "R", "FFixed", "RFixed"]) if (m[k]) G.gfx.freeMesh(m[k]);
     }
     function getPlayerWheelMeshes(car) {
       const team = car.team;

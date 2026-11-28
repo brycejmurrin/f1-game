@@ -50,8 +50,8 @@ function load(storage = {}) {
   const fns = new Function("TLXShaders", "InstCells", "_writeInstanceMatrices", "Frustum",
     `"use strict"; const _mirActive = false, frameEye = null, frameCullDist = 0, frameCullFog = null,
       _mirEye = null, _mirCull = 0, _mirFog = null;
-      ${lift(TLX, "cullInstances")}\n${lift(TLX, "updateInstances")}\n` +
-    "return { cullInstances, updateInstances };")(TLXShaders, InstCells, _writeInstanceMatrices, Frustum);
+      ${lift(TLX, "cellDroppedHead")}\n${lift(TLX, "cullInstances")}\n${lift(TLX, "updateInstances")}\n` +
+    "return { cullInstances, updateInstances, cellDroppedHead };")(TLXShaders, InstCells, _writeInstanceMatrices, Frustum);
   // Ten instances on a line, x = 5, 15, ... 95: one per 10 m cell.
   const n = 10, mats = new Float32Array(n * 16);
   for (let i = 0; i < n; i++) {
@@ -118,6 +118,45 @@ test("successive changed prop culls exchange two key buffers and preserve the re
   assert.deepEqual(writes, [3, 3, 2]);
 });
 
+// Hunt #7385 row S6: cells are in lap order, so a camera driving forward drops cell 0. The common-prefix reuse
+// found no prefix and re-gathered every surviving instance; the resident run now slides down in one copyWithin
+// and only the new tail cell is gathered. Same bytes, same order, same (whole) upload as a full repack.
+test("a dropped head cell slides the resident pack down and gathers only the new tail", () => {
+  const { cullInstances, batch, writes } = load();
+  let reads = 0;
+  const raw = batch.srcMatrices;
+  batch.srcMatrices = new Proxy(raw, { get(t, k) { if (typeof k === "string" && /^\d+$/.test(k)) reads++; return t[k]; } });
+  assert.equal(cullInstances(batch, slab(0, 36)), 4);          // cells x 5, 15, 25, 35
+  assert.equal(reads, 4 * 16);
+  reads = 0;
+  assert.equal(cullInstances(batch, slab(10, 46)), 4);         // drops x 5, adds x 45
+  assert.equal(reads, 16, "only the new cell is gathered from the source");
+  assert.deepEqual([0, 1, 2, 3].map((k) => batch.packMatrices[k * 16 + 12]), [15, 25, 35, 45]);
+  assert.deepEqual(writes, [4, 4]);
+  reads = 0;
+  assert.equal(cullInstances(batch, slab(30, 46)), 2);         // drops two, adds none
+  assert.equal(reads, 0);
+  assert.deepEqual([0, 1].map((k) => batch.packMatrices[k * 16 + 12]), [35, 45]);
+  reads = 0;
+  assert.equal(cullInstances(batch, slab(60, 76)), 2);         // disjoint set: a plain repack
+  assert.equal(reads, 2 * 16);
+  assert.deepEqual([0, 1].map((k) => batch.packMatrices[k * 16 + 12]), [65, 75]);
+});
+
+test("cellDroppedHead: only a resident suffix leading the new set counts", () => {
+  const { cellDroppedHead } = load();
+  const InstCells = { droppedHead: cellDroppedHead };
+  const b = { _cellKey: Int32Array.from([3, 4, 5, 6]), _cellKeyN: 4 };
+  assert.equal(InstCells.droppedHead(b, Int32Array.from([4, 5, 6, 7]), 4), 1);
+  assert.equal(InstCells.droppedHead(b, Int32Array.from([6]), 1), 3);
+  assert.equal(InstCells.droppedHead(b, Int32Array.from([5, 6]), 2), 2);
+  assert.equal(InstCells.droppedHead(b, Int32Array.from([4, 6, 7]), 3), 0, "a hole in the kept run");
+  assert.equal(InstCells.droppedHead(b, Int32Array.from([4, 5]), 2), 0, "the kept run must reach the resident end");
+  assert.equal(InstCells.droppedHead(b, Int32Array.from([3, 4, 5, 6]), 4), 0, "a shared prefix is the prefix path's");
+  assert.equal(InstCells.droppedHead(b, Int32Array.from([9]), 1), 0);
+  assert.equal(InstCells.droppedHead({ _cellKey: b._cellKey, _cellKeyN: -1 }, Int32Array.from([4]), 1), 0);
+});
+
 test("the shadow cull (upload:false) neither consults nor disturbs the key", () => {
   const { cullInstances, batch, writes } = load();
   cullInstances(batch, slab(0, 36));                          // camera: 4 cells
@@ -164,7 +203,7 @@ function loadGpuPack() {
   const InstCells = new Function("localStorage", "Frustum",
     read("js/render/shared/inst-cells.js") + ";return InstCells;")(localStorage, Frustum);
   const TLXShaders = { aabbInFrustum: Frustum.aabbInFrustum };
-  const declarations = ["setInstanceRange", "_writeInstanceMatrices", "cullInstances", "updateInstances"]
+  const declarations = ["setInstanceRange", "_writeInstanceMatrices", "cellDroppedHead", "cullInstances", "updateInstances"]
     .map(name => fnSource(TLX, `function ${name}(`)).join("\n");
   // Radial frame locals match load() — cullInstances reads frameEye/frameCullDist
   // (and _mir*) after the instance-suffix / radial cull work on this PR.

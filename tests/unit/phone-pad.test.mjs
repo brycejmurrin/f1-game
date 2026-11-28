@@ -1438,6 +1438,7 @@ test("host(): a linked phone whose WIRE dies is hosted again on the SAME code; t
   pairs[1][0].close(); await settle();
   assert.equal(h.ctl.state().phase, "lost"); assert.equal(h.ui.lostN, 1);
   assert.match(h.ui.said.at(-1), /^!Phone disconnected/);
+  assert.equal(h.ctl.state().stats, null, "#7368 B3: a lost link reports no stats, like a rejected or re-hosted one");
   assert.equal(pairs.length, 2, "no room hosted again after a goodbye");
 
   // A re-link nobody answers ends when the room does (nostr HOST_TIMEOUT_MS): lost() once.
@@ -2810,6 +2811,32 @@ test("menu pad: a PHONE's SELECT will not press RESET / DELETE / IMPORT; XR (the
   Input.remoteSample({ source: "xr", steer: 0, thr: 0, brk: 0 });
   const local = blocked[0]; local.clicks = 0;
   assert.equal(press(local), true); assert.equal(local.clicks, 1, "the XR controllers are the player in the room");
+});
+
+// #7414 (ledger #7346 row 5): under VR DRIVING = EXISTING CONTROLS (or XR with no pad) XR never sends a
+// remoteSample, so it never owns the remote lane; its A/X SELECT must still press RESET / DELETE / IMPORT.
+test("menu pad: XR's SELECT presses a destructive control while XR does not own the drive lane; the phone's still does not (#7414)", () => {
+  const { Input, sb } = bootInput();
+  for (const f of ["js/xr/xr-rig.js", "js/xr/xr-input.js"]) vm.runInContext(read(f).replace(/^const\b/gm, "var"), sb, { filename: absSrc(f) });
+  const XrInput = vm.runInContext("XrInput", sb);
+  const all = [];
+  const layer = { tagName: "DIV", contains: (n) => all.includes(n), dispatchEvent: () => true };
+  sb.MenuNav = { activeLayer: () => layer, FOCUSABLE: "button" };
+  sb.UiLayers = { top: () => layer, navOpen: () => true, anyOpen: () => true };
+  const reset = { tagName: "BUTTON", id: "pm-keys-reset", textContent: "RESET KEYS", disabled: false, clicks: 0, click() { this.clicks++; },
+    matches: () => true, dispatchEvent: () => true, getAttribute: () => null };
+  all.push(reset); sb.document.activeElement = reset;
+  sb.performance = { now: () => 500 };
+  Input.remoteSample({ source: "phone", roll: 0, thr: 0, brk: 0 });   // a paired phone holds the lane
+  const aDown = { handedness: "right", targetRayMode: "tracked-pointer",
+    gamepad: { axes: [0, 0, 0, 0], buttons: [0, 0, 0, 0, 1, 0].map((v) => ({ value: v })) } };
+  const latch = {};
+  const mapped = XrInput.mapFrame([aDown], latch, { driving: false, menuOpen: true, overlay: true });
+  assert.deepEqual(Array.from(mapped.events), ["navSelect"]);
+  XrInput.inject(Input, mapped);
+  assert.equal(reset.clicks, 1, "XR's A pressed RESET though the phone owns the remote lane");
+  assert.equal(Input.remoteEvent("navSelect"), false, "the phone's own SELECT is still refused");
+  assert.equal(reset.clicks, 1);
 });
 
 test("pad(): a re-dial passes reanswer and answers a NEWER offer on a FRESH transport, the session moving with it (W26 row 11)", async () => {

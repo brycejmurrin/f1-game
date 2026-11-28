@@ -541,7 +541,7 @@
     // keeps FXAA: AA stays null and nothing below changes.
     if (ctx.traa && webgpu && window.TLXAA && TLXAA.taa) {
       try {
-        const aaCtx = { waterUV: P.fxaa.waterUV, runPass: (m, t) => runPass(m, t), ownRT, rtSetSize, trackMaterial, ldrTex: ldrRT.texture, depthTex: sceneDepthTex };
+        const aaCtx = { waterUV: P.fxaa.waterUV, runPass: (m, t) => runPass(m, t), ownRT, rtSetSize, trackMaterial, dropRT: (rt) => dropRT(rt), ldrTex: ldrRT.texture, depthTex: sceneDepthTex };
         // Per-object velocity first; a throw keeps the camera-only TRAA, a second throw FXAA.
         if (velTex) { try { AA = TLXAA.taa(THREE, TSL, Object.assign({ velTex }, aaCtx)); } catch (_) { AA = null; } }
         if (!AA) AA = TLXAA.taa(THREE, TSL, aaCtx);
@@ -555,7 +555,7 @@
     // flicker keeps the pair, short enough that a shed does not hold the
     // half-res surfaces for the rest of the session (plan M-11).
     const SHED_FRAMES = 8;
-    let aoIdle = 0, grIdle = 0, bloomIdle = 0, giIdle = 0, cineIdle = 0;
+    let aoIdle = 0, grIdle = 0, bloomIdle = 0, giIdle = 0, cineIdle = 0, aaIdle = 0;
     function dropRT(rt) {
       if (!rt) return;
       ownedRTs.delete(rt);
@@ -1617,6 +1617,8 @@
         bloomIdle = shedIdle(!!(haveBloom && useLv > 0), bloomIdle, releaseBloom);
         if (HI) giIdle = shedIdle(!!haveGI, giIdle, releaseGI);
         if (HI || photoGi) cineIdle = shedIdle(!!(_last.dof || _last.mblur), cineIdle, releaseCine);
+        // TAA history: held while the TAA presents; a spell of spatial upscale, photo sampling or viz frees it.
+        if (AA) aaIdle = shedIdle(!!_last.taa, aaIdle, AA.release);
         // Capture RTs: a one-off screenshot must not pin a full-size RGBA8 target. The soft present asks
         // every frame (cap8 resets the count), so it keeps cap8RT.
         if (cap8RT) { cap8Idle++; if (capShed(cap8Idle, cap8T)) { dropRT(cap8RT); cap8RT = null; cap8Idle = 0; } }

@@ -615,7 +615,9 @@
     }
     function cacheState() {
       return C ? { size: C.S, u0: C.U0, on: D.cacheOn.value, valid: C.valid, filling: C.filling, band: C.band,
-        fills: C.fills, bands: C.bands, maxOff: +C.maxOff.toFixed(4), dead: C.dead, tex: C.tex.value } : null;
+        fills: C.fills, bands: C.bands, maxOff: +C.maxOff.toFixed(4), dead: C.dead,
+        // Scalars only: __tlx.skyState() is JSON-stringified by the census harness (a live Texture is circular, #7451).
+        texIsPlaceholder: !!C.ph && C.tex.value === C.ph, texW: (C.tex.value && C.tex.value.image && C.tex.value.image.width) | 0 } : null;
     }
     function dispose() { retireCache(); }
     // A steady sky still animates clouds and dithering as the clock advances.

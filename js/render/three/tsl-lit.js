@@ -1139,7 +1139,9 @@
         U.bakeOn.value = 0.0;
         // Bake off ~2 s (GLX bindLampBake _bakeOffN): free the light map and
         // put the placeholder back; the node keeps the program unchanged.
-        if (BAKE_NODE.value !== _bakeBlank && ++_bakeOffN > 120) {
+        // A RETIRED bake (LampBake reset it at a circuit switch, or replaced it) goes now: the paused
+        // picker never draws the 120 frames, and the old circuit's atlas stayed resident (#7464).
+        if (BAKE_NODE.value !== _bakeBlank && ((_bakeSrc && _bakeSrc.retired) || ++_bakeOffN > 120)) {
           const old = BAKE_NODE.value, oldIdx = BAKE_IDX_NODE.value;
           BAKE_NODE.value = _bakeBlank;
           BAKE_IDX_NODE.value = _bakeIdxBlank;

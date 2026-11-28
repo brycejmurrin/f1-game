@@ -151,7 +151,12 @@ const TrackPit = (function () {
     const p = (def && def.pit) || {};
     const street = !!(def && def.street);
     const mode = p.mode === "narrow" || p.mode === "full" || p.mode === "street" ? p.mode : (street ? "street" : "full");
-    const b = Object.assign({}, mode === "narrow" ? NARROW : mode === "street" ? STREET : BANDS, p.bands || {});
+    const preset = mode === "narrow" ? NARROW : mode === "street" ? STREET : BANDS;
+    // An authored band overrides its preset key only when it is a finite,
+    // non-negative width: a NaN one made every `off` NaN and `openBoundary`
+    // wrote NaN into the wall bar (#7367).
+    const b = Object.assign({}, preset), a = p.bands || {};
+    for (const k in preset) if (Number.isFinite(a[k]) && a[k] >= 0) b[k] = a[k];
     const off = {
       fastIn: b.verge + b.platform,
       fastOut: b.verge + b.platform + b.fast,
@@ -169,7 +174,9 @@ const TrackPit = (function () {
     return {
       side: p.side === -1 ? -1 : 1,
       mode,
-      limitKph: Number.isFinite(p.limitKph) ? p.limitKph : (painted ? LIMIT_KPH_STREET : LIMIT_KPH),
+      // A zero or negative limit froze or reversed the limiter (#7367).
+      limitKph: Number.isFinite(p.limitKph) && p.limitKph > 0 ? Math.min(300, Math.max(20, p.limitKph))
+        : (painted ? LIMIT_KPH_STREET : LIMIT_KPH),
       bands: b, off,
       painted,
       hasWall: !painted && b.platform > 0,

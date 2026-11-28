@@ -2525,6 +2525,21 @@ const TLX = (function () {
         return batch;
       }
 
+      // d >= 1 when ks[0..kN) is the resident cell set minus its first d cells, then (maybe) new cells: the resident
+      // run _cellKey[d..N) equals ks[0..N-d) and is not empty; 0 otherwise. Cells are in lap order, so a camera moving
+      // down the lap drops cell 0, which the common-prefix reuse cannot serve (hunt #7385 S6). TLX only (#7335 A),
+      // and here, not in the eager InstCells (boot-load budget).
+      function cellDroppedHead(batch, ks, kN) {
+        const res = batch._cellKey, rN = batch._cellKeyN;
+        if (!res || rN <= 1 || kN <= 0) return 0;
+        let d = 1;
+        while (d < rN && res[d] !== ks[0]) d++;
+        const keep = rN - d;
+        if (keep <= 0 || keep > kN) return 0;
+        for (let i = 1; i < keep; i++) if (res[d + i] !== ks[i]) return 0;
+        return d;
+      }
+
       function cullInstances(batch, planes, opts) {
         if (!batch || !batch.cells) return batch ? batch.instances : 0;
         const shadow = !!(opts && opts.upload === false);
@@ -2594,6 +2609,21 @@ const TLX = (function () {
         const reach = shadow && opts.reach && opts.reach[3] > 0 ? opts.reach : null, reach2 = reach ? reach[3] * reach[3] : 0;
         const sc = batch.srcColors, dc = shadow ? null : batch.packColors;
         let n = firstDirty;
+        // DROPPED HEAD (hunt #7385 S6): no shared prefix, but the resident run minus its first d cells leads the new
+        // set (the camera drove past cell 0). Slide those bytes down with one memmove and pack only the new tail.
+        // Same order and bytes as a full repack; the upload stays whole (every offset moved: firstDirty is 0).
+        if (useKey && firstCell === 0 && batch._cellKeyN > 1) {
+          const d = cellDroppedHead(batch, ks, kN);
+          if (d > 0) {
+            const res = batch._cellKey, rN = batch._cellKeyN;
+            let off = 0, keep = 0;
+            for (let q = 0; q < d; q++) off += cs[res[q]].idx.length;
+            for (let q = d; q < rN; q++) keep += cs[res[q]].idx.length;
+            dst.copyWithin(0, off * 16, (off + keep) * 16);
+            if (dc) dc.copyWithin(0, off * 3, (off + keep) * 3);
+            firstCell = rN - d; n = keep;
+          }
+        }
         for (let ci = firstCell, cn = useKey ? kN : cs.length; ci < cn; ci++) {
           const c = useKey ? cs[ks[ci]] : cs[ci];
           if (!useKey && !TLXShaders.aabbInFrustum(planes, c.mn, c.mx)) continue;

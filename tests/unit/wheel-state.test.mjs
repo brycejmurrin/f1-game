@@ -270,3 +270,35 @@ test("stepPlayer passes the rear curve to the rear axle (fxR inside the hold = f
   const r = WheelState.stepPlayer(c, opts({ thrOn: true, aReqR: 1000, muLongR: 10 }));
   assert.ok(Math.abs(r.fxR - 10) < 1e-9, `rear spinning at 1.4× peak κ keeps μ in its hold: fxR ${r.fxR}`);
 });
+
+// #7399 row 16: axleStep's lateral share used two closures per call (twice per player step),
+// against the file's no-alloc rule. The named forcePerSlip must give the same numbers.
+test("axleStep allocates no closures and its latScale matches the closure form bit for bit", () => {
+  const src = fs.readFileSync(path.join(ROOT, "js/physics/wheel-state.js"), "utf8");
+  const body = src.slice(src.indexOf("function axleStep("), src.indexOf("// Scratch bags"));
+  assert.ok(body.length > 200, "axleStep body found");
+  assert.ok(!/=>/.test(body), "axleStep builds an arrow function per call");
+  const legacy = src.replace(
+    "o.latScale = clamp(forcePerSlip(rhoL, rear) / forcePerSlip(aN, rear), 0.05, 1);",
+    "const g = (x) => curveAt(x, rear);\n    const per = (x) => (x > 1e-3 ? g(x) / x : g(1e-3) / 1e-3);\n    o.latScale = clamp(per(rhoL) / per(aN), 0.05, 1);");
+  assert.notEqual(legacy, src, "legacy substitution applied");
+  const cur = load().WheelState;
+  const ctx = vm.createContext({ Math, JSON, Object, Array, Number, isNaN, isFinite, console,
+    localStorage: { getItem: () => null, setItem() {}, removeItem() {} } });
+  ctx.window = ctx;
+  seedLog(ctx);
+  for (const f of ["js/core/mat4.js", "js/physics/consts.js", "js/physics/tyre-model.js"]) {
+    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), ctx, { filename: absSrc(f) });
+  }
+  vm.runInContext(legacy, ctx, { filename: absSrc("js/physics/wheel-state.js") });
+  const old = vm.runInContext("WheelState", ctx);
+  for (const rear of [false, true]) {
+    for (const alphaN of [0, 5e-4, 0.2, 0.9, 1.6]) {
+      for (const [vw, aReq] of [[30, 0], [21, -30], [0, -30], [36, 40]]) {
+        const p = { dt: DT, vx: 30, aReq, muLong: 10, alphaN, rear };
+        const a = cur.axleStep({ vw, kappa: 0 }, p, {}), b = old.axleStep({ vw, kappa: 0 }, p, {});
+        assert.equal(a.latScale, b.latScale, `rear=${rear} alphaN=${alphaN} vw=${vw} aReq=${aReq}`);
+      }
+    }
+  }
+});

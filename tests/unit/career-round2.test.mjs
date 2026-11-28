@@ -478,14 +478,18 @@ test("facility upgrades charge the geometric ladder, refuse when short or maxed,
   assert.equal(c.money, 1e9);
 });
 
-test("grant credits the balance: the default amount, an explicit one, never a negative one; nothing without a career", () => {
+test("grant credits the balance: the default amount, an explicit one, never a zero or negative one; nothing without a career", () => {
   const h = load();
   assert.equal(h.Career.grant(10), null, "no career loaded, no grant");
   const g = started(), c = g.Career.data();
   const m0 = c.money;
   assert.equal(g.Career.grant(), m0 + g.Career.GRANT, "no amount grants the default");
   assert.equal(g.Career.grant(50), m0 + g.Career.GRANT + 50);
-  assert.equal(g.Career.grant(-900), m0 + g.Career.GRANT + 50, "a negative grant adds nothing");
+  // #7366 (#7310 R4): `Number(n) || GRANT` made grant(0) grant 5000, and a
+  // negative grant reported success; both are refusals now.
+  assert.equal(g.Career.grant(0), null, "a zero grant is not the default");
+  assert.equal(g.Career.grant(-900), null, "a negative grant is refused");
+  assert.equal(g.Career.grant("x"), null, "so is a non-number");
   assert.equal(c.money, m0 + g.Career.GRANT + 50);
 });
 
