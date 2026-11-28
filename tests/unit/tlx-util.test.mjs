@@ -1,5 +1,6 @@
 /* tlx-util.test.mjs — TLXUtil (js/render/three/tlx-util.js, carved from tlx.js in #6821): characterization of the
- * three helpers that moved verbatim, and the load-order contract that keeps them out of eagerScripts. */
+ * three helpers that moved verbatim, the release funnel (#7334; tlx-release-funnel.test.mjs), and the load-order contract
+ * that keeps them out of eagerScripts. */
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -13,8 +14,8 @@ const ctx = vm.createContext({ Math, WeakSet, Promise, Error, Uint8ClampedArray,
 vm.runInContext(fs.readFileSync(new URL("../../" + rel, import.meta.url), "utf8") + "\nglobalThis.__u = TLXUtil;", ctx, { filename: absSrc(rel) });
 const U = ctx.__u;
 
-test("exports exactly the three carved helpers", () => {
-  assert.deepEqual(Object.keys(U).sort(), ["pumpAnimation", "readGlCapture", "texStandIn"]);
+test("exports exactly the carved helpers and the release funnel", () => {
+  assert.deepEqual(Object.keys(U).sort(), ["dropRenderObject", "pumpAnimation", "readGlCapture", "releaseObject", "safeDispose", "texStandIn"]);
 });
 
 test("pumpAnimation: parks one callback per tick and drains it once; null on a foreign renderer", () => {

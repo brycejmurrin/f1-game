@@ -8,6 +8,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { seedTlxUtil } from "../helpers/tlx-util-vm.mjs";
+
+seedTlxUtil();   // TLX files release through TLXUtil at call time (#7334)
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = new URL("../../js/render/three/tlx-chunked.js", import.meta.url);
@@ -41,7 +44,7 @@ function factory(released, frustum = {}) {
   const sandbox = {
     window: {}, localStorage: { getItem: () => null },
     Float32Array, Uint32Array, Uint16Array, Uint8Array, Int16Array, Int32Array, Array, Map, Math,
-    Frustum: frustum,
+    Frustum: frustum, TLXUtil: seedTlxUtil(),
   };
   vm.createContext(sandbox);
   seedLog(sandbox);
@@ -129,7 +132,7 @@ function mergeFactory(value, constructors = {}) {
   const sandbox = {
     window: {}, localStorage: { getItem: (k) => (k === "apex26.tlxChunkMerge" ? value : null) },
     Float32Array, Uint32Array, Uint16Array, Uint8Array, Int16Array, Int32Array, Array, Map, Math,
-    Frustum: {}, ...constructors,
+    Frustum: {}, TLXUtil: seedTlxUtil(), ...constructors,
   };
   vm.createContext(sandbox);
   seedLog(sandbox);

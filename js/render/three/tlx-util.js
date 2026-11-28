@@ -1,9 +1,40 @@
 /* Apex 26 — TLXUtil: module-level helpers carved out of tlx.js (#6821, #6607 row 8): pumpAnimation (three's rAF
- * pump), texStandIn (the 1x1 canvas a released texture source is swapped for) and readGlCapture (async PBO readback).
+ * pump), texStandIn (the 1x1 canvas a released texture source is swapped for) and readGlCapture (async PBO readback),
+ * plus the release funnel releaseObject / dropRenderObject / safeDispose (#7334).
  * Behaviour-neutral: bodies are verbatim. Loads before tlx.js (DEFERRED.three + DEFERRED_EDGES). */
 "use strict";
 
 const TLXUtil = (function () {
+  // THE RELEASE FUNNEL (#7334). three frees a RenderObject (its uniform buffers, bind groups and the geometry it
+  // pins) only when the OBJECT or the MATERIAL dispatches "dispose"; a geometry's own dispose() does not (GPUMEM-HUNT
+  // G1, tests/unit/tlx-gpumem-leak.test.mjs). THREE.InstancedMesh has a dispose() that dispatches it; a plain Mesh has
+  // none, so it gets the Object3D event. Every TLX release goes through these two helpers (the guard is
+  // tests/unit/tlx-release-funnel.test.mjs): a throw is expected when the object never drew (no render object yet) or
+  // the device is already tearing down.
+  function releaseObject(m) {
+    if (!m) return;
+    try {
+      if (m.isInstancedMesh && typeof m.dispose === "function") m.dispose();
+      else if (typeof m.dispatchEvent === "function") m.dispatchEvent({ type: "dispose" });
+    } catch (_) { /* no render object yet, or the renderer is already tearing down */ }
+  }
+  // Drop only the renderer's cached RenderObject: the "dispose" event, never InstancedMesh.dispose() (three r187's
+  // also frees instanceMatrix / instanceColor, which a pooled or still-live object keeps using). For the pooled
+  // wrappers and the ownership purge, whose object outlives the release; also a geometry's own "dispose" event.
+  function dropRenderObject(o) {
+    if (!o || typeof o.dispatchEvent !== "function") return;
+    try { o.dispatchEvent({ type: "dispose" }); } catch (_) { /* no render object yet, or a stale one only */ }
+  }
+  // Dispose each resource in its own try: a throwing first resource must not skip the rest (tsl-aa's TAA leaked its
+  // second target that way). Skips null/undefined and anything without a dispose().
+  /** @param {...any} xs */
+  function safeDispose(...xs) {
+    for (let i = 0; i < xs.length; i++) {
+      const x = xs[i];
+      if (!x || typeof x.dispose !== "function") continue;
+      try { x.dispose(); } catch (_) { /* device dying or already gone: release the rest regardless */ }
+    }
+  }
   // three r186 Renderer.init() starts its own window rAF loop (Animation: info.reset, nodeFrame.update ->
   // frameId, inspector) that ticks every vsync beside the game loop: 2.04 rAF callbacks per drawn frame on
   // TLX vs 1.04 on GLX (gpu-census 39071040057), 0.12 ms each on the phone-shaped VM probe. TLX never sets
@@ -109,7 +140,7 @@ const TLXUtil = (function () {
     }
   }
 
-  return { pumpAnimation, texStandIn, readGlCapture };
+  return { pumpAnimation, texStandIn, readGlCapture, releaseObject, dropRenderObject, safeDispose };
 })();
 
 Object.freeze(TLXUtil);

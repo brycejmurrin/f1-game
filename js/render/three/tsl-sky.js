@@ -519,9 +519,7 @@
         ph.colorSpace = THREE.NoColorSpace; ph.needsUpdate = true;
         C.tex.value = ph; C.ph = ph;
       } catch (_) { /* dispose proceeds regardless */ }
-      for (const resource of [...C.rts, C.geo, C.mat]) {
-        try { resource.dispose(); } catch (_) { /* retire the remaining resources too */ }
-      }
+      TLXUtil.safeDispose(...C.rts, C.geo, C.mat);   // each in its own try: retire the remaining resources too
     }
     function cacheStep(renderer) {
       if (!C || C.dead || !renderer || !(U.cloud.value > 0.001)) return;

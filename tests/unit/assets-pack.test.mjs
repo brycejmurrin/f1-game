@@ -23,6 +23,9 @@ import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 import { mkTmpDir } from "../helpers/tmp-dir.mjs";
+import { seedTlxUtil } from "../helpers/tlx-util-vm.mjs";
+
+seedTlxUtil();   // TLX files release through TLXUtil at call time (#7334)
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");

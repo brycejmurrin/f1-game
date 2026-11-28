@@ -323,7 +323,7 @@
     let _decalFrame = 0;
     const _evicted = [];   // evicted decal materials; tlx present() flushes after paint
     function flushEvicted() {
-      for (let i = 0; i < _evicted.length; i++) { try { _evicted[i].dispose(); } catch (_) { /* already disposed */ } }
+      for (let i = 0; i < _evicted.length; i++) TLXUtil.safeDispose(_evicted[i]);   // already disposed
       _evicted.length = 0;
     }
     // tlx.js freeTexture: retire every decal material bound to a freed

@@ -15,6 +15,9 @@ import vm from "node:vm";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { makeFakeGL, installThreeGlobals } from "../helpers/fake-webgl2.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { seedTlxUtil } from "../helpers/tlx-util-vm.mjs";
+
+seedTlxUtil();   // TLX files release through TLXUtil at call time (#7334)
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");

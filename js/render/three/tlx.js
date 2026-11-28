@@ -1462,7 +1462,7 @@ const TLX = (function () {
         if (!post || !post.tagOn || _warmPending || post.tagOn() === _wantTag()) return;
         const old = post; post = null;
         _cancelSoftBlits();
-        try { if (old.dispose) old.dispose(); } catch (_) { /* best effort */ }
+        TLXUtil.safeDispose(old);   // best effort
         post = buildPost(); if (post) post.resize(W, H, presentW, presentH);
       }
       // One viewport mapper for the sky (scene pass) and the post chain; identity
@@ -1493,7 +1493,7 @@ const TLX = (function () {
               // cannot resolve a depth attachment (docs/research/WEBGPU-PARITY.md).
               sceneSamples: (_sceneSamples = sceneSamplesFor(renderer, forceWebGL, isMobile)) });
           if (post && !post.enabled()) {
-            try { if (post.dispose) post.dispose(); } catch (_) { /* disabled factory cleanup */ }
+            TLXUtil.safeDispose(post);   // disabled factory cleanup
             post = null;
           }
           // GLX keeps the post chain on an RGBA8 scene when half-float is not
@@ -1505,7 +1505,7 @@ const TLX = (function () {
         }
       } catch (e) {
         try { Log.warn("gfx", "TLX: post factory failed, direct to canvas —", e); } catch (_) {}
-        try { if (post && post.dispose) post.dispose(); } catch (_) { /* partial factory cleanup */ }
+        TLXUtil.safeDispose(post);   // partial factory cleanup
         post = null;
       }
       return post;
@@ -2692,10 +2692,7 @@ const TLX = (function () {
       // hide the TypeError from calling a nonexistent Mesh.dispose()).
       function disposeInstancedObject(mesh) {
         if (!mesh) return;
-        try {
-          if (mesh.isInstancedMesh && typeof mesh.dispose === "function") mesh.dispose();
-          else if (typeof mesh.dispatchEvent === "function") mesh.dispatchEvent({ type: "dispose" });
-        } catch (_) { /* best-effort: the renderer may already be tearing down */ }
+        TLXUtil.releaseObject(mesh);   // best-effort, the renderer may already be tearing down
       }
 
       function freeInstancedBatch(batch) {
@@ -2708,7 +2705,7 @@ const TLX = (function () {
           if (ix >= 0) _instRegistry.splice(ix, 1);
           try { _instRemove(mv.imesh); } catch (_) { /* */ }
           disposeInstancedObject(mv.imesh);
-          try { mv.imesh.geometry.dispose(); } catch (_) { /* */ }
+          TLXUtil.safeDispose(mv.imesh && mv.imesh.geometry);
           mv.imesh = null; mv.cells = null; mv.srcMatrices = mv.srcColors = mv.packMatrices = mv.packColors = null;
         }
         if (batch.imesh) {
@@ -2719,7 +2716,7 @@ const TLX = (function () {
           batch.imesh = null;
         }
         if (batch.geo) {
-          try { batch.geo.dispose(); } catch (_) { /* */ }
+          TLXUtil.safeDispose(batch.geo);
           batch.geo = null;
         }
         // Drop the shadow cull's private pack with the batch (R3-RENDER-6): a
@@ -3433,7 +3430,7 @@ const TLX = (function () {
             }
             if (p.pending) return;
             for (const m of p.meshes.values()) {
-              try { m.dispatchEvent({ type: "dispose" }); } catch (_) { /* no render object yet */ }
+              TLXUtil.dropRenderObject(m);   // no render object yet
               m.geometry = null; m.material = null;
             }
             p.meshes.clear();
@@ -3707,7 +3704,7 @@ const TLX = (function () {
           _mirWarmUnswap();
           sRT.scissor.copy(sSc); sRT.scissorTest = sST;
           renderer.autoClear = autoClear0;
-          if (tmp) try { tmp.dispose(); } catch (_) { /* device dying */ }
+          TLXUtil.safeDispose(tmp);   // device dying
         }
         return drawn;
       }
@@ -4358,10 +4355,10 @@ const TLX = (function () {
           flushDropLater(true);
         }
         m.__tlxDropped = true;
-        try { m.dispatchEvent({ type: "dispose" }); } catch (_) { /* no render object yet */ }
+        TLXUtil.dropRenderObject(m);   // no render object yet
         if (m._ownGeo && m.geometry) m.geometry.dispose();   // a mesh that owns its geometry (an R1 run's view)
         m.geometry = null; m.material = null;
-        if (ownedGeometry) try { ownedGeometry.dispose(); } catch (_) { /* already lost */ }
+        TLXUtil.safeDispose(ownedGeometry);   // already lost
       }
       function flushDropped(force) {
         if ((!force && _warmPending) || !_dropQueue.length) return;
@@ -4377,16 +4374,16 @@ const TLX = (function () {
         try { if (m.parent) m.parent.remove(m); } catch (_) { /* already detached */ }
         const live = freedGeo && m.geometry && m.geometry !== freedGeo;
         if (live) {
-          try { m.dispatchEvent({ type: "dispose" }); } catch (_) { /* stale render object only */ }
+          TLXUtil.dropRenderObject(m);   // stale render object only
           return;
         }
         m.visible = false;
         if (m.__tlxDropped) return;
         m.__tlxDropped = true;
-        try { m.dispatchEvent({ type: "dispose" }); } catch (_) { /* no render object yet */ }
+        TLXUtil.dropRenderObject(m);   // no render object yet
         if (m._ownGeo && m.geometry) m.geometry.dispose();
         m.geometry = null; m.material = null;
-        if (owned) try { owned.dispose(); } catch (_) { /* already lost */ }
+        TLXUtil.safeDispose(owned);   // already lost
       }
       function purgeOwnershipRenderObjects(freedGeos) {
         const ros = renderer._objects && renderer._objects._renderObjects;
@@ -4401,10 +4398,10 @@ const TLX = (function () {
             try { if (o.parent) o.parent.remove(o); } catch (_) { /* already detached */ }
             o.visible = false;
             if (!o.__tlxDropped) ownershipDropQueued(o, o._ownGeo ? o.geometry : null, g);
-            else try { o.dispatchEvent({ type: "dispose" }); } catch (_) { /* stale render object */ }
+            else TLXUtil.dropRenderObject(o);   // stale render object
           }
           if (typeof g.dispatchEvent === "function") {
-            try { g.dispatchEvent({ type: "dispose" }); } catch (_) { /* already torn down */ }
+            TLXUtil.dropRenderObject(g);   // a geometry: its own "dispose" event; already torn down
           }
           if (typeof ros.delete === "function") ros.delete(ro);
         }
@@ -5298,8 +5295,7 @@ const TLX = (function () {
         _postRebuild = false;   // lit/fx go too: no chain to rebuild for
         postFailure("Renderer fallback requires reload for post-processing");
         _cancelSoftBlits();
-        try { if (deadPost && deadPost.dispose) deadPost.dispose(); } catch (_) { /* best-effort degradation */ }
-        try { if (sky && sky.dispose) sky.dispose(); } catch (_) { /* its two bake targets: best-effort */ }
+        TLXUtil.safeDispose(deadPost, sky);   // best-effort degradation; sky: its two bake targets
         sky = null;
         hideSkyMesh();
         try { scene.backgroundNode = null; } catch (_) { /* node already gone */ }
@@ -5779,7 +5775,7 @@ const TLX = (function () {
               for (const t of [matOwnedAlbedo, matOwnedNormal]) {
                 if (!t || seen.has(t) || kept.has(t)) continue;
                 seen.add(t);
-                try { t.dispose(); } catch (_) { /* already disposed */ }
+                TLXUtil.safeDispose(t);   // already disposed
               }
               matOwnedAlbedo = null;
               matOwnedNormal = null;
@@ -6233,7 +6229,7 @@ const TLX = (function () {
           const t = mirRT.texture;
           try { if (post && post.releaseMirror) post.releaseMirror(); } catch (_) { /* node values only */ }
           try { if (fx && fx.releaseTexture) fx.releaseTexture(t); } catch (_) { /* cache bookkeeping only */ }
-          try { mirRT.dispose(); } catch (_) { /* already gone */ }
+          TLXUtil.safeDispose(mirRT);   // already gone
           mirRT = null; mirCam = null; _mirReady = false; _mirRenders = 0;
           resetMirrorRoadStats();
           return true;
@@ -7089,7 +7085,7 @@ const TLX = (function () {
             _postRetryAt = (typeof performance !== "undefined" ? performance.now() : Date.now()) + 2000;   // begin() retries; a resize is not required
             try { paintCanvas(this); painted = true; } catch (e) { persistFail(e); }
             finally {
-              try { if (deadPost.dispose) deadPost.dispose(); } catch (_) { /* device already dying */ }
+              TLXUtil.safeDispose(deadPost);   // device already dying
             }
           }
           if (!painted) {
@@ -7181,7 +7177,7 @@ const TLX = (function () {
           sweepCarShadowMirrors(_now);
           // Evicted materials dispose only now — after paint, when no drawList
           // record can still reference them (safe since the #33952 backport).
-          for (let i = 0; i < _matDispose.length; i++) { try { _matDispose[i].dispose(); } catch (_) { /* already disposed */ } }
+          for (let i = 0; i < _matDispose.length; i++) TLXUtil.safeDispose(_matDispose[i]);   // already disposed
           _matDispose.length = 0;
           if (_dropLater.length) flushDropLater(false);   // after paint: their successors hold the pipelines now
           if (fx && fx.flushEvicted) fx.flushEvicted();

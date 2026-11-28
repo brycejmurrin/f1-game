@@ -8,6 +8,7 @@ import { vendorModule, bindImports } from "../helpers/vendor-class.mjs";
 import * as THREE from "../../vendor/three-0.187.0/three.webgpu.min.js";
 import { makeFakeGL, installThreeGlobals } from "../helpers/fake-webgl2.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { withTlxUtil } from "../helpers/tlx-util-vm.mjs";   // TLX files release through TLXUtil (#7334)
 
 const read = (rel) => fs.readFileSync(new URL(`../../${rel}`, import.meta.url), "utf8");
 const TSL = THREE.TSL;
@@ -56,7 +57,7 @@ function shadowHarness() {
     });
     if (fail) throw Error("injected partial compile failure");
   };
-  const ctx = vm.createContext({ window: {}, localStorage: { getItem: () => null }, Float32Array, Uint16Array });
+  const ctx = vm.createContext(withTlxUtil({ window: {}, localStorage: { getItem: () => null }, Float32Array, Uint16Array }));
   load(ctx, ["js/render/three/tlx-shadow.js"]);
   const sys = ctx.window.TLXShaders.shadowSys(THREE, TSL, { renderer, isMobile: true, mobileTier: true });
   const source = new THREE.BufferGeometry();
@@ -107,12 +108,12 @@ for (const initialFailure of [true, false]) {
   test(`SSR materials retain capability across post recovery (initial failure=${initialFailure})`, () => {
     let builds = 0;
     const target = () => ({ tagOn: () => true, resize() {}, hdrOk: () => true });
-    const ctx = vm.createContext({ window: {}, localStorage: { getItem: () => null }, Log: { warn() {} }, THREE, TSL,
+    const ctx = vm.createContext(withTlxUtil({ window: {}, localStorage: { getItem: () => null }, Log: { warn() {} }, THREE, TSL,
       post: initialFailure ? null : target(), fx: {}, lit: null, renderer: { setMRT() {} },
       garageProbeRequested: false, _gfxx: () => false,
       shadowSys: null, envRT: null, matMaps: null, lampGrid: null, _sharedUniforms: true, _liteGpu: true, isMobile: false, isWebGPU: () => false, ENV_SIZE: 64,
       _warmPending: null, W: 640, H: 360, presentW: 640, presentH: 360, performance: { now: () => 100 },
-      buildPost() { builds++; return target(); } });
+      buildPost() { builds++; return target(); } }));
     load(ctx, ["js/render/shared/light-budget.js", "js/render/three/tsl-chunks.js", "js/render/three/tsl-lit.js"]);
     vm.runInContext("globalThis.TLXShaders = window.TLXShaders; globalThis.chunks = TLXShaders.chunks(THREE, TSL);", ctx);
     vm.runInContext(slice(tlx, "          const litCtx = {", "\n        }"), ctx, { filename: "vm-snippet:tlx-lit-recovery" });
@@ -145,7 +146,7 @@ for (const initialFailure of [true, false]) {
 
 test("post SSR diagnostics agree with uploaded road/car gates and required camera data", async (t) => {
   installThreeGlobals();
-  const ctx = vm.createContext({ window: {}, localStorage: { getItem: () => null }, Log: { warn() {}, info() {} }, Float32Array });
+  const ctx = vm.createContext(withTlxUtil({ window: {}, localStorage: { getItem: () => null }, Log: { warn() {}, info() {} }, Float32Array }));
   load(ctx, ["js/render/shared/light-budget.js", "js/lighting/knobs.js", "js/render/shared/post-common.js", "js/render/three/tsl-chunks.js", "js/render/three/tsl-post.js", "js/render/three/tlx-post.js"]);
   vm.runInContext("globalThis.TLXShaders = window.TLXShaders", ctx);
   let graph;

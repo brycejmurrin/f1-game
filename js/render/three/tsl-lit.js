@@ -1128,7 +1128,7 @@
     };
     function retireBakeTexture(texture, blank) {
       if (texture === blank) return;
-      try { texture.dispose(); } catch (_) { /* already gone */ }
+      TLXUtil.safeDispose(texture);   // already gone
       // A compiled TSL sample can retain its original DataTexture after the base
       // node switches tracks. Drop that retired texture's CPU atlas as well.
       texture.image = blank.image;

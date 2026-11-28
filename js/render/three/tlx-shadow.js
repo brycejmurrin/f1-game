@@ -561,7 +561,7 @@
     const _f32Filt = () => { try { return !!(renderer.hasFeature && renderer.hasFeature("float32-filterable")); } catch (_) { return false; } };
     const _canCopy = () => typeof renderer.copyTextureToTexture === "function" && (isWebGPU ? _f32Filt() : seedUnpackCache());
     let csmCarsOn = false;
-    const _disposeAll = (list) => { for (const rt of list) { try { rt.dispose(); } catch (_) { /* */ } } list.length = 0; };
+    const _disposeAll = (list) => { for (const rt of list) TLXUtil.safeDispose(rt); list.length = 0; };
     if (sunRT && _xFeat("csm")) {
       let carsWanted = true;
       try { carsWanted = localStorage.getItem("apex26.tlxCsmCars") !== "0"; } catch (_) { /* no storage: on */ }
@@ -739,7 +739,7 @@
     }
     // Object disposal drops the renderer's retained RenderObject (tlx.js dropWrapper).
     function disposeCaster(m) {
-      try { if (m.isInstancedMesh) m.dispose(); else m.dispatchEvent({ type: "dispose" }); } catch (_) { /* */ }
+      TLXUtil.releaseObject(m);
     }
 
     // caster scene + pooled mesh wrappers (the tlx.js draw-list pattern)
@@ -837,7 +837,7 @@
       return g;
     }
     function freeCasterGeo(m) {
-      try { m.geometry.dispose(); } catch (_) { /* the clone releases its own instanceMatrix */ }
+      TLXUtil.safeDispose(m && m.geometry);   // the clone releases its own instanceMatrix
     }
     const iCast = [];             // this pass's casts, hidden again at the next Begin
     // M-12: phones skip only the shadow caster UBO pad (lit batches keep it).
@@ -946,7 +946,7 @@
           const m = pl.pool[i];
           if (m.geometry !== geo && !(m.geometry === parkedGeo && m.__lastGeo === geo)) continue;   // a PARKED slot's RenderObject still holds __lastGeo (#2693); a re-used slot is left alone
           m.visible = false; m.geometry = parkedGeo; m.__lastGeo = null;
-          try { m.dispatchEvent({ type: "dispose" }); } catch (_) { /* no render object yet */ }
+          TLXUtil.dropRenderObject(m);   // no render object yet
         }
       }
     }
@@ -963,7 +963,7 @@
           if (!m) continue;
           const live = m.geometry !== e.geo && m.geometry !== parkedGeo;
           if (!live) { m.visible = false; m.geometry = parkedGeo; m.__lastGeo = null; }
-          try { m.dispatchEvent({ type: "dispose" }); } catch (_) { /* no render object yet */ }
+          TLXUtil.dropRenderObject(m);   // no render object yet
         }
         releaseGeometry(e.geo);
       }
@@ -972,11 +972,11 @@
       if (!m || !geo) return;
       const live = m.geometry !== geo && m.geometry !== parkedGeo && m.__lastGeo !== geo;
       if (live) {
-        try { m.dispatchEvent({ type: "dispose" }); } catch (_) { /* stale render object only */ }
+        TLXUtil.dropRenderObject(m);   // stale render object only
         return;
       }
       m.visible = false; m.geometry = parkedGeo; m.__lastGeo = null;
-      try { m.dispatchEvent({ type: "dispose" }); } catch (_) { /* no render object yet */ }
+      TLXUtil.dropRenderObject(m);   // no render object yet
     }
     function purgeCastersForGeos(freedGeos) {
       if (!freedGeos || !freedGeos.size) return;
@@ -1023,14 +1023,14 @@
           if (!m) continue;
           const live = m.geometry !== e.geo && m.geometry !== parkedGeo;
           if (!live) { m.visible = false; m.geometry = parkedGeo; m.__lastGeo = null; }
-          try { m.dispatchEvent({ type: "dispose" }); } catch (_) { /* no render object yet */ }
+          TLXUtil.dropRenderObject(m);   // no render object yet
         }
         for (const pl of pools.values()) {
           for (let j = 0; j < pl.pool.length; j++) {
             const m = pl.pool[j];
             if (m.geometry !== e.geo && !(m.geometry === parkedGeo && m.__lastGeo === e.geo)) continue;
             m.visible = false; m.geometry = parkedGeo; m.__lastGeo = null;
-            try { m.dispatchEvent({ type: "dispose" }); } catch (_) { /* no render object yet */ }
+            TLXUtil.dropRenderObject(m);   // no render object yet
           }
         }
       }
@@ -1633,7 +1633,7 @@
           const retired = compiled ? _probePrev : probes;
           if (retired) {
             for (const m of retired.meshes) disposeCaster(m);
-            for (const g of retired.geos) { try { g.dispose(); } catch (_) { /* device dying */ } }
+            for (const g of retired.geos) TLXUtil.safeDispose(g);   // device dying
           }
           if (compiled) { _probePrev = probes; S.probeLayouts = probes.geos.length; }
           hideCasters(shown);

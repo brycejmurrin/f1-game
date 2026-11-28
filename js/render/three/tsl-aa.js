@@ -365,7 +365,7 @@
         hist = null; W = 0; H = 0; reset = true; lastOk = false;
       },
       state: () => ({ frames, resets, size: [W, H], jitter: [_jit[0], _jit[1]], held: !!hist, velocity: !!velT }),
-      dispose() { try { histInit.dispose(); outInit.dispose(); } catch (_) { /* device dying */ } },
+      dispose() { TLXUtil.safeDispose(histInit, outInit); },   // each in its own try: a dying device skipped outInit (#7334)
     };
   }
 

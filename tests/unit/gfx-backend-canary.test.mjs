@@ -47,6 +47,9 @@ import { bootRendererBoot } from "../helpers/renderer-boot-vm.mjs";
 import { cssRules, decl } from "../helpers/css-rules.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 import { mkTmpDir } from "../helpers/tmp-dir.mjs";
+import { seedTlxUtil } from "../helpers/tlx-util-vm.mjs";
+
+seedTlxUtil();   // TLX files release through TLXUtil at call time (#7334)
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const readFile = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -4733,7 +4736,7 @@ test("TLX shadow pool parks idle wrappers on an empty geometry; GLX road bias is
   assert.match(sh, /function freeInstanced\(batch\) \{[\s\S]*?iByBatch\.delete\(batch\);[\s\S]*?castScene\.remove\(m\);[\s\S]*?disposeCaster\(m\)/,
     "freeInstanced drops the batch's caster from the cast scene and disposes it");
   // A-H4: an InstancedMesh caster (tlxCasterAttr=0) disposes; the attribute Mesh has no dispose(), so its event.
-  assert.match(sh, /function disposeCaster\(m\) \{\s*try \{ if \(m\.isInstancedMesh\) m\.dispose\(\); else m\.dispatchEvent\(\{ type: "dispose" \}\); \}/);
+  assert.match(sh, /function disposeCaster\(m\) \{\s*TLXUtil\.releaseObject\(m\);/);   // the rule itself: tlx-release-funnel.test.mjs (#7334)
   const tlxSrc = read("js/render/three/tlx.js").replace(/^[ \t]*\/\/.*$/gm, "");
   const disposeInstancedObject = new Function(`return (${fnSource(tlxSrc, "function disposeInstancedObject(mesh) {")})`)();
   const plain = { dispatches: 0, dispatchEvent(e) { this.dispatches++; this.event = e; } };
@@ -4752,7 +4755,7 @@ test("TLX shadow pool parks idle wrappers on an empty geometry; GLX road bias is
   // AT ONCE: a slot is otherwise parked only by its target's next pass, which
   // cannot run while the next track builds — so every chunk geometry of the
   // old track stayed reachable through a hidden caster across the build peak.
-  assert.match(sh, /function releaseGeometry\(geo\) \{[\s\S]*?for \(const pl of pools\.values\(\)\)[\s\S]*?if \(m\.geometry !== geo && !\(m\.geometry === parkedGeo && m\.__lastGeo === geo\)\) continue;[^\n]*\n\s*m\.visible = false; m\.geometry = parkedGeo; m\.__lastGeo = null;\s*try \{ m\.dispatchEvent\(\{ type: "dispose" \}\); \}/,
+  assert.match(sh, /function releaseGeometry\(geo\) \{[\s\S]*?for \(const pl of pools\.values\(\)\)[\s\S]*?if \(m\.geometry !== geo && !\(m\.geometry === parkedGeo && m\.__lastGeo === geo\)\) continue;[^\n]*\n\s*m\.visible = false; m\.geometry = parkedGeo; m\.__lastGeo = null;\s*TLXUtil\.dropRenderObject\(m\);/,
     "shadowSys.releaseGeometry parks every slot still pointing at the geometry AND drops its render object");
   assert.match(sh, /releaseGeometry,\n/, "and exports it");
   assert.match(tlxSrc, /function releaseGeometry\(geo\) \{[\s\S]*?meshByGeo\.delete\(geo\);\s*if \(shadowSys && shadowSys\.releaseGeometry\) shadowSys\.releaseGeometry\(geo\);/,
@@ -4773,14 +4776,14 @@ test("TLX shadow pool parks idle wrappers on an empty geometry; GLX road bias is
     "ownership flush must not drain every deferred drop — that stripped the next circuit's ribbons on CI");
   assert.match(fnBody(tlxSrc, "flushOwnershipRelease"), /purgeOwnershipRenderObjects\(freedGeos\)/,
     "ownership flush must evict straggler RenderObjects for freed geos (Metal WebGPU geometry cache)");
-  assert.match(fnBody(tlxSrc, "purgeOwnershipRenderObjects"), /g\.dispatchEvent\(\{ type: "dispose" \}\)/,
+  assert.match(fnBody(tlxSrc, "purgeOwnershipRenderObjects"), /TLXUtil\.dropRenderObject\(g\)/,
     "straggler RenderObjects drop when geometry dispatches dispose (WebGL2 warm probes and WebGPU cache)");
   assert.match(sh, /flushOwnershipDropped,\n/, "shadow pool exports the warm-bypass drain for chunked free");
   assert.match(fnBody(tlxSrc, "_coDrop"), /b\.imesh\._ownGeo = true;\s*dropWrapper\(b\.imesh, null, later\)/, "coalesced owned views use the same warm-aware lifecycle");
   const warmProbe = tlxSrc.slice(tlxSrc.indexOf("async function compileWarmProbe("), tlxSrc.indexOf("async function warmFxPrograms("));
   const ownershipFlush = fnBody(tlxSrc, "flushOwnershipRelease");
   const ownershipDrop = fnBody(tlxSrc, "ownershipDropQueued");
-  assert.match(warmProbe, /if \(p\.pending\) return;[\s\S]*?m\.dispatchEvent\(\{ type: "dispose" \}\);[\s\S]*?m\.geometry = null; m\.material = null;/,
+  assert.match(warmProbe, /if \(p\.pending\) return;[\s\S]*?TLXUtil\.dropRenderObject\(m\);[\s\S]*?m\.geometry = null; m\.material = null;/,
     "warm probes drop render objects before clearing references, after pending compilation settles");
   assert.match(warmProbe, /finally \{ if \(!--p\.pending && p\.dead\) p\.release\(\); \}/,
     "a retired probe releases when its last compiler settles");

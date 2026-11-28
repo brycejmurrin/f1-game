@@ -19,6 +19,9 @@ import vm from "node:vm";
 import { loadCrests } from "../../tools/car/crest-sweep.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 import { symbolSource } from "../helpers/game-source.mjs";
+import { withTlxUtil, seedTlxUtil } from "../helpers/tlx-util-vm.mjs";
+
+seedTlxUtil();   // TLX files release through TLXUtil at call time (#7334): new Function slices read the global
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const TEXPOOL_SRC = fs.readFileSync(path.join(ROOT, "js/render/three/tlx-texpool.js"), "utf8");
@@ -75,7 +78,7 @@ test("phone AI atlases snapshot before scratch reuse on STANDARD and HIGH, inclu
         get width() { return width; }, set width(v) { width = v; generation++; },
         get height() { return height; }, set height(v) { height = v; generation++; } };
     } };
-    const ctx = vm.createContext({ document, GLX: { isMobile, mobileTier }, console: { log() {}, warn() {}, error() {}, info() {} } });
+    const ctx = vm.createContext(withTlxUtil({ document, GLX: { isMobile, mobileTier }, console: { log() {}, warn() {}, error() {}, info() {} } }));
     for (const file of ["js/core/log.js", "js/data/teams.js", "js/car/liveries.js", "js/car/crest-paths.js",
       "js/car/livery-graphics.js", "js/car/crest-draw.js", "js/car/liverytex.js"])
       vm.runInContext(fs.readFileSync(path.join(ROOT, file), "utf8"), ctx, { filename: absSrc(file) });
@@ -267,7 +270,7 @@ test("freeTexture retires the decal materials bound to the texture when it is di
   const free = slice(TLX, "        freeTexture(t) {", "        texCensus:", "freeTexture");
   assert.match(free, /retireTexture\(t\.tex,/);
   const disposeBody = slice(TEXPOOL_SRC, "function disposePooled(t) {", "function retireTexture(", "disposePooled");
-  assert.ok(disposeBody.indexOf("fx.releaseTexture(t)") >= 0 && disposeBody.indexOf("fx.releaseTexture(t)") < disposeBody.indexOf("t.dispose()"));
+  assert.ok(disposeBody.indexOf("fx.releaseTexture(t)") >= 0 && disposeBody.indexOf("fx.releaseTexture(t)") < disposeBody.indexOf("TLXUtil.safeDispose(t)"));
 
   const body = slice(FX, "    function releaseTexture(tex) {", "    function decalMaterialFor(tex, glow) {", "releaseTexture");
   assert.match(FX, /decalMaterialFor, releaseTexture,/, "releaseTexture is not exported from TLXShaders.fx");

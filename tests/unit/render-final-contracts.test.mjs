@@ -4,6 +4,9 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import { createRequire } from 'node:module';
 import { Matrix4, PerspectiveCamera } from '../../vendor/three-0.187.0/three.core.min.js';
+import { seedTlxUtil } from "../helpers/tlx-util-vm.mjs";
+
+seedTlxUtil();   // TLX files release through TLXUtil at call time (#7334)
 const read = p => fs.readFileSync(new URL('../../' + p, import.meta.url), 'utf8');
 function fn(source, name) {
   const start = source.indexOf('function ' + name + '('); assert.ok(start >= 0, name);
@@ -40,7 +43,7 @@ test('tier-4 recovery keeps inverse projection current through ordinary camera s
     assert.equal(G.lens.near, .3);
   } finally { game.close(); }
 });
-function ctx(values, code) { const c = vm.createContext(values); vm.runInContext(code, c); return c; }
+function ctx(values, code) { const c = vm.createContext({ TLXUtil: seedTlxUtil(), ...values }); vm.runInContext(code, c); return c; }
 
 test('tier 4 keeps the main camera view and inverse projection current across lens changes', () => {
   const game = read('js/game.js');
