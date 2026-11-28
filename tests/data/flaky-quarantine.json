@@ -44,13 +44,13 @@
     {
       "spec": "tests/specs/track-switch-memory.spec.js",
       "title": "loading circuits one after another keeps one world in memory and does not grow",
-      "signature": "^monaco: heap ",
+      "signature": "^(monaco|monza): heap ",
       "owner": "brycejmurrin",
       "since": "2026-11-26",
-      "evidence": "https://github.com/brycejmurrin/f1-game/actions/runs/45881964604/job/140123810793",
-      "expires": "2026-12-10",
-      "review": "PR #7007. Metal real-GPU job only: monaco heap 131.7 → 133.4 → 151.3 → 134.7 → 152.1 MB (median growth 17.489 > 10), a GC sawtooth, passed on retry 1 (110.5 s). #7007's diff (night/fog exposure floors, WGX-only mieDamp) allocates nothing. Metal ~17 MB per pick is documented in docs/notes/TRACK-SWITCH-METAL-2026-10-17.md. By 2026-12-10 the owner fixes the sawtooth or re-bounds the Metal check and removes this row; an extension needs a fresh failed run and a new deadline.",
-      "why": "One red on #7007 20197e3f (job 140123810793): median 17.489 MB, series 17.8/-16.6/17.5 (GC sawtooth); passed on retry; APEX_FAIL_ON_FLAKY=1 turned the retry into exit 1. No same-tier base run found for comparison."
+      "evidence": "https://github.com/brycejmurrin/f1-game/actions/runs/46109757702/job/140870601140",
+      "expires": "2026-12-05",
+      "review": "Issue #7464 (map-switch slowdown). Metal real-GPU job only, a GC sawtooth that passes on retry 1. (1) PR #7007 20197e3f (run 45881964604 job 140123810793): monaco heap 131.7 → 133.4 → 151.3 → 134.7 → 152.1 MB (median growth 17.489 > 10); #7007 allocates nothing. (2) PR #7480 5d120c54 (run 46109757702 job 140870601140): monza heap 122.1 → 126.0 → 151.9 → 127.6 → 154.5 MB (median growth 25.92 > 10, 106.1 s retry); #7480 (VSC drill) touches no renderer or track loading. Metal ~17 MB per pick is documented in docs/notes/TRACK-SWITCH-METAL-2026-10-17.md. Exit: #7464 lands a fix (or re-bounds the Metal check), then three cold CI passes of this spec without retry, then remove this row; an extension needs a fresh failed run and a new deadline.",
+      "why": "Two reds, two circuits, one shape: #7007 20197e3f monaco series 17.8/-16.6/17.5; #7480 5d120c54 monza series 25.9/-24.3/26.9 (net after warm-up 28.5 MB). Both passed on retry; APEX_FAIL_ON_FLAKY=1 turned each retry into exit 1. Signature widened from ^monaco to monaco|monza on 2026-11-28; any other circuit still blocks."
     },
     {
       "spec": "tests/specs/engine-audio-offline.spec.js",
