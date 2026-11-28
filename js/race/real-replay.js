@@ -95,14 +95,6 @@ const RealReplay = (function () {
     }
     return best;
   }
-  /** World (x, z) of a feed point under a fit. */
-  function mapPoint(fit, x, y, out) {
-    const yy = fit.refl * y, cos = Math.cos(fit.th), sin = Math.sin(fit.th);
-    out = out || [0, 0];
-    out[0] = cos * x - sin * yy + fit.tx; out[1] = sin * x + cos * yy + fit.ty;
-    return out;
-  }
-
   // ── Traces (pure with Tracks): a feed trace → progress along the circuit ──
   /** raw: Float32Array [t, x, y, …] (t seconds from lights out; x, y feed metres).
    *  Returns {t, prog, x, n, end}: prog is the unwrapped arc length so a lap is
@@ -754,6 +746,6 @@ const RealReplay = (function () {
     return api;
   }
 
-  return { create, fitFrame, mapPoint, trackTrace, buildTraces, sampleAt, highlightsFor, reelFor, fmtLap, LEAD_S, HOLD_S, ENDED_S };
+  return { create, fitFrame, trackTrace, buildTraces, sampleAt, highlightsFor, reelFor, fmtLap, LEAD_S, HOLD_S, ENDED_S };
 })();
 Object.freeze(RealReplay);
