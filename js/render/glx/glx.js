@@ -2919,7 +2919,7 @@ const GLXBackend = (function () {
     },
     gpuMs() { return ctxGone() ? -1 : _gpuMs; },
     isMobile: IS_MOBILE,
-    mobileTier: IS_MOBILE,   // phone NOT opted into GRAPHICS: HIGH → memory-safe caps apply
+    mobileTier: IS_MOBILE,   // same predicate as isMobile (#6519); kept for the facade consumers
   };
 })();
 GLX.install(GLXBackend);
