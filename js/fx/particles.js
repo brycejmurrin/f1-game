@@ -21,6 +21,7 @@ const Particles = (function () {
   let _drg, _grv;             // drag rate (1/s) + downward gravity (m/s²)
   let _stoneFloor = null;      // allocated on first gravel event, NaN for airborne-only effects
   let _add;                   // Uint8: 1 = additive (spark) group
+  let _spr, _spawnSpr = 0;    // Uint8: 1 = spray/mist (fades out at the lens)
   let _n = 0;                 // live count
   let _mobile = false;        // gfx.mobileTier at init — the spray plume shrinks with the pool
 
@@ -78,7 +79,7 @@ const Particles = (function () {
     _cr = new Float32Array(MAX); _cg = new Float32Array(MAX); _cb = new Float32Array(MAX);
     _a0 = new Float32Array(MAX);
     _drg = new Float32Array(MAX); _grv = new Float32Array(MAX);
-    _add = new Uint8Array(MAX);
+    _add = new Uint8Array(MAX); _spr = new Uint8Array(MAX);
     _stoneFloor = null;
     // Pool only at init — rainSeed grows _vertA to MAX + wetCap once a shower arms.
     // A second init (tests, a future gfx-recreate path) must DROP any armed
@@ -167,7 +168,7 @@ const Particles = (function () {
     _cr[i] = r; _cg[i] = g; _cb[i] = b;
     _a0[i] = alpha;
     _drg[i] = drag; _grv[i] = grav;
-    _add[i] = additive ? 1 : 0;
+    _add[i] = additive ? 1 : 0; _spr[i] = _spawnSpr;
     if (_stoneFloor) _stoneFloor[i] = floor;
     _dirty = true;
   }
@@ -292,6 +293,7 @@ const Particles = (function () {
   function spray(x, y, z, bvx, bvz, strength, count) {
     const m = mul(); if (m <= 0) return;
     const lifeK = _mobile ? 0.7 : 1, sizeK = _mobile ? 0.8 : 1, s1 = Math.min(strength, 1.35), s0 = Math.min(strength, 1);
+    _spawnSpr = 1;
     for (let n = nOf((count === undefined ? 1 : count) * Math.min(m, 2) / shedDiv()); n > 0 && _n < MAX * 0.75; n--) {
       const roll = Math.random();
       if (roll < 0.35) {                                   // rooster tail: up to ~7 m/s up, a tall arc
@@ -316,6 +318,7 @@ const Particles = (function () {
           1.5, -0.9, 0);
       }
     }
+    _spawnSpr = 0;
   }
 
   // Spray STRENGTH for one car: the speed term (vs = vStd(speed): starts at
@@ -373,7 +376,7 @@ const Particles = (function () {
           _sz[i] = _sz[l]; _grw[i] = _grw[l];
           _cr[i] = _cr[l]; _cg[i] = _cg[l]; _cb[i] = _cb[l];
           _a0[i] = _a0[l]; _drg[i] = _drg[l]; _grv[i] = _grv[l];
-          _add[i] = _add[l];
+          _add[i] = _add[l]; _spr[i] = _spr[l];
           if (_stoneFloor) _stoneFloor[i] = _stoneFloor[l];
         }
         continue;
@@ -429,6 +432,15 @@ const Particles = (function () {
   // The normalized near plane comes from the actual view-projection matrix.
   function behindNear(plane, x, y, z, size) {
     return plane && plane[0] * x + plane[1] * y + plane[2] * z + plane[3] < -Math.SQRT2 * size;
+  }
+  // Spray/mist centred within ~1 m of the near plane fades to nothing (#7508,
+  // Bryce's D1 = A): a camera inside a wet pack no longer stacks dozens of
+  // lens-filling quads. Beyond LENS_FADE_FAR the alpha is untouched.
+  const LENS_FADE_NEAR = 0.5, LENS_FADE_FAR = 1.5;
+  function lensFade(plane, x, y, z) {
+    if (!plane) return 1;
+    const d = plane[0] * x + plane[1] * y + plane[2] * z + plane[3];
+    return d >= LENS_FADE_FAR ? 1 : d <= LENS_FADE_NEAR ? 0 : (d - LENS_FADE_NEAR) / (LENS_FADE_FAR - LENS_FADE_NEAR);
   }
   const unclipped = [0, 0, 0, 0], lastPlane = new Float64Array(4);
   function draw(nearPlane) {
@@ -490,7 +502,8 @@ const Particles = (function () {
       const t = _age[i] / _life[i];
       // quick fade-in (kills the "pop"), long fade-out
       const fade = t < 0.12 ? t / 0.12 : 1 - (t - 0.12) / 0.88;
-      const alpha = _a0[i] * fade;
+      let alpha = _a0[i] * fade;
+      if (_spr[i]) { const k = lensFade(nearPlane, _px[i], _py[i], _pz[i]); if (k < 1) alpha *= k; }
       if (alpha <= 0.004) continue;
       const size = _sz[i] + _grw[i] * _age[i];
       if (behindNear(nearPlane, _px[i], _py[i], _pz[i], size)) continue;
