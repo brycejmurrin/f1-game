@@ -5,9 +5,21 @@
     "street": 9.75
   },
   "files": {
+    "css/carsetup.css": {
+      "lines": 2118
+    },
+    "css/data.css": {
+      "lines": 1633
+    },
     "css/hud.css": {
       "codeLines": 2415,
       "lines": 2686
+    },
+    "css/overlays.css": {
+      "lines": 2046
+    },
+    "css/tuner.css": {
+      "lines": 1565
     },
     "js/agent/agentview.js": {
       "lines": 2340
@@ -34,9 +46,21 @@
     "js/track/tracks.js": {
       "lines": 846
     },
+    "js/ui/hud-layout.js": {
+      "lines": 1314
+    },
     "js/ui/hud.js": {
       "codeLines": 1401,
       "lines": 2196
+    },
+    "js/ui/photo-studio-ui.js": {
+      "lines": 1278
+    },
+    "js/ui/select-screen.js": {
+      "lines": 1447
+    },
+    "js/ui/settings-export-body.js": {
+      "lines": 1291
     },
     "tools/ci/pick-tests.mjs": {
       "blanketOnlyRoutes": 2
