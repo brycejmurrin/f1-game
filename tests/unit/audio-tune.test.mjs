@@ -1643,7 +1643,9 @@ test("a preempted transmission leaves nothing rendering", async () => {
   for (let i = 0; i < 12; i++) GameAudio.radioSting("radio", 2);
   GameAudio.radioStingStop();
   // radioStingStop itself must disconnect the bed filter chain — do NOT rely on
-  // onended (a closed / suspended context never fires it).
+  // onended (a closed / suspended context never fires it). On this RUNNING
+  // context its own timer cuts the bed after the 50 ms fade (#7252 m4).
+  for (const fn of pendingTimers.splice(0)) fn();
   assert.equal(live.size, before,
     "twelve preempts left " + (live.size - before) + " nodes wired into sfxBus — a Gain still connected keeps rendering for ever");
 });
@@ -2377,7 +2379,7 @@ test("feedReplayScrub: replay scrub drives engine + rivals from replayed speed, 
   const src = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
   const tick = src.slice(src.indexOf("function tickBody(now) {"));
   const paused = tick.slice(0, tick.indexOf("replayBuf.onTick(raceT, cars, state);"));
-  assert.match(paused, /GameAudio\.feedReplayScrub\(soundOn && player, replayBuf\.isScrubbing\(\), cars, naturalGear, rpmFor, rivalAudio, isWetRoad, vTop\); return;/,
+  assert.match(paused, /GameAudio\.feedReplayScrub\(soundOn && player, replayBuf\.isScrubbing\(\), cars, naturalGear, rpmFor, rivalAudio, isWetAt, vTop\); return;/,
     "the paused branch's return line hands the frame to GameAudio.feedReplayScrub (hoisted refs, no per-frame {})");
   assert.doesNotMatch(paused, /GameAudio\.setEngine\(/, "the scrub engine pack lives in GameAudio, not inline in game.js");
   assert.match(src, /paused = p; GameAudio\.resetReplayScrub\(\);/, "setPaused clears the scrub one-shot");

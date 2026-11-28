@@ -586,7 +586,7 @@ function isWetRoad() { return trackWetness() >= 0.25; }
 function isRaining() { return trackWetness() >= 0.72; }
 // The view's own sky / surface (a local storm cell, js/race/rain-cells.js), not the lap mean: lightning, thunder and wet-car SFX follow what the player is under.
 function isRainingView() { return wxArc ? wxArc.viewRainfall() >= 0.72 : isRaining(); }
-function carWet(c) { return c && wxArc ? wxArc.wetnessAt(c.s, c.x) : trackWetness(); } function isWetAt(c) { return carWet(c) >= 0.25; }   // the surface under car c (lap mean without an arc)
+function carWet(c) { return c && wxArc ? wxArc.wetnessAt(c.s, c.x) : trackWetness(); } function isWetAt(c = player) { return carWet(c) >= 0.25; }   // the surface under car c (lap mean without an arc); no argument = the player: the engine-audio wet feeds (setEngine, setSkid, grid idle, and feedReplayScrub, which calls it bare; #7252)
 // Road grip by weather AND fitted tyre (table WET_GRIP) — see docs/PHYSICS.md
 // "Weather and tyres". No car => the slick column.
 function trackWetness() { return wxArc ? wxArc.wetness() : TyreModel.wetness(raceWeather, null); } function roadWetness() { return trackWetness(); }   // the arc's lagged road state (js/race/weather-arc.js); roadWetness = alias for grip / pits / engineer
@@ -4598,7 +4598,7 @@ function update(dt) {
       // reaches the gantry, and then the lap is driven from the line.
       if (isQuali() && !wasRestart) launchFlyingLap();
     }
-    _gridIdleOpts.soundOn = soundOn; _gridIdleOpts.wet = isWetRoad(); _gridIdleOpts.step = _audioParamStep;
+    _gridIdleOpts.soundOn = soundOn; _gridIdleOpts.wet = isWetAt(); _gridIdleOpts.step = _audioParamStep;
     GameAudio.setGridIdle(player, _gridIdleOpts); return;
   }
   if (state === "results") return RaceCeremony.get()?.stepResultsField(cars, dt, updateCar);
@@ -4771,7 +4771,7 @@ function update(dt) {
     // use, never the road's curvature (|k| * speed): that squeals every corner
     // whether or not the car is sliding and leaves a genuine slide down a
     // straight silent — the most audible arc-coupling in the game.
-    GameAudio.setSkid(player.skidIntensity || 0, isWetAt(player));
+    GameAudio.setSkid(player.skidIntensity || 0, isWetAt());
     // THE BRAKING CUE. Driven from the sim tick and not the draw, because it is
     // the one part of the driving line that has to work with the line OFF — a
     // player who cannot read the ribbon is exactly who it is for. DrivingLine
@@ -8635,7 +8635,7 @@ function tickBody(now) {
       if (settingsOnly ? RenderRate.settle(dt, _dtMs, XrBoot.comfort()) : RenderRate.force(dt, _dtMs))
         render(Math.min(RenderRate.dt(), setupPreviewOn ? 0.1 : 1 / 20));   // garage's 100 ms stall limit preserves motion below 20 fps
     }
-    GameAudio.feedReplayScrub(soundOn && player, replayBuf.isScrubbing(), cars, naturalGear, rpmFor, rivalAudio, isWetRoad, vTop); return;   // instant-replay engine/rivals while scrubbing; silence on scrub exit
+    GameAudio.feedReplayScrub(soundOn && player, replayBuf.isScrubbing(), cars, naturalGear, rpmFor, rivalAudio, isWetAt, vTop); return;   // instant-replay engine/rivals while scrubbing; silence on scrub exit
   }
   replayBuf.onTick(raceT, cars, state); // 30 Hz solo ring — never under netplay / scrub
   banner.tick(dt);
@@ -8689,7 +8689,7 @@ function tickBody(now) {
   PerfSpans.begin("camera"); director.tick(dt); PerfSpans.end("camera");   // TV director (dbgCam only): after the step, on the pose render draws (camPoseOf)
   if (photoMode && paused && netPlay.active()) updatePhotoCam(Math.min(dt, 1 / 20));
   if (state === "results") { resultsCam.tick(dt); const rc = RaceCeremony.get(); if (rc) rc.tick(Math.max(0, _dtMs / 1000)); }
-  if (state !== "race" && state !== "count") GameAudio.feedReplayScrub(soundOn && player, state === "results" && replayBuf.isScrubbing(), cars, naturalGear, rpmFor, rivalAudio, isWetRoad, vTop);   // results HIGHLIGHTS: engines + field per clip; orbit, NEXT, RACE AGAIN or MENU (each ends the scrub) silences once
+  if (state !== "race" && state !== "count") GameAudio.feedReplayScrub(soundOn && player, state === "results" && replayBuf.isScrubbing(), cars, naturalGear, rpmFor, rivalAudio, isWetAt, vTop);   // results HIGHLIGHTS: engines + field per clip; orbit, NEXT, RACE AGAIN or MENU (each ends the scrub) silences once
   RenderRate.observe(_dtMs);
   if (RenderRate.gate(dt, _dtMs, XrBoot.comfort(), state === "race" && !paused)) {   // a skipped rAF hands its dt/ms to the next drawn frame
     dt = RenderRate.dt();

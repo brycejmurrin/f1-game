@@ -269,7 +269,7 @@ test("losing results eligibility during a montage restores the finish and releas
 // Runs the REAL tickBody against the real ResultsCam, ReplayBuf and GameAudio
 // (engine.js on a recording AudioContext).
 const TICK = symbolSource("function tickBody(now) {");
-const FEED = "GameAudio.feedReplayScrub(soundOn && player, state === \"results\" && replayBuf.isScrubbing(), cars, naturalGear, rpmFor, rivalAudio, isWetRoad, vTop);";
+const FEED = "GameAudio.feedReplayScrub(soundOn && player, state === \"results\" && replayBuf.isScrubbing(), cars, naturalGear, rpmFor, rivalAudio, isWetAt, vTop);";
 
 function param(v) {
   const p = { value: v, setTargetAtTime(x) { p.value = x; }, setValueAtTime(x) { p.value = x; },
@@ -353,7 +353,7 @@ function highlightsRig({ sound = true } = {}) {
     netPlay: { tick: noop, active: () => false }, netStart: null, countT: 0, startLights: { countCredit: () => 0 }, PerfGov: { tick: noop, recordSimulation: noop }, UiExperience: { resumeHolding: () => false },
     director: { tick: noop, reset: noop }, mirrorPass: { preparing: () => false }, replayBuf, resultsCam, RaceCeremony: { get: () => null }, raceT: 3,
     GameAudio: audio.GameAudio, soundOn: sound, player, cars, rivalAudio,
-    naturalGear: (v) => (v < 30 ? 2 : 6), rpmFor: (g, v) => Math.min(15000, 5000 + v * 1000 / g), isWetRoad: () => false, vTop: () => 90,
+    naturalGear: (v) => (v < 30 ? 2 : 6), rpmFor: (g, v) => Math.min(15000, 5000 + v * 1000 / g), isWetAt: () => false, vTop: () => 90,
     _poseAt: null, photoMode: false, setupPreviewOn: false, announceT: 0, hitStop: 0, frozen: false, raceRestarting: false, track: {}, physAcc: 0, PHYS_DT: 1 / 60,
     banner: { tick() {}, clear() {}, announce() {}, get t() { return 0; } }, feel: { shake: 0, camRoll: 0, hitStop: 0 },
     renderAlpha: 0, clamp: (v, lo, hi) => Math.max(lo, Math.min(hi, v)), updateHud: noop, render: noop, update: noop, updatePhotoCam: noop,
@@ -373,7 +373,7 @@ test("game.js feeds feedReplayScrub from the results tick, off the race/count fr
   assert.ok(TICK.indexOf("resultsCam.tick(") < at && at < TICK.indexOf('PerfSpans.begin("render"); render('),
     "after resultsCam.tick (the clip's pose is applied), before render");
   assert.ok(TICK.indexOf("replayBuf.onTick(raceT, cars, state);") < at, "outside the paused branch");
-  assert.match(TICK, /GameAudio\.feedReplayScrub\(soundOn && player, replayBuf\.isScrubbing\(\), cars, naturalGear, rpmFor, rivalAudio, isWetRoad, vTop\); return;/,
+  assert.match(TICK, /GameAudio\.feedReplayScrub\(soundOn && player, replayBuf\.isScrubbing\(\), cars, naturalGear, rpmFor, rivalAudio, isWetAt, vTop\); return;/,
     "the #1262 paused-branch feed is untouched");
 });
 
@@ -657,7 +657,7 @@ function pausedSettingsRig({ mode = "30", hz = 60, preview = "" } = {}) {
       flyby: { hidden: preview !== "flyby" }, pmsettings: { hidden: false } },
     setupPreviewOn: preview === "garage", photoMode: preview === "photo", updatePhotoCam: noop,
     GameAudio: { feedReplayScrub: () => calls.audio++ }, soundOn: false, player: {}, cars: [],
-    naturalGear: noop, rpmFor: noop, rivalAudio: {}, isWetRoad: noop, vTop: noop,
+    naturalGear: noop, rpmFor: noop, rivalAudio: {}, isWetAt: noop, vTop: noop,
     XrBoot: { comfort: () => false }, render: (dt) => { calls.render++; calls.dt += dt; calls.deltas.push(dt); },
   });
   vm.runInContext(src("js/perf/render-rate.js"), ctx, { filename: absSrc("js/perf/render-rate.js") });

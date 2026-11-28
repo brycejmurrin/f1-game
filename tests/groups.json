@@ -1753,6 +1753,7 @@
         "tests/unit/pu-harvest-audio.test.mjs",
         "tests/unit/race-frame-alloc-6752.test.mjs",
         "tests/unit/radio-duration.test.mjs",
+        "tests/unit/radio-sting-stop-fade.test.mjs",
         "tests/unit/radio-voice.test.mjs",
         "tests/unit/real-replay-captions.test.mjs",
         "tests/unit/rival-attach-init.test.mjs",

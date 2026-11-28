@@ -97,7 +97,7 @@ test('online Photo camera input integrates while shared physics continues; solo 
       replayBuf: { isScrubbing: () => false, tickScrub() {}, onTick() {} }, raceT: 0,
       // The paused branch's return line hands the frame to GameAudio.feedReplayScrub.
       GameAudio: { feedReplayScrub() {} }, soundOn: false, player: null, rivalAudio: null,
-      naturalGear() { return 1; }, rpmFor() { return 0; }, isWetRoad() { return false; }, vTop() { return 1; },
+      naturalGear() { return 1; }, rpmFor() { return 0; }, isWetAt() { return false; }, vTop() { return 1; },
       _poseAt: null, photoMode: photo, photomode: {}, setupPreviewOn: false,
       els: { lighting: { hidden: true }, camtune: { hidden: true }, flyby: { hidden: true } },
       announceT: 0, hitStop: 0, frozen: false, track: {}, physAcc: 0, PHYS_DT: 1 / 60, cars: [], renderAlpha: 0,   // track: the K1 null-track gate wants a built world

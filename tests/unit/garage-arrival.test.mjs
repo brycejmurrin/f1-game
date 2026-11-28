@@ -1172,7 +1172,7 @@ function arrivalTickHarness({ paused = false, preview = false, garage = true, ra
     replayBuf: { isScrubbing: () => false, tickScrub: noop, onTick: noop }, banner: { tick: noop },
     feel: { hitStop: 0 }, frozen: true, raceRestarting: false, physAcc: 0, PHYS_DT: 1 / 60, renderAlpha: 1,
     clamp: (v, lo, hi) => Math.max(lo, Math.min(hi, v)), photoMode: false,
-    GameAudio: { feedReplayScrub: noop }, naturalGear: noop, rpmFor: noop, rivalAudio: null, isWetRoad: noop, vTop: noop,
+    GameAudio: { feedReplayScrub: noop }, naturalGear: noop, rpmFor: noop, rivalAudio: null, isWetAt: noop, vTop: noop,
     XrBoot: { comfort: () => false }, updateHud: noop,
     els: { overlay: { hidden: true }, lighting: { hidden: false }, camtune: { hidden: true }, flyby: { hidden: true }, pmsettings: { hidden: true } },
     home: { active: false }, driveOut: null, endHome: noop, sequenceLook: noop, reducedMotion: () => false, garageCtx: () => ({ sceneNow: 0 }),
