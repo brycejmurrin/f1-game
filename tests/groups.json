@@ -1320,6 +1320,7 @@
     "tests/unit/title-flow.test.mjs",
     "tests/unit/title-home-scene-prepaint.test.mjs",
     "tests/unit/title-menu-even.test.mjs",
+    "tests/unit/title-portrait-photo-bg-7448.test.mjs",
     "tests/unit/title-rows.test.mjs",
     "// A·W50: TitleWarm runs the menu's race prep + program warm on an idle title, once per update on a phone (apex26.titleWarm = the build); never under Save-Data, a 3D Home or off the title (real module in a VM).",
     "tests/unit/title-warm.test.mjs",
