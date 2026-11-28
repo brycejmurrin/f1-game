@@ -580,13 +580,13 @@ function naturalGear(speed) {
 }
 const GAME_LAPS = 3;
 const TT_LAPS = 4;          // time trial: four flying laps (a rolling start: js/race/flying-start.js)
-// Weather predicates from continuous trackWetness (same 0.25 / 0.72 ladder as
-// TyreModel.treadFor). Atmosphere profiles keep reading raceWeather enum.
-function isWetRoad() { return trackWetness() >= 0.25; }
-function isRaining() { return trackWetness() >= 0.72; }
+// Weather predicates from continuous trackWetness (TyreModel's WET_ROAD / RAIN
+// ladder, the one treadFor reads). Atmosphere profiles keep reading raceWeather enum.
+function isWetRoad() { return trackWetness() >= TyreModel.WET_ROAD; }
+function isRaining() { return trackWetness() >= TyreModel.RAIN; }
 // The view's own sky / surface (a local storm cell, js/race/rain-cells.js), not the lap mean: lightning, thunder and wet-car SFX follow what the player is under.
-function isRainingView() { return wxArc ? wxArc.viewRainfall() >= 0.72 : isRaining(); }
-function carWet(c) { return c && wxArc ? wxArc.wetnessAt(c.s, c.x) : trackWetness(); } function isWetAt(c) { return carWet(c) >= 0.25; }   // the surface under car c (lap mean without an arc)
+function isRainingView() { return wxArc ? wxArc.viewRainfall() >= TyreModel.RAIN : isRaining(); }
+function carWet(c) { return c && wxArc ? wxArc.wetnessAt(c.s, c.x) : trackWetness(); } function isWetAt(c) { return carWet(c) >= TyreModel.WET_ROAD; }   // the surface under car c (lap mean without an arc)
 // Road grip by weather AND fitted tyre (table WET_GRIP) — see docs/PHYSICS.md
 // "Weather and tyres". No car => the slick column.
 function trackWetness() { return wxArc ? wxArc.wetness() : TyreModel.wetness(raceWeather, null); } function roadWetness() { return trackWetness(); }   // the arc's lagged road state (js/race/weather-arc.js); roadWetness = alias for grip / pits / engineer

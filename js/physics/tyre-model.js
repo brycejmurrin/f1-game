@@ -605,8 +605,11 @@ const TyreModel = (function () {
     w = clamp(w, 0, 1);
     return w <= 0.5 ? table.dry[t] + (table.wet[t] - table.dry[t]) * w * 2 : table.wet[t] + (table.rain[t] - table.wet[t]) * (w - 0.5) * 2;
   }
+  // THE WET LADDER (one home, #7434): wetness >= WET_ROAD is a wet road (inter
+  // tread), >= RAIN is rain / standing water (full wet). game.js reads both.
+  const WET_ROAD = 0.25, RAIN = 0.72;
   function treadFor(weather, wetness) {
-    if (Number.isFinite(wetness)) return wetness >= 0.72 ? 2 : wetness >= 0.25 ? 1 : 0;
+    if (Number.isFinite(wetness)) return wetness >= RAIN ? 2 : wetness >= WET_ROAD ? 1 : 0;
     return weather === "rain" || weather === "storm" ? 2 : weather === "wet" ? 1 : 0;
   }
   function classForTread(tread) { return tread === 2 ? "wet" : tread === 1 ? "inter" : null; }
@@ -651,7 +654,7 @@ const TyreModel = (function () {
   //
   // NOT A CLIFF: loss = AQUA_LOSS · depth · r², r the fraction of AQUA_RAMP
   // past onset — zero slope at onset, the full loss AQUA_RAMP above it.
-  const AQUA_WET = 0.72;                           // wetness where standing water starts (treadFor's full-wet line)
+  const AQUA_WET = RAIN;                           // wetness where standing water starts (treadFor's full-wet line)
   const AQUA_ONSET = Object.freeze([140 / 3.6, 215 / 3.6, 290 / 3.6]);   // m/s std: slick / inter / full wet
   const AQUA_RAMP = 70 / 3.6;                      // m/s std from onset to the full loss
   const AQUA_LOSS = 0.5;                           // grip fraction lost at full depth, full ramp: floor 0.5
@@ -1139,7 +1142,7 @@ const TyreModel = (function () {
     T_AMBIENT, T_TRACK_DELTA, T_BLANKET, T_OPT_MID, T_WINDOW,
     HEAT_K, HEAT_ROLL, HEAT_SLIP, SINK_TRACK, SEVERITY_DEFAULT: 1.0,
     GRAIN_GRIP, BLIST_GRIP, BLIST_OVER,
-    classRecord, optionRecord, applyCompound, startRecord, AI_CLASS, codeForLife, treadFor, treadOf, carGrip, classForTread, wetness, weatherGrip,
+    classRecord, optionRecord, applyCompound, startRecord, AI_CLASS, codeForLife, treadFor, treadOf, carGrip, classForTread, wetness, weatherGrip, WET_ROAD, RAIN,
     aquaplane, aquaplaneSafeV, aquaInto, AQUA_WET, AQUA_ONSET, AQUA_RAMP, asRain,
     DROP_LIN, DROP_CLIFF, GRIP_FLOOR, LONG_SHARE, LIFE_MIN, LIFE_MAX, FUEL_LOAD,
     create,
