@@ -191,12 +191,13 @@ var GameAudioRadioFx = (function () {
       // The figure and the squelch tail are scheduled ahead: stopping only the
       // bed left the squelch to fire seconds later, over the pause menu.
       for (const x of b.extra || []) { try { x.stop(t); } catch (e) { /* already ended */ } }
-      // Disconnect the bed + extras now. onended may never run on a closed or
-      // suspended context; a Gain still wired into the SFX bus keeps rendering
-      // (same contract as voice-chain M8 / the preempt live.size pin).
-      for (const n of b.nodes || []) {
-        try { if (n && n.disconnect) n.disconnect(); } catch (e) { /* closed or already gone */ }
-      }
+      // Disconnect the bed without trusting onended: a closed or suspended
+      // context may never fire it, and a Gain still wired into the SFX bus keeps
+      // rendering (same contract as voice-chain M8 / the preempt live.size pin).
+      // A running context plays the 50 ms fade first, so the timer cuts after it
+      // (#7252 m4); any other state cuts now, where the fade would never be heard.
+      const cut = () => { for (const n of b.nodes || []) { try { if (n && n.disconnect) n.disconnect(); } catch (e) { /* closed or already gone */ } } };
+      if ((host.context() || 0).state === "running") setTimeout(cut, 120); else cut();
       for (const x of b.extra || []) dropChain(x);
     }
 

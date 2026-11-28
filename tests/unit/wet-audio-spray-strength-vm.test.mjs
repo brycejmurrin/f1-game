@@ -92,3 +92,31 @@ test("dry laps: engine flag stays false, no spray, and two dry runs are bit-iden
   assert.equal(A.r.engWet, 0); assert.equal(A.r.strs.length, 0);
   assert.deepEqual(A, B, "dry probes are deterministic and untouched by the wet reads");
 });
+
+// #7252 member 3: the grid-idle engine (count state) and the replay-scrub feed (paused branch) take the same
+// car-local rule as setEngine. Split wetness: a soaked lap mean (≥ 0.25) over a dry surface under the player.
+test("grid idle and replay scrub engine wet follow the surface under the car, not the lap mean", async () => {
+  g.G.driverIdx = 0; g.G.teamIdx = 0;
+  await g.race("monza", "day", "dry", { laps: 3 });
+  g.G.headlessMode = false; g.G.soundOn = true;
+  const GA = g.sandbox.GameAudio, idle = [], scrub = [];
+  GA.setSkid = () => {}; GA.setEngine = () => {};
+  GA.setGridIdle = (p, o) => { idle.push(!!o.wet); };
+  GA.feedReplayScrub = (...a) => { const w = a[6]; scrub.push(typeof w === "function" ? !!w() : !!w); };
+  const countFrames = (wet) => { road.mean = 0.9; road.wetAt = () => wet; idle.length = 0; frames(5); return idle.slice(); };
+
+  g.G.cmd.setState("count", "test");   // race() already went green: back onto the gantry for the idle feed
+  assert.equal(g.G.state, "count", "the lights are on the gantry");
+  const dry = countFrames(0);
+  assert.ok(dry.length > 0 && dry.every((w) => w === false), "grid idle dry on a dry surface under a wet mean: " + dry);
+  const wet = countFrames(0.95);
+  assert.ok(wet.length > 0 && wet.every((w) => w === true), "grid idle wet on a soaked surface: " + wet);
+
+  g.apex.go();
+  g.G.cmd.pause(true, "test");   // the paused branch feeds the scrub every frame
+  road.mean = 0.9; road.wetAt = () => 0; scrub.length = 0; frames(5);
+  assert.ok(scrub.length > 0 && scrub.every((w) => w === false), "scrub engine dry on a dry surface under a wet mean: " + scrub);
+  road.wetAt = () => 0.95; scrub.length = 0; frames(5);
+  assert.ok(scrub.length > 0 && scrub.every((w) => w === true), "scrub engine wet on a soaked surface: " + scrub);
+  g.G.cmd.pause(false, "test");
+});
