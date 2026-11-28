@@ -12,6 +12,12 @@ import fs from "node:fs";
 import vm from "node:vm";
 import { absSrc } from "../helpers/abs-src.mjs";
 import { loadUiShape } from "../helpers/ui-shape-load.mjs";
+// The real CvdPalette.srgbToLinear (manifest loads cvd-palette first; its other members stay absent here) (#7444).
+const CVD_LIN = (() => {
+  const c = vm.createContext({ Math, Number, String });
+  vm.runInContext(fs.readFileSync(new URL("../../js/ui/cvd-palette.js", import.meta.url), "utf8").replace(/^const\b/gm, "var"), c, { filename: absSrc("js/ui/cvd-palette.js") });
+  return Object.freeze({ srgbToLinear: c.CvdPalette.srgbToLinear });
+})();
 
 const read = (f) => fs.readFileSync(new URL("../../" + f, import.meta.url), "utf8");
 
@@ -37,7 +43,7 @@ function boot(file, extra = {}, dom = {}) {
     navigator: { userAgent: "node" }, Log: { info() {}, warn() {}, error() {} },
     GameStore: { store }, SettingRow, setTimeout: () => 0, clearTimeout() {}, requestAnimationFrame: () => 0,
     matchMedia: () => ({ matches: false, addEventListener() {} }), localStorage: { getItem: () => null, setItem() {} },
-    SettingsNav: { lazy: (fn) => gated.push(fn), onEnter() {}, onLeave() {} },
+    SettingsNav: { lazy: (fn) => gated.push(fn), onEnter() {}, onLeave() {} }, CvdPalette: CVD_LIN,
     ...extra,
   });
   ctx.globalThis = ctx; ctx.self = ctx;

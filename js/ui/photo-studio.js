@@ -112,7 +112,7 @@ const PhotoStudio = (function () {
 
   // No eager ensureBody(): bare specs load this stub without Log/ScriptLoader (#4978).
   return Object.freeze({
-    create, shareCancelled, background, setBackground, slotFor, crop, filename, focalFov, focalMm,
+    create, shareCancelled, background, setBackground, slotFor, orient, crop, filename, focalFov, focalMm,
     lens: () => live?.lens(),
     album: () => { const r = live; return r && r.album ? r.album() : ensureBody().then(() => { const impl = newest && newest(); return impl && impl.album ? impl.album() : Promise.reject(new Error("Photo library unavailable")); }); },
     contactSheet: (times, seek, cancelled) => { const r = live; return r && r.contactSheet ? r.contactSheet(times, seek, cancelled) : ensureBody().then(() => { const impl = newest && newest(); return impl && impl.contactSheet ? impl.contactSheet(times, seek, cancelled) : Promise.reject(new Error("Photo capture unavailable")); }); },

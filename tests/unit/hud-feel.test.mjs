@@ -34,6 +34,12 @@ import { makeDom } from "../helpers/mini-dom.mjs";
 import { cssRules, decl, ruleFor } from "../helpers/css-rules.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 import { loadDom } from "../helpers/dom-vm.mjs";
+// The real CvdPalette (manifest loads cvd-palette first): HudSkin linearises through it (#7444).
+const CVD = (() => {
+  const c = vm.createContext({ Math, Number, String });
+  vm.runInContext(fs.readFileSync(new URL("../../js/ui/cvd-palette.js", import.meta.url), "utf8").replace(/^const\b/gm, "var"), c, { filename: absSrc("js/ui/cvd-palette.js") });
+  return c.CvdPalette;
+})();
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (name) => fs.readFileSync(path.join(ROOT, name), "utf8");
@@ -110,6 +116,7 @@ function boot(opts = {}) {
       : opts.tokens ? () => ({ getPropertyValue: (k) => ALL_TOKENS[k] || "" }) : undefined,
   };
   sb.window = sb;
+  sb.CvdPalette = CVD;
   // #announce-live's one writer, as in the shell (it loads before hud.js).
   vm.runInNewContext(src("js/ui/live-region.js"), sb, { filename: absSrc("js/ui/live-region.js") });
   vm.runInNewContext(src("js/ui/hud-skin.js"), sb, { filename: absSrc("js/ui/hud-skin.js") });

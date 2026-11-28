@@ -3,7 +3,6 @@
  * background()/create() for the title; this file is the capture UI + library. */
 const PhotoStudioBody = (function () {
 const DB = "apex26.photoLibrary", LIMIT = 6;
-const ASPECTS = { scene: 0, wide: 16 / 9, square: 1, portrait: 4 / 5 };
 const CAPTURE_MS = 8000;   // a frame readback that has not come back by then never will (a hidden tab, a stalled loop)
 // TIME and WEATHER are the engine's own discrete sets (js/race/weather-arc.js VALID, setTimeOfDay): no continuous clock exists.
 const TODS = [["dawn", "Dawn"], ["day", "Day"], ["dusk", "Dusk"], ["night", "Night"], ["default", "Track default"]];
@@ -46,33 +45,6 @@ function capturePass(count) {
   };
 }
 const text = (v, max) => String(v || "").replace(/[\x00-\x1f\x7f]/g, " ").trim().slice(0, max || 80);
-function filename(label) { return "apex26-" + (text(label).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "photo") + ".png"; }
-function crop(width, height, aspect) {
-  const w = Math.max(1, Math.round(width)), h = Math.max(1, Math.round(height)), r = ASPECTS[aspect] || w / h;
-  const cw = Math.min(w, h * r), ch = Math.min(h, w / r);
-  return { x: (w - cw) / 2, y: (h - ch) / 2, width: cw, height: ch };
-}
-const KEYS = { landscape: "apex26.photoBackground", portrait: "apex26.photoBackgroundPortrait" };
-const orient = () => { try { return window.innerHeight > window.innerWidth ? "portrait" : "landscape"; } catch (_) { return "landscape"; } };
-const readSlot = (slot) => { try { const v = localStorage.getItem(KEYS[slot]); return v && /^data:image\/(jpeg|png);base64,/.test(v) && v.length < 1.5e6 ? v : ""; } catch (_) { return ""; } };
-// 4:5 or taller goes to the portrait slot, a wide photo to landscape; unknown or square follows the device orientation.
-const slotFor = (aspect) => (aspect && aspect <= 0.8 ? "portrait" : aspect >= 1.25 ? "landscape" : orient());
-// No slot: the current orientation's image, else the other one. A named slot reads strictly.
-function background(slot) {
-  if (KEYS[slot]) return readSlot(slot);
-  const o = orient();
-  return readSlot(o) || readSlot(o === "portrait" ? "landscape" : "portrait");
-}
-function setBackground(value, slot) {
-  slot = KEYS[slot] ? slot : orient();
-  if (value && (!/^data:image\/(jpeg|png);base64,/.test(value) || value.length >= 1.5e6)) return false;
-  try {
-    const S = GameStore.store;   // raw lane: setRoomy's quota sweep, failedKeys (#5023); a failed write leaves the other slot untouched
-    if (!(value ? S.rawSet(KEYS[slot], value) : S.rawDel(KEYS[slot]))) return false;
-    window.dispatchEvent(new CustomEvent("apex26:photo-background", { detail: { available: !!value, slot } }));
-    return true;
-  } catch (_) { return false; }
-}
 function openDb() {
   return new Promise((resolve, reject) => {
     if (typeof indexedDB === "undefined") { reject(new Error("Photo storage unavailable")); return; }
@@ -660,7 +632,7 @@ function create(G, deps) {
         sampleRow, mk("p", { className: "adv-help", textContent: "More samples smooth edges on a frozen scene. Online sessions use Instant." }),
         mk("img", { id: "ps-preview", alt: "Captured photo preview", hidden: true }),
         mk("div", { className: "balanced-row" }, [button("DOWNLOAD PNG", exportPhoto, "ps-export"), button("SAVE PHOTO", savePhoto, "ps-save")]),
-        mk("div", { className: "balanced-row" }, [button("USE AS MENU BACKGROUND", useBackground, "ps-background"), button("CLEAR BACKGROUND", () => say(setBackground("", orient()) ? (orient() === "portrait" ? "Portrait" : "Landscape") + " menu background cleared." : "Background could not be cleared."))]),
+        mk("div", { className: "balanced-row" }, [button("USE AS MENU BACKGROUND", useBackground, "ps-background"), button("CLEAR BACKGROUND", () => say(PhotoStudio.setBackground("", PhotoStudio.orient()) ? (PhotoStudio.orient() === "portrait" ? "Portrait" : "Landscape") + " menu background cleared." : "Background could not be cleared."))]),
         mk("label", { className: "tune-row" }, [mk("span", { className: "tune-label", textContent: "Import your photo" }), importFile]),
       ]),
       mk("details", { id: "ps-album" }, [mk("summary", { textContent: "MY PHOTOS · up to 6" }),
@@ -1019,7 +991,7 @@ function create(G, deps) {
     box.appendChild(button("DISMISS TIPS", () => { box.hidden = true; })); return box;
   }
   function compose(source, opts = options()) {
-    const box = crop(source.width, source.height, opts.aspect), scale = Math.min(1, opts.maxEdge / box.width, opts.maxEdge / box.height), out = mk("canvas");
+    const box = PhotoStudio.crop(source.width, source.height, opts.aspect), scale = Math.min(1, opts.maxEdge / box.width, opts.maxEdge / box.height), out = mk("canvas");
     out.width = Math.round(box.width * scale); out.height = Math.round(box.height * scale);
     const ctx = out.getContext("2d"); if (!ctx) throw new Error("Image composition is unavailable");
     ctx.drawImage(source, box.x, box.y, box.width, box.height, 0, 0, out.width, out.height);
@@ -1144,7 +1116,7 @@ function create(G, deps) {
   async function exportPhoto() {
     if (!st.open || !last || st.busy || downloading) return;
     downloading = true;
-    const gen = st.generation, name = filename(st.metadata.title || "photo"), canvas = last;
+    const gen = st.generation, name = PhotoStudio.filename(st.metadata.title || "photo"), canvas = last;
     try { await download(await blobOf(canvas), name); if (gen === st.generation) say("PNG download requested."); }
     catch (e) { if (gen === st.generation) say(downloadError(e)); }
     finally { downloading = false; }
@@ -1170,8 +1142,8 @@ function create(G, deps) {
     finally { if (gen === st.generation) busy(false); }
   }
   function chooseBackground(image, aspect) {
-    const slot = slotFor(aspect), name = slot === "portrait" ? "Portrait" : "Landscape";
-    if (!setBackground(image, slot)) { say(name + " background could not be saved. Device storage may be full" + (background(slot) ? "; the previous one is kept." : ".")); return; }
+    const slot = PhotoStudio.slotFor(aspect), name = slot === "portrait" ? "Portrait" : "Landscape";
+    if (!PhotoStudio.setBackground(image, slot)) { say(name + " background could not be saved. Device storage may be full" + (PhotoStudio.background(slot) ? "; the previous one is kept." : ".")); return; }
     const result = AppearanceStudio.setScene("photo");
     say(result?.durable === false ? name + " menu background selected for this visit." : name + " menu background set.");
   }
@@ -1199,7 +1171,7 @@ function create(G, deps) {
           if (downloading) return;
           downloading = true;
           const gen = st.generation;
-          try { await download(p.blob || await library("get", p.id), filename(p.title).replace(/\.png$/, ".jpg")); if (gen === st.generation) say("Photo download requested."); }
+          try { await download(p.blob || await library("get", p.id), PhotoStudio.filename(p.title).replace(/\.png$/, ".jpg")); if (gen === st.generation) say("Photo download requested."); }
           catch (e) { if (gen === st.generation) say(downloadError(e)); }
           finally { downloading = false; }
         }),
@@ -1236,7 +1208,7 @@ function create(G, deps) {
     } catch (e) { if (gen === st.generation) say("This photo could not be opened: " + text(e.message)); }
     finally { if (gen === st.generation) { busy(false); importFile.value = ""; } }
   }
-  function state() { return { open: st.open, generation: st.generation, source: st.source, subject: !!st.subject, aspect: st.aspect, samples: G.netPlay?.active?.() ? 1 : st.samples, grid: st.grid, postcard: st.postcard, dock: st.dock, collapsed: st.collapsed, busy: st.busy, captured: !!last, width: last ? last.width : 0, height: last ? last.height : 0, background: !!background() }; }
+  function state() { return { open: st.open, generation: st.generation, source: st.source, subject: !!st.subject, aspect: st.aspect, samples: G.netPlay?.active?.() ? 1 : st.samples, grid: st.grid, postcard: st.postcard, dock: st.dock, collapsed: st.collapsed, busy: st.busy, captured: !!last, width: last ? last.width : 0, height: last ? last.height : 0, background: !!PhotoStudio.background() }; }
   async function album() {
     let photos;
     try { photos = await library("list", null, session); } catch (e) { if (!session.length) throw e; photos = []; }
@@ -1252,7 +1224,7 @@ function create(G, deps) {
       if (cancelled()) throw new Error("Contact sheet cancelled");
       seek(times[i]); const image = await frame();
       if (cancelled()) throw new Error("Contact sheet cancelled");
-      const box = crop(image.width, image.height, "wide");
+      const box = PhotoStudio.crop(image.width, image.height, "wide");
       ctx.drawImage(image, box.x, box.y, box.width, box.height, i * 512, 0, 512, 288);
       ctx.fillStyle = "#0c0c14"; ctx.fillRect(i * 512, 288, 512, 54); ctx.fillStyle = "#f6f6f9"; ctx.font = "18px sans-serif";
       ctx.fillText(["BEFORE", "MOMENT", "AFTER"][i] + " · " + times[i].toFixed(2) + "s", i * 512 + 16, 322);
@@ -1268,10 +1240,10 @@ function create(G, deps) {
     // Depth focus Off: focus undefined, not null (#6445). null is tlx-post's autofocus-on-the-car, which bakes blur in.
     offLens.mm = lens.mm; return offLens;
   }
-  const api = { open, close, capture, state, contactSheet, album, background, setBackground, exportPhoto, savePhoto, hasCar, lens: activeLens };
+  const api = { open, close, capture, state, contactSheet, album, exportPhoto, savePhoto, hasCar, lens: activeLens };
   live = api; busy(false); paintSheet(); return api;
 }
-// ASPECTS / LIMIT stay module-private (crop + library only); no external callers.
-return Object.freeze({ get sampling() { return samplePass; }, create, stepPosition, holdMetres, positionLabel, POV_SHOTS, visorOptions, shareCancelled, background, setBackground, slotFor, crop, filename, album: () => live ? live.album() : Promise.reject(new Error("Photo library unavailable")), contactSheet: (times, seek, cancelled) => live ? live.contactSheet(times, seek, cancelled) : Promise.reject(new Error("Photo capture unavailable")), state: () => live ? live.state() : { open: false } });
+// LIMIT stays module-private; crop/filename/background/setBackground/slotFor live on the stub (PhotoStudio.*, read at call time).
+return Object.freeze({ get sampling() { return samplePass; }, create, stepPosition, holdMetres, positionLabel, POV_SHOTS, visorOptions, shareCancelled, album: () => live ? live.album() : Promise.reject(new Error("Photo library unavailable")), contactSheet: (times, seek, cancelled) => live ? live.contactSheet(times, seek, cancelled) : Promise.reject(new Error("Photo capture unavailable")), state: () => live ? live.state() : { open: false } });
 })();
 Object.freeze(PhotoStudioBody);

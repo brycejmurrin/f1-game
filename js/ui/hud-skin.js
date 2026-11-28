@@ -31,8 +31,7 @@ const HudSkin = (function () {
   // borrowing it also published three false rows in a generated table. Channels
   // are linearised first — the Rec.709 coefficients on gamma-encoded sRGB
   // overstate mid-tones badly (0.5 grey reads as 0.5 when it is really 0.21).
-  const _lin = (u) => (u <= 0.04045 ? u / 12.92 : Math.pow((u + 0.055) / 1.055, 2.4));
-  const _lum = (c) => 0.2126 * _lin(c[0]) + 0.7152 * _lin(c[1]) + 0.0722 * _lin(c[2]);
+  const _lum = (c) => { const f = CvdPalette.srgbToLinear; return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]); };
   const _wcag = (a, b) => {
     const la = _lum(a), lb = _lum(b);
     return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);

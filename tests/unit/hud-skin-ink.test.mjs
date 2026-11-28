@@ -9,6 +9,12 @@ import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const SRC = fs.readFileSync(path.join(ROOT, "js/ui/hud-skin.js"), "utf8").replace(/^const\b/gm, "var");
+// The real CvdPalette (manifest loads it first): HudSkin linearises through CvdPalette.srgbToLinear (#7444).
+const CVD = (() => {
+  const c = vm.createContext({ Math, Number, String });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/ui/cvd-palette.js"), "utf8").replace(/^const\b/gm, "var"), c, { filename: absSrc("js/ui/cvd-palette.js") });
+  return c.CvdPalette;
+})();
 
 function inkFor(color, tokens) {
   const props = new Map();
@@ -17,6 +23,7 @@ function inkFor(color, tokens) {
     document: { documentElement: { style: { setProperty: (k, v) => props.set(k, v), removeProperty: (k) => props.delete(k) } } },
     getComputedStyle: () => ({ getPropertyValue: (k) => tokens[k] || "" }),
     Teams: { isReal: () => false },
+    CvdPalette: CVD,
   });
   vm.runInContext(SRC, ctx, { filename: absSrc("js/ui/hud-skin.js") });
   ctx.HudSkin.skinAccent({ color }, { cssCol: () => "#808080" });

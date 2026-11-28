@@ -341,3 +341,48 @@ test("HUD colour sources route hues through CvdPalette / tokens (#1595)", () => 
   Q.set("off");
   for (const name of Object.values(Q.HUD_CSS_OF)) assert.equal(style.has(name), false, `off leaves ${name} to hud.css`);
 });
+
+// ---- One sRGB linearise in js/ui/ (#7444, #6885 row 4): CvdPalette.srgbToLinear. HudSkin's WCAG ink and
+// AppearanceOpts' relLum read it at call time. AppearanceOpts' knee moved from WCAG 2.0's 0.03928 to the
+// IEC 61966-2-1 0.04045 (Bryce's pick on #7444): no 8-bit channel changes; only a fractional rgb() channel
+// in (10.0164, 10.31475] / 255 does.
+const linCtx = vm.createContext({ Math, Number, String });
+vm.runInContext(read("js/ui/cvd-palette.js").replace(/^const\b/gm, "var"), linCtx, { filename: absSrc("js/ui/cvd-palette.js") });
+const lin = linCtx.CvdPalette.srgbToLinear;
+// The two linearisers this PR deleted, verbatim from tip ec36a926.
+const oldHudSkin = (u) => (u <= 0.04045 ? u / 12.92 : Math.pow((u + 0.055) / 1.055, 2.4));
+const oldAppearance = (v) => (v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4));
+
+test("every 8-bit channel k/255 linearises to the same double as both deleted copies", () => {
+  for (let k = 0; k <= 255; k++) {
+    const v = k / 255;
+    assert.ok(Object.is(lin(v), oldHudSkin(v)), "hud-skin k=" + k);
+    assert.ok(Object.is(lin(v), oldAppearance(v)), "appearance-opts k=" + k);
+  }
+});
+
+test("only a fractional rgb() channel between the two knees moves (Bryce's OK, #7444)", () => {
+  // readCssRgbFrom parses rgb(10.2, …): 10.2/255 sits between 0.03928 and 0.04045.
+  for (const c of [10.02, 10.2, 10.31]) assert.notEqual(lin(c / 255), oldAppearance(c / 255), "moves at " + c);
+  for (const c of [10, 10.01, 10.32, 11]) assert.ok(Object.is(lin(c / 255), oldAppearance(c / 255)), "unchanged at " + c);
+});
+
+test("js/ui/ holds the sRGB knee once, and HudSkin reads CvdPalette.srgbToLinear", () => {
+  const dir = path.join(ROOT, "js/ui");
+  const hits = [];
+  for (const f of fs.readdirSync(dir)) {
+    if (!f.endsWith(".js")) continue;
+    const n = read("js/ui/" + f).split("0.04045").length - 1;
+    for (let i = 0; i < n; i++) hits.push(f);
+  }
+  assert.deepEqual(hits, ["cvd-palette.js"]);
+  // Behaviour, not source: both callers linearise through the shared helper at call time.
+  let calls = 0;
+  const spy = { srgbToLinear: (v) => (calls++, lin(v)) };
+  const hud = vm.createContext({ Math, String, parseInt, CvdPalette: spy, Teams: { isReal: () => false },
+    document: { documentElement: { style: { setProperty() {}, removeProperty() {} } } },
+    getComputedStyle: () => ({ getPropertyValue: (k) => ({ "--text": "#888888", "--bg": "#777777" })[k] || "" }) });
+  vm.runInContext(read("js/ui/hud-skin.js").replace(/^const\b/gm, "var"), hud, { filename: absSrc("js/ui/hud-skin.js") });
+  hud.HudSkin.skinAccent({ color: [0.5, 0.5, 0.5] }, { cssCol: () => "#808080" });
+  assert.ok(calls > 0, "HudSkin's ink reads CvdPalette.srgbToLinear");
+});
