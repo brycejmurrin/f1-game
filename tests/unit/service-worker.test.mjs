@@ -775,13 +775,13 @@ test("a failed cache-bust navigation with no cached shell at all still fails (no
 });
 
 // A SPENT ?b= (no newer than the cached shell) is an ordinary query navigation.
-// THE SHELL RACE IS 1 s ONLY WHERE A CACHED SHELL CAN ANSWER. A plain navigation with a cached shell stops waiting
+// THE SHELL RACE IS 300 ms ONLY WHERE A CACHED SHELL CAN ANSWER. A plain navigation with a cached shell stops waiting
 // for a silent host at SHELL_RACE_MS; with no cached shell, and for the `?b=` bust and version.json, the waits are
-// the ones above. The harness fires only the 1000 ms timer at once, so a branch that still needed 3 s would take 3 s.
+// the ones above. The harness fires only the SHELL_RACE_MS timer at once, so a branch that still needed 3 s would take 3 s.
 const SHELL_RACE_MS = Number(/const SHELL_RACE_MS = (\d+);/.exec(SW_SOURCE)?.[1]);
 const lateShell = (ms, body) => () => new Promise((resolve) => setTimeout(() => resolve(new Response(body, { status: 200 })), ms));
 test("a plain navigation with a cached shell stops waiting for the network at SHELL_RACE_MS", async () => {
-  assert.equal(SHELL_RACE_MS, 1000);
+  assert.equal(SHELL_RACE_MS, 300); // Bryce's decision on #7387 row 8 (was 1000, #6671), not a widened tolerance
   const harness = createHarness({ immediateTimeoutMs: SHELL_RACE_MS, navigator: { onLine: true }, fetchImpl: () => new Promise(() => {}) });
   harness.stores.set("apex26-old", new Map([[`${ORIGIN}/index.html`, new Response("precached shell", { status: 200 })]]));
   const t0 = Date.now();
