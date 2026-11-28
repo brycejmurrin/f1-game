@@ -233,7 +233,8 @@ for (const language of ["wgsl", "glsl"]) {
     assert.equal(off.fs, none.fs, "detail flags false = no detail ctx, byte for byte");
     assert.deepEqual(none.detail, { matDetail: false, envAll: false });
     const grad = language === "wgsl" ? /textureSampleGrad\(/g : /textureGrad\(/g;
-    assert.equal((none.fs.match(grad) || []).length, 0, "no gradient taps below EXTREME");
+    // #7232: the two base MAT taps (normal, albedo) carry explicit gradients too; below EXTREME they are the only ones.
+    assert.equal((none.fs.match(grad) || []).length, 2, "only the two base MAT taps below EXTREME");
     const on = await build({ detail: { matDetail: true, envAll: true, envLods: 7 } }, language, spyTSL());
     assert.deepEqual(on.detail, { matDetail: true, envAll: true });
     // normal: 2 biplanar + 3 hex + 1 plain + 1 detail; albedo: 2 + 3 + 1; parallax: MD_POM_STEPS (6).

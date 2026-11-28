@@ -1493,6 +1493,7 @@
     "tests/unit/tsl-gi.test.mjs",
     "// ?lab=fxaaSubNN (phone sharpness arm a): the FXAA sub-pixel blend reader; no lab is the shipped 0.75.",
     "tests/unit/tsl-post-fxaa-lab.test.mjs",
+    "tests/unit/tsl-webgpu-hygiene-7232.test.mjs",
     "tests/unit/tt-challenge-link.test.mjs",
     "// TUMFTM racetrack-database CSV → designer envelope (tools/track/tumftm-import.mjs).",
     "// Synthetic fixture only — no network, no LGPL geometry in the tree. ~1 s.",
