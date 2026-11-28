@@ -221,6 +221,12 @@ test("ci.yml: the node-suites job plans on a pull request and guards exactly the
   const b1 = groups["test:game-vm-b1"].files, b2 = groups["test:game-vm-b2"].files;
   assert.deepEqual([...b1, ...b2].sort(), [...groups["test:game-vm-b"].files].sort(), "b1 + b2 is exactly game-vm-b");
   assert.equal(new Set([...b1, ...b2]).size, b1.length + b2.length, "b1 and b2 are disjoint");
+  // #7253 P2: game-vm (the whole local VM suite) is exactly a ∪ b. cam-surge-hold sat in b only, so
+  // `npm run test:game-vm` never ran it; both lists are now derived ("union", gen-test-groups resolveUnions).
+  const vmA = groups["test:game-vm-a"].files, vmB = groups["test:game-vm-b"].files;
+  assert.deepEqual([...groups["test:game-vm"].files].sort(), [...new Set([...vmA, ...vmB])].sort(), "game-vm is exactly game-vm-a ∪ game-vm-b");
+  assert.deepEqual(groups["test:game-vm"].union, ["test:game-vm-a", "test:game-vm-b1", "test:game-vm-b2"], "game-vm is derived from a, b1, b2");
+  assert.deepEqual(groups["test:game-vm-b"].union, ["test:game-vm-b1", "test:game-vm-b2"], "game-vm-b is derived from b1, b2");
   // The seconds-long scripts are NOT guarded by planned(): a script skip there
   // buys nothing. On a matched PR they thin tooling-fast overlap via
   // run-group --skip-tf; the npm run else-branch stays for gateNodeSuites.
