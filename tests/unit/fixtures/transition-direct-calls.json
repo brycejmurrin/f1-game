@@ -1,0 +1,38 @@
+{
+  "startRaceBody": {
+    "Particles.clear": 1,
+    "announcer.stop": 1,
+    "banner.clear": 1,
+    "coach.reset": 1,
+    "director.reset": 1,
+    "garagePre.release": 1,
+    "loadingScreen.stop": 4,
+    "raceMessageHistory.clear": 1,
+    "skids.reset": 1
+  },
+  "redFlagRestart": {
+    "OvertakeMode.reset": 1,
+    "redOrder.clear": 1
+  },
+  "endRace": {
+    "Droplets.clear": 1,
+    "quali.clear": 2
+  },
+  "quitToMenu": {
+    "Droplets.clear": 1,
+    "IncidentSim.reset": 1,
+    "Particles.clear": 1,
+    "announcer.stop": 2,
+    "banner.clear": 1,
+    "daily.stop": 1,
+    "flyingStart.stop": 1,
+    "loadingScreen.stop": 1,
+    "netPlay.stop": 1,
+    "quali.clear": 1,
+    "raceMessageHistory.clear": 1,
+    "replayBuf.release": 2,
+    "resultsCam.reset": 2
+  },
+  "resetEpisodeOwners": {},
+  "LapRetry.retry": {}
+}

@@ -1,0 +1,51 @@
+{
+  "start": [
+    "Scopes.enter race:start",
+    "IncidentSim.reset",
+    "RaceControl.reset",
+    "DebrisWorld.reset",
+    "PitLane.releaseTrack",
+    "DrivingCoach.reset",
+    "[CarFields.resetFor, OvertakeMode.reset, PitLane.reset] ×22",
+    "SkidMarks.reset",
+    "Particles.clear",
+    "Scopes.exit camera-mode:cut"
+  ],
+  "redFlagRestart": [
+    "Scopes.enter race:restart-red",
+    "IncidentSim.reset",
+    "DebrisWorld.reset",
+    "[CarFields.resetFor, OvertakeMode.reset, WheelState.resetThermal, PitLane.clearArm] ×22",
+    "RaceControl.rewound",
+    "ReplayBuf.breakTimeline",
+    "Scopes.exit race:restart-red/grid",
+    "Scopes.exit camera-mode:cut"
+  ],
+  "finish": [
+    "Scopes.exit race:finish",
+    "IncidentSim.reset",
+    "RaceControl.reset"
+  ],
+  "quit": [
+    "ReplayBuf.release",
+    "PitLane.releaseTrack",
+    "Scopes.exit race:quit",
+    "RaceControl.reset",
+    "DrivingCoach.releasePracticeWorlds",
+    "Particles.clear",
+    "IncidentSim.reset",
+    "DebrisWorld.reset"
+  ],
+  "episode": [
+    "Scopes.exit race:episode",
+    "IncidentSim.reset",
+    "RaceControl.reset",
+    "DebrisWorld.reset"
+  ],
+  "retryLap": [
+    "SimState.restore",
+    "IncidentSim.reset",
+    "DebrisWorld.reset",
+    "Scopes.exit camera-mode:cut ×2"
+  ]
+}
