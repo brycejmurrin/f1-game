@@ -215,11 +215,11 @@ test("BROADCAST towerAt: pools rows and skips rebuild when the timing-line sampl
     const snap = host(a);
     const b = B.towerAt(script, T1);
     assert.equal(b, a, "same pooled array when the discrete sample is unchanged");
-    assert.equal(B.towerSample(script, T0), B.towerSample(script, T1), "sample key stable between crossings");
     assert.deepEqual(host(b), snap, "pooled rows keep the same tower content across a skipped rebuild");
+    // towerAt owns the one sample hash: no second, test-only copy that could drift from it (#7319 R5).
+    assert.equal(B.towerSample, undefined, "towerSample is not exported");
     // Advance past the next leader crossing: sample and content must move.
     const T2 = lead.lapStart[32] + 1;
-    assert.notEqual(B.towerSample(script, T0), B.towerSample(script, T2), "a new timing line changes the sample");
     const c = B.towerAt(script, T2);
     assert.equal(c, a, "still the module pool");
     assert.equal(c[0].lap, 32, "leader lap advances after the next crossing");
