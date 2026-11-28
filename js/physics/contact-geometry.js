@@ -32,7 +32,7 @@ const ContactGeometry = (function () {
       const start = x0 * x + y0 * y, delta = (x1 - x0) * x + (y1 - y0) * y;
       if (Math.abs(delta) < 1e-9) { if (Math.abs(start) >= r) return null; continue; }
       let lo = (-r - start) / delta, hi = (r - start) / delta;
-      if (lo > hi) [lo, hi] = [hi, lo];
+      if (lo > hi) { const t = lo; lo = hi; hi = t; }   // no array-literal swap on a per-axis path (#7399 row 17)
       if (lo > enter) { enter = lo; const sign = delta > 0 ? -1 : 1; nx = x * sign; ny = y * sign; }
       leave = Math.min(leave, hi);
       if (enter > leave) return null;
