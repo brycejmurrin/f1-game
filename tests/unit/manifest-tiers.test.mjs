@@ -113,3 +113,23 @@ test("a worker-loaded file tagged page-only fails", () => {
 test("no LAZY_* key of the manifest is TIERS", () => {
   assert.deepEqual(Object.keys(MANIFEST).filter((k) => /^LAZY_/.test(k) && k.includes("TIERS")), []);
 });
+
+// Shrink-only: the eager shell carries the `race` tier until those files move to a LAZY group
+// (#7492 phase 13). The ceiling is the count on 2026-11-28; it may only fall.
+const FULL_RACE_CEILING = 95;
+const tierOf = (v) => (typeof v === "string" ? v : v.tier);
+/** Pure: the FULL_TIERS entries tagged `race`. */
+export const fullRaceCount = (M) => Object.values(M.TIERS.FULL_TIERS).filter((v) => tierOf(v) === "race").length;
+const raceCeilingMsg = (n) => `FULL_TIERS has ${n} race entries, ceiling ${FULL_RACE_CEILING}: race files belong in a LAZY group, ` +
+  "not FULL. When files move out of race, lower FULL_RACE_CEILING to the new count (it may only fall).";
+
+test("the count of race entries in FULL_TIERS can only fall", () => {
+  const n = fullRaceCount(MANIFEST);
+  assert.ok(n <= FULL_RACE_CEILING, raceCeilingMsg(n));
+});
+
+test("one more FULL race entry breaks the ceiling", () => {
+  const M = clone(MANIFEST);
+  M.TIERS.FULL_TIERS[["js", "race", "new-eager.js"].join("/")] = "race";
+  assert.ok(fullRaceCount(M) > FULL_RACE_CEILING);
+});

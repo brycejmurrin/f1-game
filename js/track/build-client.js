@@ -140,6 +140,10 @@ const TrackBuildClient = (function () {
     const R = typeof ApexRoster !== "undefined" ? ApexRoster : null;
     const files = R && R.TRACK_VM && R.TRACK_VM.concat(R.TRACK_WORKER_EXTRA || []);
     if (!enabled() || typeof Worker === "undefined" || !files) return null;
+    // The version gate (ScriptLoader honours it for lazy scripts): under a
+    // mismatched build the worker's importScripts would fetch the wrong files,
+    // so build in steps on this thread instead.
+    if (typeof UpdateCheck !== "undefined" && UpdateCheck.blocksLazyLoad?.()) return null;
     try { _w = new Worker(url("js/track/build-worker.js")); } catch (e) { drop("spawn " + e.message); return null; }
     let ok;
     const worker = _w, ready = _ready = new Promise((res) => { ok = _readyRes = res; });
