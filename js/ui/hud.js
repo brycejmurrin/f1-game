@@ -374,6 +374,9 @@ let _fitPending = false;   // invalidateFit mid-tick: do not publish --hud-fit-s
 let _fitStamped = false, _fitClashRun = 0;
 // The post-write clash probe's skip key (#2240): what decides a clash, read without layout.
 let _stampKey = "", _stampWait = 0;
+// The same bound for the stamp probe (#7239): a clash it cannot clear on key `_stampClashKey` re-ran up to 8 passes
+// of rect reads every 10 Hz tick. After FIT_CLASH_TRIES probes on one key it waits out the 3 s backstop like fitHud.
+let _stampClashKey = "", _stampClashRun = 0;
 const FIT_CLASH_TRIES = 5;
 // Track visibility and width changes of moved pieces. AERO counts down and changes mode all lap:
 // keyed on `hidden` alone it widened past the screen edge after the fit and
@@ -684,6 +687,8 @@ function phoneFitStampSync(scale, force) {
   const sk = radioPaintedKey(root) + "|" + _fitKey + "|" + (typeof HudRelative !== "undefined" && HudRelative.fitKey ? HudRelative.fitKey() : "")
     + "|" + (els.hudSectors ? (els.hudSectors.hidden ? "h" : "v") : "-");
   if (!force && _fitStamped && !_fitPending && sk === _stampKey && --_stampWait > 0) return;
+  // A clash that outlived FIT_CLASH_TRIES probes on this key: the stamp stays voided, the verdict and gapMir stand.
+  if (!force && !_fitPending && sk === _stampClashKey && _stampClashRun > FIT_CLASH_TRIES && --_stampWait > 0) return;
   if (els.aero && els.aero.style.left) { els.aero.style.left = ""; els.aero.style.position = ""; }   // a stale #3272 nudge: the probe re-applies it
   // One probe per pass: the verdict after the last pass feeds the stamp below.
   if (root.dataset && "gapMir" in root.dataset) delete root.dataset.gapMir;   // re-derived by the probe below
@@ -706,7 +711,11 @@ function phoneFitStampSync(scale, force) {
       _fitStamped = true;
     }
   } else { hStyle(root, "--hud-fit-stamp", ""); _fitStamped = false; }
-  _stampKey = clash ? "" : sk; _stampWait = 30;
+  _stampKey = clash ? "" : sk;
+  if (!clash) { _stampClashKey = ""; _stampClashRun = 0; }
+  else if (sk === _stampClashKey) _stampClashRun++;
+  else { _stampClashKey = sk; _stampClashRun = 1; }
+  _stampWait = 30;
 }
 function fitHud() {
   // Cinematic HUD: OFF and "any open .screen" hide #hud via display:none.
@@ -805,7 +814,7 @@ function fitHud() {
   // only paces the same-key safety re-measure: 30 ticks at the ~10 Hz HUD
   // tick ≈ 3 s between forced layout reads while nothing changed.
   if (key !== _fitKey) _fitClashRun = 0;
-  _fitKey = key; _fitWait = 30; _stampKey = "";   // a full fit ran: the next stamp tick probes
+  _fitKey = key; _fitWait = 30; _stampKey = ""; _stampWait = 0;   // a full fit ran: the next stamp tick probes (once, for a held clash)
   _fitPending = false;
   fitWatch(); _fitObsDirty = false; _fitAt = _fitNow(); _fitSkips = 0;
   // CAPS AT A CANONICAL ZOOM, LENGTHS AT THE PAINTED ONE (#2882, #2941). Font metrics
@@ -1681,6 +1690,11 @@ function speakHud(player, cars, timeTrial) {
   return { cn, caution, blueCar, txt };
 }
 
+/** A piece HUD ELEMENTS turned off is display:none (body[data-hud-hide]): skip its per-tick JS (#7239).
+ *  ARRANGE HUD lifts that hide and shows it as a ghost, so it paints while the editor is open. */
+function hudShown(id) {
+  return typeof HudElements === "undefined" || HudElements.isOn(id) || !!document.body.hasAttribute?.("data-hud-arrange");
+}
 function syncDriveControls(player, canService, timeTrial, showReadouts, spokenFlag) {
   // The touch dock and the pit actions remain operable when HIDE HUD is on.
   const pit = G.pits;
@@ -1736,33 +1750,36 @@ function syncDriveControls(player, canService, timeTrial, showReadouts, spokenFl
   hAttr(els.btnAero, "aria-disabled", autoAero || noZones || !player.xArmed ? "true" : "false");
   hAttr(els.btnAero, "data-state", autoAero ? "automatic" : noZones || !player.xArmed ? "unavailable" : xOpen ? "active" : "armed");
   if (!showReadouts) return;
-  const ot = player.otT > 0 ? "ot-active" : otOff ? "ot-off" : otReady ? "ot-armed" : player.otEarned ? "ot-cool" : "ot-off";
-  hClass(els.ot, ot);
-  hData(els.ot, "gate", otReason || null);
-  const mjTxt = otMJ.toFixed(2) + " MJ";
-  const otText = player.otT > 0 ? "OVERTAKE " + mjTxt
-                : otOff ? (otReason === "pit-lane" ? "OT · PIT LANE"
-                  : otReason === "caution" ? "OT · CAUTION"
-                  : otReason === "low-grip" ? "OT · LOW GRIP"
-                  : otReason === "opening-lap" ? "OT · LAP 1"
-                  : otReason === "waiting-for-leader" ? "OT · GRID"
-                  : "NO OVERTAKE")
-                : otReady ? "OT READY " + mjTxt
-                : otPaused ? "OT PAUSED " + mjTxt : otHeld ? "OT HELD " + mjTxt
-                : player.otEarned ? "OT · NEXT LAP" : "OT · CLOSE IN";
-  hText(els.ot, otText);
-  hAttr(els.ot, "aria-label", player.otT > 0 ? hT("hud.overtake.active", { time: mjTxt }, "Overtake active, {time} left")
-    : otOff ? (otReason === "pit-lane" ? hT("hud.overtake.pitLane", null, "Overtake unavailable in the pit lane")
-      : otReason === "caution" ? hT("hud.overtake.caution", null, "Overtake unavailable under caution")
-      : otReason === "low-grip" ? hT("hud.overtake.lowGrip", null, "Overtake off in low grip conditions")
-      : otReason === "opening-lap" ? hT("hud.overtake.openingLap", null, "Overtake unavailable on lap 1")
-      : otReason === "waiting-for-leader" ? hT("hud.overtake.waitingLeader", null, "Overtake waiting for the leader")
-      : hT("hud.overtake.unavailable", null, "Overtake unavailable"))
-    : otReady ? hT("hud.overtake.ready", { time: mjTxt }, "Overtake ready, {time} — press to deploy")
-    : otPaused ? hT("hud.overtake.paused", { time: mjTxt }, "Overtake paused, {time} — press to switch off")
-    : otHeld ? hT("hud.overtake.held", { time: mjTxt }, "Overtake allowance held, {time} — unavailable at this speed")
-    : player.otEarned ? hT("hud.overtake.earned", null, "Overtake earned — available from the start line")
-    : hT("hud.overtake.pending", null, "Overtake unavailable — be within one second at the detection line"));
+  if (hudShown("ot")) {
+    const ot = player.otT > 0 ? "ot-active" : otOff ? "ot-off" : otReady ? "ot-armed" : player.otEarned ? "ot-cool" : "ot-off";
+    hClass(els.ot, ot);
+    hData(els.ot, "gate", otReason || null);
+    const mjTxt = otMJ.toFixed(2) + " MJ";
+    const otText = player.otT > 0 ? "OVERTAKE " + mjTxt
+                  : otOff ? (otReason === "pit-lane" ? "OT · PIT LANE"
+                    : otReason === "caution" ? "OT · CAUTION"
+                    : otReason === "low-grip" ? "OT · LOW GRIP"
+                    : otReason === "opening-lap" ? "OT · LAP 1"
+                    : otReason === "waiting-for-leader" ? "OT · GRID"
+                    : "NO OVERTAKE")
+                  : otReady ? "OT READY " + mjTxt
+                  : otPaused ? "OT PAUSED " + mjTxt : otHeld ? "OT HELD " + mjTxt
+                  : player.otEarned ? "OT · NEXT LAP" : "OT · CLOSE IN";
+    hText(els.ot, otText);
+    hAttr(els.ot, "aria-label", player.otT > 0 ? hT("hud.overtake.active", { time: mjTxt }, "Overtake active, {time} left")
+      : otOff ? (otReason === "pit-lane" ? hT("hud.overtake.pitLane", null, "Overtake unavailable in the pit lane")
+        : otReason === "caution" ? hT("hud.overtake.caution", null, "Overtake unavailable under caution")
+        : otReason === "low-grip" ? hT("hud.overtake.lowGrip", null, "Overtake off in low grip conditions")
+        : otReason === "opening-lap" ? hT("hud.overtake.openingLap", null, "Overtake unavailable on lap 1")
+        : otReason === "waiting-for-leader" ? hT("hud.overtake.waitingLeader", null, "Overtake waiting for the leader")
+        : hT("hud.overtake.unavailable", null, "Overtake unavailable"))
+      : otReady ? hT("hud.overtake.ready", { time: mjTxt }, "Overtake ready, {time} — press to deploy")
+      : otPaused ? hT("hud.overtake.paused", { time: mjTxt }, "Overtake paused, {time} — press to switch off")
+      : otHeld ? hT("hud.overtake.held", { time: mjTxt }, "Overtake allowance held, {time} — unavailable at this speed")
+      : player.otEarned ? hT("hud.overtake.earned", null, "Overtake earned — available from the start line")
+      : hT("hud.overtake.pending", null, "Overtake unavailable — be within one second at the detection line"));
+  }
+  if (!hudShown("aero")) return;
   const aeroClass = noZones ? "ax-none" : xOpen ? "ax-open"
     : player.xArmed ? "ax-armed" : "ax-off";
   hClass(els.aero, aeroClass);
@@ -1866,7 +1883,7 @@ function updateHud(force, dtMs) {
   if (rank) _lastRank = rank;
   paintDash(player);   // this tick frame's instruments, after fitHud's reads (see the top)
   hText(els.lap, Math.min(player.lap || 1, G.lapsTarget) + "/" + G.lapsTarget);
-  if (typeof HudDamage !== "undefined") HudDamage.sync(player);   // DAMAGE chip (js/ui/hud-damage.js) — display only
+  if (typeof HudDamage !== "undefined" && hudShown("damage")) HudDamage.sync(player);   // DAMAGE chip (js/ui/hud-damage.js) — display only
   // THE LAP JUST DRIVEN. A race showed only the running clock, which snaps to
   // zero at the line, so unless the lap was a best the driver never saw it.
   // Hold it for the first 3 s of the next lap, green when it is a personal best
@@ -1895,7 +1912,7 @@ function updateHud(force, dtMs) {
     hData(_rx.energyBox, "ers", st === "idle" ? null : st);
     hAttr(_rx.energyBox, "aria-label", en.label);
     // BRAKE BIAS — the set-up sheet's split, fixed for the race (game.js applySetup).
-    if (_rx.bb) {
+    if (_rx.bb && hudShown("bb")) {
       const bb = _ro.bbText(player.brakeBias, typeof SetupTune !== "undefined" ? SetupTune.BB_REF : 0.56);
       hText(_rx.bb, bb);
       hAttr(_rx.bb, "aria-label", hT("hud.brakeBias", { pct: bb.slice(3) }, "Brake bias {pct} front"));
@@ -1933,7 +1950,9 @@ function updateHud(force, dtMs) {
     // lap before, --you on the lap, and CHEAPER STOP under a caution that fits it.
     // Practice / TT / quali: hide the race strategy line.
     const practice = sessionOf(timeTrial) !== "race";
-    const pl = (!practice && pit && pit.planInfo) ? pit.planInfo(player, pitReadouts) : null;
+    // The plan feeds the tyre chip and STRATEGY (pitReadouts): with both hidden nobody reads it.
+    const tyreShown = hudShown("tyre");
+    const pl = (!practice && pit && pit.planInfo && (tyreShown || pitReadouts)) ? pit.planInfo(player, pitReadouts) : null;
     if (pitReadouts) pitReadouts.plan = pl;
     if (els.plan) hText(els.plan, pl ? pl.text : "");
     hData(els.tyre, "plan", pl && pl.state || null);
@@ -1941,7 +1960,7 @@ function updateHud(force, dtMs) {
     // when the set is below its window and red above it, with ❄/▲ after it for
     // anyone the hue does not reach — and the chip's aria-label (role="img")
     // says compound, heat, laps left and the plan in words.
-    if (typeof HudTyres !== "undefined") {
+    if (typeof HudTyres !== "undefined" && tyreShown) {
       HudTyres.paint(els.tyre, tyres.temperatureInfo?.(player),
         { code: player.tyre && player.tyre.code, lapsLeft: spent >= 1 ? null : left, spent, plan: pl && pl.text });
     }
