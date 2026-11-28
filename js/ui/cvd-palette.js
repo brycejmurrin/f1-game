@@ -106,6 +106,7 @@ const CvdPalette = (function () {
     if (typeof fn === "function") listeners.push(fn);
   }
 
+  // The one sRGB EOTF in js/ui/ (IEC 61966-2-1); HudSkin and AppearanceOpts read it at call time.
   function srgbToLinear(v) {
     return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
   }
@@ -179,7 +180,7 @@ const CvdPalette = (function () {
     MODES: MODES, STATE: STATE, COVISIBLE: COVISIBLE, CSS_OF: CSS_OF, HUD_CSS_OF: HUD_CSS_OF, MACHADO: MACHADO,
     mode: function () { return mode; },
     set: set, hex: hex, rgb01: rgb01, css: css, onChange: onChange,
-    simulate: simulate, simulateLinear: simulateLinear, labFromLinear: labFromLinear, dE2000: dE2000,
+    simulate: simulate, simulateLinear: simulateLinear, srgbToLinear: srgbToLinear, labFromLinear: labFromLinear, dE2000: dE2000,
   };
 })();
 Object.freeze(CvdPalette);

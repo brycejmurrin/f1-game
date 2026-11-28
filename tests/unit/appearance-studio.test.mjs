@@ -95,7 +95,7 @@ function loadWithControls(moving = false) {
   const context = vm.createContext({ document: dom.document, GameStore: { store }, Log: { info() {}, warn() {} },
     setTimeout, clearTimeout, MutationObserver: class { observe() {} }, innerWidth: 1000, innerHeight: 500 });
   context.window = context;
-  for (const file of ["setting-row", "appearance-opts", "title-layout", "pause-opts"]) {
+  for (const file of ["setting-row", "cvd-palette", "appearance-opts", "title-layout", "pause-opts"]) {   // manifest order: cvd-palette before appearance-opts (#7444)
     const code = fs.readFileSync(new URL("../../js/ui/" + file + ".js", import.meta.url), "utf8");
     vm.runInContext(code.replace(/^const\b/gm, "var"), context);
   }
