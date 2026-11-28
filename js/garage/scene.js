@@ -1282,7 +1282,11 @@ function roomKeyStrings(team, liv, info, ctx) {
 // handle in place, so nothing is allocated. Free-then-create leaned on the TLX retire pool, and a handle retired
 // before its first draw (two edits between frames) came back without a GPU texture, which three made on the draw.
 function reuploadTex(old, canvas) {
-  if (old && _gfx.refillTexture && _gfx.refillTexture(old, canvas)) return old;
+  // A throwing refill frees old: the callers null their slot first (#7339).
+  if (old && _gfx.refillTexture) {
+    try { if (_gfx.refillTexture(old, canvas)) return old; }
+    catch (e) { if (_gfx.freeTexture) _gfx.freeTexture(old); throw e; }
+  }
   if (old && _gfx.freeTexture) _gfx.freeTexture(old);
   return _gfx.createTexture(canvas);
 }
@@ -1333,11 +1337,11 @@ function rebuild(team, liv, info, ctx) {
     // A new team/paint/context is a fresh texture; old failed uploads must
     // not permanently remove this team's wall graphics or moving trace.
     dressFail = 0; dressRetryAt = 0; traceFail = 0;
-    if (shellMesh) _gfx.freeMesh(shellMesh);
+    if (shellMesh) { _gfx.freeMesh(shellMesh); shellMesh = null; }
     for (let i = 0; i < SIDES.length; i++)
       if (ledMesh[SIDES[i]]) { _gfx.freeMesh(ledMesh[SIDES[i]]); ledMesh[SIDES[i]] = null; }
-    if (floorMesh) _gfx.freeMesh(floorMesh);
-    if (exteriorFallbackMesh) _gfx.freeMesh(exteriorFallbackMesh);
+    if (floorMesh) { _gfx.freeMesh(floorMesh); floorMesh = null; }
+    if (exteriorFallbackMesh) { _gfx.freeMesh(exteriorFallbackMesh); exteriorFallbackMesh = null; }
     if (mirrorFadeMesh) { _gfx.freeMesh(mirrorFadeMesh); mirrorFadeMesh = null; }
     for (let i = 0; i < SIDES.length; i++)
       if (propMesh[SIDES[i]]) { _gfx.freeMesh(propMesh[SIDES[i]]); propMesh[SIDES[i]] = null; }
