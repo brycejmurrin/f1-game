@@ -482,8 +482,12 @@ end-of-season sheet, the one screen that sits between two seasons.
 
 **Three** objectives per round, drawn with `Career.rnd(year, "obj", round)` from a
 table of kinds (`OBJ_KINDS`); the player takes one. Meeting it pays **`OBJ_BONUS`
-(150 cr) and `OBJ_REP` (+2 rep)**, plus twice any planning stake escrowed on the
-round (`js/career/career-planning.js`); missing it costs **2 rep**.
+(150 cr) and `OBJ_REP` (+2 rep)**, plus any planning stake escrowed on the
+round and, beside it, a refund of what escrow actually took (`planning().refund`,
+`js/career/career-planning.js`): the stake is returned, so the net win is the stake.
+Under FREE MONEY escrow takes nothing, so nothing is refunded and the win is the
+stake alone (#7378; before it paid twice the stake and netted +100).
+Missing the brief costs **2 rep**.
 
 | Type | Met when | Value |
 |---|---|---|

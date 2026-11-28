@@ -4465,7 +4465,8 @@ not a fact about one career.
 
 ### `careerGrant(n?) → number | null`
 Hand the live career credits; no argument grants `Career.GRANT` (5,000). Returns the
-new balance, or `null` with no career loaded.
+new balance, or `null` with no career loaded or a non-positive amount: only an omitted
+`n` means the default, so `0`, a negative or a non-number returns `null`.
 
 ### `careerFacility(up?) → {level, max, cost, discount}`
 The open-ended research facility — the money sink that keeps working once the
