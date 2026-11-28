@@ -129,3 +129,52 @@ test("Escape and BACK are one door, and closing puts the title, HUD and dock bac
   assert.equal(dom.document.body.hasAttribute("data-thumb-trainer"), false);
   assert.deepEqual(calls, ["preview true", "preview false", "reset", "closed"], "the dock hides and every hold is released before Learn returns");
 });
+
+// #7406: a run cut short by a frame gap (the app backgrounded) scored only the samples before it and saved a false best.
+function runHarness() {
+  const dom = makeDom(), store = new Map(), frames = [], clock = { now: 1000 };
+  let timeouts = [];
+  const sb = { Math, Object, Array, Map, Set, JSON, Promise, String, Number, document: dom.document, devicePixelRatio: 1, innerWidth: 852, innerHeight: 393,
+    Log: { info() {}, warn() {} }, localStorage: { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, String(v)) },
+    addEventListener() {}, removeEventListener() {}, performance: { now: () => clock.now },
+    requestAnimationFrame: (fn) => { frames.push(fn); return frames.length; }, cancelAnimationFrame() {},
+    setTimeout: (fn) => { timeouts.push(fn); return timeouts.length; }, clearTimeout() {}, queueMicrotask() {},
+    getComputedStyle: () => ({ getPropertyValue: () => "", fontSize: "15px" }), Input: { reset() {}, touchLevels: () => ({ brake: 0, gas: 0, left: 0, right: 0 }) } };
+  sb.window = sb;
+  vm.runInNewContext(src("js/ui/thumb-trainer.js"), sb, { filename: absSrc("js/ui/thumb-trainer.js") });
+  const TT = vm.runInNewContext("ThumbTrainer", sb);
+  const proto = Object.getPrototypeOf(dom.document.createElement("canvas"));
+  if (!proto.getContext) proto.getContext = () => null;
+  const s = TT.open({ getSteerMode: () => "buttons" }, { corner: "T6" });
+  frames.length = 0;
+  const go = () => { dom.byId("tt-go").click(); while (timeouts.length) { const t = timeouts; timeouts = []; t.forEach((fn) => fn()); } };
+  const frame = (dt) => { clock.now += dt; const fn = frames.shift(); fn(clock.now); };
+  return { TT, s, dom, go, frame, frames, clock };
+}
+
+test("a run interrupted by a frame gap is dropped unscored; a full run still saves its best (#7406)", () => {
+  const h = runHarness();
+  h.go();
+  assert.equal(h.s.state().running, true);
+  for (let i = 0; i < 3; i++) h.frame(16);
+  h.frame(10000);                       // back from the background: t >= C.dur on the first frame
+  assert.equal(h.s.state().running, false, "the trainer is idle");
+  assert.equal(h.TT.readBest().T6, undefined, "no best written for a cut-short run");
+
+  h.go();
+  let n = 0;
+  while (h.s.state().running && n++ < 2000) h.frame(16);
+  assert.equal(h.s.state().running, false);
+  assert.ok(h.TT.readBest().T6 > 0, "a normal run still scores and saves its best");
+});
+
+test("hiding the page mid-run drops the run unscored (#7406)", () => {
+  const h = runHarness();
+  h.go();
+  h.frame(16);
+  Object.defineProperty(h.dom.document, "hidden", { value: true, configurable: true });
+  h.dom.document.dispatchEvent({ type: "visibilitychange" });
+  assert.equal(h.s.state().running, false);
+  assert.equal(h.TT.readBest().T6, undefined);
+  h.s.close();
+});
