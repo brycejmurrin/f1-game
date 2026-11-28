@@ -1,0 +1,16 @@
+{
+  "files": {
+    "js/agent/apex.js": {
+      "lines": -2
+    },
+    "js/game.js": {
+      "codeLines": -17,
+      "lines": -13
+    }
+  },
+  "tree": {
+    "assertPins": -2,
+    "assertPinsAll": -2,
+    "eagerCodeBytes": -276
+  }
+}
