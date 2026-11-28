@@ -224,6 +224,7 @@ const SENT_BUILD = "apex26.crashStrikesBuild";
 const SENT_SEEN = "apex26.crashSeen";
 const SENT_SEEN_BUILD = "apex26.crashSeenBuild";
 let _crashStrikes = 0;
+let _dprCapped = false;   // init's capDpr(1) is live; _setCrashFloor lifts it once the strikes reach 0 (#7508)
 let _raceTicked = false;   // this document already stamped SENT_TICKED
 // Safe-mode floor the governor's restore path can't climb below (per session —
 // only strikes paying off across boots lift it): one strike starts with
@@ -314,7 +315,8 @@ function init(gfx) {
   _xShed = 0; _xFutile = false;
   try { if (_xq()) gfx.gpuTimer(true); } catch (_) { /* timing is optional */ }
   // Two strikes: the phone was killed twice, so boot with the smallest backing store too (TLX reads this after create; GLX has no capDpr).
-  if (_crashStrikes >= 2 && gfx && gfx.isMobile && typeof gfx.capDpr === "function") gfx.capDpr(1);
+  _dprCapped = _crashStrikes >= 2 && !!gfx && !!gfx.isMobile && typeof gfx.capDpr === "function";
+  if (_dprCapped) gfx.capDpr(1);
 }
 
 // ONE owner for the strikes -> floor mapping, shared by init and cleanRace(), so
@@ -370,6 +372,7 @@ function _setCrashFloor() {
   _perfTierFloor = _floorFromStrikes(_crashStrikes);
   if (_perfTierFloor < prev && _perfTier > _perfTierFloor) { _perfTier = _perfTierFloor; _autoShed = 0; }
   if (_perfTierFloor !== prev) _syncPresetDpr();
+  if (_dprCapped && _crashStrikes === 0) { _dprCapped = false; _gfx.capDpr(0); }
 }
 
 // Bounded raw-frame history supplements the EMA: occasional hitches must not

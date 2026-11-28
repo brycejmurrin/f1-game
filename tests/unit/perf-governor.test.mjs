@@ -623,7 +623,7 @@ test("the crash-sentinel floor still cannot be defeated by pinning the resolutio
 });
 
 test("two crash strikes cap the backend's DPR at 1 at init; one strike or a desktop leaves it alone (#1641)", () => {
-  const boot = (strikes, isMobile) => {
+  const boot = (strikes, isMobile, after) => {
     globalThis.localStorage = {
       _s: { "apex26.crashStrikes": String(strikes), "apex26.crashStrikesBuild": "1" },
       getItem(k) { return this._s[k] ?? null; }, setItem(k, v) { this._s[k] = String(v); },
@@ -633,6 +633,7 @@ test("two crash strikes cap the backend's DPR at 1 at init; one strike or a desk
     const PerfGov = eval(SRC + ";PerfGov");
     const caps = [];
     PerfGov.init({ isMobile, getRenderScale: () => 1, setRenderScale: () => false, capDpr: (n) => { caps.push(n); return true; } });
+    if (after) after(PerfGov);
     return caps;
   };
   assert.deepEqual(boot(2, true), [1], "two strikes on a phone cap DPR at 1");
@@ -640,9 +641,15 @@ test("two crash strikes cap the backend's DPR at 1 at init; one strike or a desk
   assert.deepEqual(boot(1, true), [], "one strike sheds features but keeps DPR");
   assert.deepEqual(boot(0, true), []);
   assert.deepEqual(boot(2, false), [], "a desktop never enters safe mode");
+  // #7508: the ceiling lifts once the strikes clear, and not before.
+  assert.deepEqual(boot(2, true, (g) => g.cleanRace()), [1], "one strike still pending keeps the cap");
+  assert.deepEqual(boot(2, true, (g) => { g.cleanRace(); g.cleanRace(); }), [1, 0], "two clean races lift it (capDpr(0))");
+  assert.deepEqual(boot(2, true, (g) => { g.cleanRace(); g.cleanRace(); g.cleanRace(); }), [1, 0], "lifted once, never re-sent");
+  assert.deepEqual(boot(4, true, (g) => g.clearStrikes()), [1, 0], "clearStrikes lifts it too");
+  assert.deepEqual(boot(1, true, (g) => g.cleanRace()), [], "never capped, never lifted");
 });
 
-test("TLX capDpr only ever lowers the cap and re-sizes; RESOLUTION MAX's boost cannot lift it back (#1641, #5222)", () => {
+test("TLX capDpr lowers the cap and re-sizes, capDpr(0) lifts it; RESOLUTION MAX's boost cannot lift it back (#1641, #5222)", () => {
   // create()'s cap state, reCapDpr and the facade's capDpr / setDprBoost / getDprBoost, lifted verbatim and run.
   const tlx = fs.readFileSync(path.join(ROOT, "js/render/three/tlx.js"), "utf8");
   const slice = (from, to) => { const a = tlx.indexOf(from); return tlx.slice(a, tlx.indexOf(to, a) + to.length); };
@@ -660,9 +667,10 @@ test("TLX capDpr only ever lowers the cap and re-sizes; RESOLUTION MAX's boost c
     ["setDprBoost(3)", true, 3], ["setDprBoost(3)", false, 3], // MAX lifts the phone's 1.5 to 3; a repeat is a no-op
     ["capDpr(1)", true, 1], ["setDprBoost(0)", false, 1],      // the sentinel's ceiling wins, with or without MAX
     ["setDprBoost(3)", false, 1], ["getDprBoost()", 3, 1],
+    ["capDpr(0)", true, 3], ["capDpr(0)", false, 3],           // #7508: strikes cleared, the tier's (MAX-boosted) cap returns
   ];
   assert.deepEqual(rows.map(([c]) => { const r = vm.runInContext("f." + c, ctx, { filename: "vm-page:evaluate" }); return [c, r, cap()]; }), rows);
-  assert.equal(ctx.resized, 2, "one re-size per cap that moved (1.5 -> 3 -> 1)");
+  assert.equal(ctx.resized, 3, "one re-size per cap that moved (1.5 -> 3 -> 1 -> 3)");
 });
 
 // ── The GRAPHICS preset's user tier (js/perf/quality-preset.js) ────────────────

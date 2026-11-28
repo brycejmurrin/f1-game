@@ -493,3 +493,38 @@ test("gravel stones rebound, expire, and give way to reduced effects and primary
   for (let i = 0; i < 10; i++) emit(P, 24);
   assert.ok(P.count() <= Math.ceil(P.capacity() * 0.4));
 });
+
+test("spray and mist fade to nothing in the last metre before the lens; ≥ 3 m stays bit-identical (#7508)", () => {
+  // One quad = 6 vertices × 10 floats [u, w, x, y, z, r, g, b, size, alpha].
+  const quads = (u) => {
+    const out = [];
+    for (let p = 0; p < u.floats; p += 60) out.push({ x: u.data[p + 2], alpha: u.data[p + 9] });
+    return out;
+  };
+  const run = (plane, smoke) => {
+    const uploads = [], P = make(uploads);
+    P.spray(0, 0, 0, 0, 0, 1, 12);
+    if (smoke) P.tyreSmoke(0, 0, 0, 0, 0, 1, 4);
+    P.update(0.05);
+    P.draw(plane);
+    const u = uploads.filter((x) => !x.additive).at(-1) || { floats: 0, data: new Float32Array(0) };
+    return { quads: quads(u), bytes: Array.from(u.data.subarray(0, u.floats)) };
+  };
+  const base = run(null), xs = base.quads.map((q) => q.x);
+  assert.ok(xs.length >= 4, "the seeded burst draws quads");
+  // plane [1,0,0,c]: a quad's distance in front of the near plane is x + c.
+  const far = run([1, 0, 0, 3 - Math.min(...xs)]);
+  assert.deepEqual(far.bytes, base.bytes, "every quad ≥ 3 m away keeps the base alpha bit for bit");
+  const x0 = Math.min(...xs), near = run([1, 0, 0, 0.3 - x0]);
+  assert.ok(!near.quads.some((q) => q.x === x0), "the quad 0.3 m from the lens draws with alpha 0 (culled)");
+  for (const q of near.quads) {
+    const d = q.x + 0.3 - x0, b = base.quads.find((r) => r.x === q.x);
+    assert.ok(d > 0.5, "nothing inside 0.5 m survives");
+    assert.ok(q.alpha <= b.alpha + 1e-7, "the fade only ever thins a quad");
+    if (d >= 1.5) assert.equal(q.alpha, b.alpha);
+  }
+  // Tyre smoke is not spray: the lens fade leaves it alone.
+  const smokeBase = run(null, true), smokeNear = run([1, 0, 0, 0.3 - x0], true);
+  assert.ok(smokeNear.quads.length > near.quads.length, "smoke quads at the lens still draw");
+  assert.ok(smokeBase.quads.length >= smokeNear.quads.length);
+});

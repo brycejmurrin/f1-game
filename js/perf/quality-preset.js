@@ -170,9 +170,9 @@ function capId(id, mobile) {
 }
 
 // Older / weaker phones: iPhone 13 (iOS 18, WebGL) idled ~25 fps on MEDIUM in
-// the 2026-10-21 BrowserStack suite. Capable phones (iPhone 15 + iOS 26 Safari
-// with navigator.gpu) hold MEDIUM racing. deviceMemory < 4 catches low-RAM
-// Androids. A Node harness with no Navigator.prototype.gpu stays "capable" so
+// the 2026-10-21 BrowserStack suite. Every iPhone defaults to LOW before this
+// check runs (defaultId's isIPhone() line), so only capable non-iPhone phones
+// get MEDIUM. deviceMemory < 4 catches low-RAM Androids. A Node harness with no Navigator.prototype.gpu stays "capable" so
 // the existing MEDIUM default tests keep their meaning; pass hint.weak to force.
 function isWeakPhone(nav) {
   // `null` is an explicit "no navigator" (tests); only fall back to the

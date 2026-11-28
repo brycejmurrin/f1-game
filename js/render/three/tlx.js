@@ -5415,7 +5415,9 @@ const TLX = (function () {
         maxRenderScale() { return _ssCeil(); },
         mirrorMax: _mirHi ? [_mirCapW, _mirCapH] : null,   // mirrorHi: mirror-pass.js targetSize's cap (GLX/WGX: none, 1024x512)   // superSample / ss2x ceiling (1 everywhere else): the governor's climb
         // PerfGov.init (after create) caps the backing store at DPR 1 once the crash sentinel holds two strikes: the scene/ldr/canvas targets shrink with dpr^2 (#1641). Only ever lowers.
+        // capDpr(0) lifts the ceiling again: PerfGov calls it once the strikes clear (#7508).
         capDpr(n) {
+          if (n === 0) { if (!_dprCeil) return false; _dprCeil = 0; return reCapDpr(); }
           if (!(n >= 1) || n >= DPR_CAP) return false;
           _dprCeil = n; return reCapDpr();
         },
