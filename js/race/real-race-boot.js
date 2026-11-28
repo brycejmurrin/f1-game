@@ -78,9 +78,8 @@ const RealRace = (function () {
   const status = () => { const b = latest(); return b ? b.status() : { active: false }; };
   const isWatch = () => !!live && live.isWatch();   // hot audio guards need no formatted field snapshot
   const replay = () => { const b = latest(); return b ? b.replay : null; };   // the replay's controls (follow / setSpeed / seek / skip) for page probes
-  const loaded = () => typeof RealRaceBody !== "undefined";
 
-  const api = { create, launch, status, isWatch, replay, dropSpeed, seatOnRoad, loaded, V_DROP_MIN };
+  const api = { create, launch, status, isWatch, replay, dropSpeed, seatOnRoad, V_DROP_MIN };
   // The pure timing-script helpers are RealRacePace's (LAZY_REAL_RACE): absent until it lands, as before a
   // caller's `RealRace.cumTable ? … : null` guard reads them.
   for (const k of ["realLapFor", "simLapFor", "paceTable", "cumTable", "planFor", "dnfAtFor", "cautionsFor", "mapField", "fieldAt",

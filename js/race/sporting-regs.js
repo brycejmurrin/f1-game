@@ -224,7 +224,7 @@ const SportingRegs = (function () {
   const BLUE_WARN_S = 4;
   const BLUE_HOLD_S = 8;
   const BLUE_PEN_S = 5;
-  const BLUE_KEEP_S = 1.6;   // a held lapper's flag stays out to this (HudReadouts BLUE_HOLD_S)
+  const BLUE_KEEP_S = 1.6;   // a held lapper's flag stays out to this (HudReadouts.blueFlag reads it)
 
   /** No blue flag shows under any caution (yellow included) or a give-back
    *  owed: the gate hud.js speakHud and the watch share (#6630). */

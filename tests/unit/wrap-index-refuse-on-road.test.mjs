@@ -54,7 +54,7 @@ test("per-kind SUPPRESSED counts of three real builds are unchanged by the refac
   const { buildContext } = require("../../tools/track/verify-track.cjs");
   const Tracks = buildContext(null, { quiet: true });
   const expect = {
-    monaco: { building: 5, cypress: 1, palm: 72, place: 1, plane: 1, stonePine: 3 },
+    monaco: { building: 5, cypress: 1, lampMast: 3, palm: 72, place: 1, plane: 1, stonePine: 3 },
     redbull: { tree: 61 },
     zolder: { building: 1, grandstand: 1, pine: 5, tree: 5 },
   };

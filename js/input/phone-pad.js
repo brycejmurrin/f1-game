@@ -698,11 +698,10 @@ const PhonePad = (function () {
     };
   }
 
+  // The wire (encode*/decode*, EVENTS, fmtLap, codeFromUrl) is PhonePadCodec's and HELD is
+  // PhonePadPage's: read them there. HEARTBEAT_MS and askOnScreen are this file's own test seams.
   return {
-    PROTO, HELD, EVENTS, DASH, HEARTBEAT_MS, HUD_MS,
-    encodeSample, decodeSample, encodeHud, decodeHud, encodeEvent, encodeHaptic, encodeHello, decodeEvent,
-    teamHex, fmtLap, paintHud,
-    padUrl, codeFromUrl,
+    DASH, HEARTBEAT_MS, teamHex, paintHud, padUrl,
     link, host, padSession, pad, askOnScreen,
   };
 })();

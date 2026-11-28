@@ -191,12 +191,60 @@ test('wheel wizard pins the first device, ignores other axes and cancels only ow
   assert.equal(I.getPadAxisMap().steer, 3);
   assert.equal(I.getPadAxisMap().throttle, 2);
   assert.equal(I.getPadAxisMap().brake, 1);
-  const profiles = plain(I.getControllerProfiles());
+  const profiles = plain(h.sb.GameStore.store.get('padProfiles'));
   assert.deepEqual(profiles.devices.find((p) => p.id === 'Wheel A').axes, beforeA);
   const beforeB = plain(I.getPadAxisMap());
   b.axes = [0, 0, 0, 0];
   h.$('pm-pad-wheel').onclick(); b.axes[3] = -.9; I.poll();
   b.connected = false; h.fire('gamepaddisconnected', { gamepad: b });
   assert.equal(h.$('pm-pad-wheel').textContent, 'SET UP A WHEEL', 'owner disconnect cancels');
-  assert.deepEqual(plain(I.getControllerProfiles()).devices.find((p) => p.id === 'Wheel B').axes, beforeB);
+  assert.deepEqual(plain(h.sb.GameStore.store.get('padProfiles')).devices.find((p) => p.id === 'Wheel B').axes, beforeB);
+});
+
+// Hunt #7320 A4/A5: the wizard's gaps — a pad gone mid-step, and the 600 ms between steps.
+function wheelRig() {
+  let pauses = 0;
+  const h = bootUi(true, {}, null, withProfileStore, { deferTimers: true, initOpts: { onPause: () => { pauses++; } } });
+  const w = { id: 'Solo Wheel', index: 0, connected: true, mapping: '', axes: [0, 0, 0, 0],
+    buttons: Array.from({ length: 20 }, () => ({ pressed: false, value: 0 })) };
+  let t = 0; h.sb.performance.now = () => t;
+  h.sb.navigator.getGamepads = () => [w];
+  h.fire('gamepadconnected', { gamepad: w }); h.Input.poll();
+  const start = (down) => { w.buttons[9] = { pressed: down, value: down ? 1 : 0 }; h.Input.poll(); };
+  return { h, w, start, pauses: () => pauses, at: (ms) => { t = ms; } };
+}
+test('a pedal step whose wheel vanished aborts at its deadline, not on the wheel’s return (#7322 A4)', () => {
+  const { h, w, at } = wheelRig(), I = h.Input;
+  h.$('pm-pad-wheel').onclick();
+  w.axes[0] = -.9; I.poll();                       // steering answered
+  w.axes[0] = 0; at(700); h.flushTimers();         // the throttle step arms
+  I.poll(); w.axes[2] = .9; at(720); I.poll();     // press: the pedal capture waits for release
+  assert.equal(h.$('pm-pad-wheel').textContent, 'CANCEL');
+  h.sb.navigator.getGamepads = () => [];           // the wheel drops out of getGamepads
+  at(1000); I.poll();
+  assert.equal(h.$('pm-pad-wheel').textContent, 'CANCEL', 'a brief hole is not an abort');
+  at(720 + 8001); I.poll();
+  assert.equal(h.$('pm-pad-wheel').textContent, 'SET UP A WHEEL', 'the deadline ran while the wheel was gone');
+});
+test('the only pad leaving during step 1 cancels the wizard; a spare pad keeps it (#7322 A4)', () => {
+  const { h, w } = wheelRig();
+  h.$('pm-pad-wheel').onclick();
+  assert.equal(h.$('pm-pad-wheel').textContent, 'CANCEL');
+  const spare = { ...w, id: 'Spare', index: 1, connected: true };
+  h.sb.navigator.getGamepads = () => [w, spare];
+  w.connected = false; h.fire('gamepaddisconnected', { gamepad: w });
+  assert.equal(h.$('pm-pad-wheel').textContent, 'CANCEL', 'a spare pad is still there');
+  spare.connected = false; h.fire('gamepaddisconnected', { gamepad: spare });
+  assert.equal(h.$('pm-pad-wheel').textContent, 'SET UP A WHEEL', 'no pad left: the sheet does not sit on "running"');
+});
+test('Start inside the 600 ms step gap does not pause; after the hold it does (#7322 A5)', () => {
+  const { h, w, start, pauses, at } = wheelRig(), I = h.Input;
+  h.$('pm-pad-wheel').onclick();
+  w.axes[0] = -.9; at(10); I.poll();              // step 1 completes: capture disarmed, re-arm in 600 ms
+  assert.equal(h.pendingTimers() > 0, true, 'the step timer is pending');
+  at(200); start(true); at(220); start(false);
+  assert.equal(pauses(), 0, 'Start in the step gap is the wizard’s, not a pause');
+  h.$('pm-pad-wheel').onclick();                   // cancel: the hold ends with the wizard
+  at(300); start(true); at(320); start(false);
+  assert.equal(pauses(), 1, 'anti-vacuity: with no wizard, Start pauses');
 });

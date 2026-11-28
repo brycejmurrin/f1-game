@@ -8,8 +8,9 @@
    off the track or contact (RaceInsights), wheels locked over 0.3 s, a spin. Medals (MEDALS below): bronze a clean
    run, silver and gold the VM-derived rim-use tiers, gold also a gate time within 0.15 s of your best TRAIL run this
    launch. Reference runs: tests/helpers/drill-drive-vm.mjs --write-grip; pins: tests/unit/drill-grip{,-vm}.test.mjs.
-   THE ARC NEVER REACHES THE DRIVER: sample(), score() and the widget read only port.physState() (__apex) and the
-   race clock; the turn and its gate are the curated track.def.turns, never the curvature table. Nothing is written
+   THE ARC NEVER REACHES THE DRIVER: sample(), score() and the widget read only port.physState() (the host's
+   DrillRegistry.physOf: the player's car, no __apex needed, #7342) and the race clock; the widget's variant is the
+   host's (port.variant(), so the card's NEXT moves it too); the turn and its gate are the curated track.def.turns, never the curvature table. Nothing is written
    to a car outside begin()'s placement, as the Aero drill places its cars. LAZY_LEARN: defined at eval when the
    registry is already up, else by LearnDoor.defineDrills (bundle order is not evaluation order). */
 const GripDrill = (function () {
@@ -88,7 +89,7 @@ const GripDrill = (function () {
       value, unit: "%", better: "high", clean, reason, gateS: +(last.seconds || 0).toFixed(2),
       metrics: [
         [name + " rim use", value.toFixed(0), "%"],
-        ["Peak decel", acc.peak.toFixed(0) + " of " + PhysicsConsts.LONG_GRIP, "m/s²"],
+        ["Peak decel", (acc.peak || 0).toFixed(0) + " of " + PhysicsConsts.LONG_GRIP, "m/s²"],
         ["Braking slack", slack.toFixed(0), "m"],
         ["Gate time", (last.seconds || 0).toFixed(2), "s"],
         ["Exit", kmh(acc.vGate || 0), ""],
@@ -124,19 +125,20 @@ const GripDrill = (function () {
     scope.setAttribute("aria-hidden", "true");
     const ctx = scope.getContext("2d");
     const task = document.createElement("strong");
+    task.id = "learn-grip-task";
     task.setAttribute("role", "status");
     const readout = document.createElement("span");
     const chips = document.createElement("div");
     const copy = document.createElement("div");
     copy.append(task, readout, chips);
     root.append(scope, copy);
-    let variant = VARIANTS[0].id;
+    const variant = () => port.variant() || VARIANTS[0].id;   // the host's: a chip, or the card's NEXT (rerun)
     const buttons = VARIANTS.map(v => {
       const b = document.createElement("button");
       b.type = "button";
       b.id = "learn-grip-" + v.id;
       b.textContent = v.label.toUpperCase();
-      b.addEventListener("click", () => { variant = v.id; port.rerun(v.id); });
+      b.addEventListener("click", () => port.rerun(v.id));
       return b;
     });
     const retry = document.createElement("button");
@@ -176,10 +178,11 @@ const GripDrill = (function () {
       head = (head + 1) % TAIL; filled = Math.min(TAIL, filled + 1);
       paint({ x: sx, y: c.y }, ps.wheelLock > LOCK);
       root.hidden = false;
-      task.textContent = (VARIANTS.find(v => v.id === variant) || VARIANTS[0]).task;
+      const vid = variant();
+      task.textContent = (VARIANTS.find(v => v.id === vid) || VARIANTS[0]).task;
       readout.textContent = Math.max(0, -ps.axEstSm).toFixed(0) + " m/s² · " + Math.round(100 * c.r) + " % of the circle"
         + (ps.brakeStab < 0.98 ? " · rear brake share eased" : "");
-      for (const b of buttons) b.setAttribute("aria-pressed", String(b.id === "learn-grip-" + variant));
+      for (const b of buttons) b.setAttribute("aria-pressed", String(b.id === "learn-grip-" + vid));
       return false;   // no road markings: the replay ghost keeps the road
     }
     return { draw, car: () => null, hide() { root.hidden = true; }, remove() { root.remove(); } };

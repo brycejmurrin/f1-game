@@ -1761,7 +1761,7 @@ function gridUp(preOrder) {
     const h = DriverRatings.hash32(hSeed + ":" + hRound + ":" + i + ":" + c.skill);
     c.launch = c.human ? null : AiDrive.launchPlan(AiDrive.traits(c), (h & 0xffff) / 65536);
     c.launchOn = !c.human; c.phaseRoll = (h >>> 16) / 65536; c.raceHash = h;
-    c.tyreClass = c.human ? null : AiDrive.tyreClass(((h >>> 8) & 0xffff) / 65536, lapsTarget);   // the compound IS the strategy
+    c.tyreClass = c.human ? null : AiStrategy.tyreClass(((h >>> 8) & 0xffff) / 65536, lapsTarget);   // the compound IS the strategy
     // A fresh set for the start. The player's comes from the fitted catalog row
     // (the row IS the compound); an AI car's from the class it just drew. No RNG
     // here — `h` is already the per-car race hash, so arming costs the sim

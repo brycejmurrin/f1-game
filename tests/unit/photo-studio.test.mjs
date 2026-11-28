@@ -574,7 +574,7 @@ test("live online and unpaused sessions cannot reposition the race car", () => {
 // that immediately mutate a Map. Real multi-tab IndexedDB is the browser gate.
 function photoDb(seed = []) {
   const rows = new Map(seed.map((row) => [row.id, row])), queue = [], failures = [];
-  let active = false, hold = null, release = null, writes = 0;
+  let active = false, hold = null, release = null, writes = 0; const kinds = [];
   const start = () => {
     if (active || !queue.length) return;
     active = true; const state = queue.shift(), tx = state.tx;
@@ -592,6 +592,7 @@ function photoDb(seed = []) {
     const step = () => {
       if (ended) return;
       const op = state.ops.shift();
+      if (op) kinds.push(op.kind);
       if (!op) {
         if (failures[0] === "commit" && state.mode === "readwrite") { failures.shift(); finish(new Error("Injected commit failure")); return; }
         if (state.held) { release = () => finish(); state.held(); }
@@ -603,7 +604,12 @@ function photoDb(seed = []) {
         if (tx.onerror) tx.onerror({ target: op.req });
         setImmediate(() => finish(op.req.error)); return;
       }
-      op.req.result = op.kind === "getAll" ? [...staged.values()] : op.kind === "put" ? (staged.set(op.value.id, op.value), op.value.id) : (staged.delete(op.value), undefined);
+      if (op.kind === "openCursor") {
+        for (const value of [...staged.values()]) { op.req.result = { value, continue() {} }; if (op.req.onsuccess) op.req.onsuccess(); }
+        op.req.result = null; if (op.req.onsuccess) op.req.onsuccess();
+        setImmediate(step); return;
+      }
+      op.req.result = op.kind === "get" ? staged.get(op.value) : op.kind === "getAll" ? [...staged.values()] : op.kind === "put" ? (staged.set(op.value.id, op.value), op.value.id) : (staged.delete(op.value), undefined);
       if (op.req.onsuccess) op.req.onsuccess();
       setImmediate(step);
     };
@@ -616,11 +622,11 @@ function photoDb(seed = []) {
       if (kind === "delete" && failures[0] === "delete-sync") { failures.shift(); throw new Error("Injected delete enqueue failure"); }
       const req = {}; state.ops.push({ kind, value, req }); return req;
     };
-    tx.objectStore = () => ({ getAll: () => request("getAll"), put: (v) => request("put", v), delete: (v) => request("delete", v) });
+    tx.objectStore = () => ({ getAll: () => request("getAll"), openCursor: () => request("openCursor"), get: (v) => request("get", v), put: (v) => request("put", v), delete: (v) => request("delete", v) });
     queue.push(state); setImmediate(start); return tx;
   } };
   return {
-    rows, get writes() { return writes; }, failNext(kind) { failures.push(kind); },
+    rows, kinds, get writes() { return writes; }, failNext(kind) { failures.push(kind); },
     holdNextCommit() { return new Promise((resolve) => { hold = resolve; }); },
     releaseCommit() { const done = release; release = null; done(); },
     open() { const req = { result: db }; queueMicrotask(() => { if (req.onsuccess) req.onsuccess(); }); return req; },
@@ -1281,7 +1287,7 @@ for (const fallback of [false, true]) test(`a late ${fallback ? "visit-only" : "
   assert.equal(db.rows.size, fallback ? 1 : 2);
   assert.equal(b.dom.document.activeElement.parentElement.children[1].textContent, "Old 0", "DELETE still targets the previously focused photo");
   assert.equal(b.dom.document.activeElement.textContent, "DELETE");
-  row.children.find(el => el.textContent === "DOWNLOAD").click(); await turn();
+  row.children.find(el => el.textContent === "DOWNLOAD").click(); for (let i = 0; i < 6; i++) await turn();
   assert.equal(await downloaded.text(), "original capture bytes");
   finishCapture({ width: 160, height: 90, data: new Uint8ClampedArray(160 * 90 * 4) }); await capturing;
 });
@@ -1936,4 +1942,22 @@ test("TIME chips cross day<->night without a synchronous rebuild: deferred, at m
   assert.equal(b.G.raceTimeOfDay, "day");
   assert.equal(n.sync, 0, "RESET CONDITIONS ran no synchronous rebuild");
   assert.ok(n.deferred >= 1 && n.deferred <= 2, "each crossing is deferred (the engine coalesces them)");
+});
+
+test("library list projects rows without the blob; DOWNLOAD fetches the blob on demand (#7240)", async () => {
+  const big = new Blob([new Uint8Array(3 * 1024 * 1024)]);
+  const idb = photoDb([{ id: "big", at: 5, title: "Big", thumb: "data:image/jpeg;base64,ZmFrZQ==", blob: big }]);
+  const b = boot({ indexedDB: idb }); b.api.open();
+  for (let i = 0; i < 6; i++) await turn();
+  const row = b.dom.byId("ps-library").children[0];
+  assert.ok(row, "the library paints the saved row");
+  assert.ok(idb.rows.get("big").blob, "the store still holds the blob");
+  assert.ok(idb.kinds.includes("openCursor") && !idb.kinds.includes("getAll"), "list reads by cursor, never getAll (full blobs): " + idb.kinds);
+});
+test("an oversize import clears the file input so the same path can be re-picked (#7240)", async () => {
+  const b = boot(); b.api.open();
+  const input = b.dom.byId("ps-import"); input.value = "C:/big.png";
+  Object.defineProperty(input, "files", { value: [{ type: "image/png", size: 13 * 1024 * 1024 }], configurable: true });
+  b.dom.dispatch(input, { type: "change" }); await turn();
+  assert.equal(input.value, "");
 });

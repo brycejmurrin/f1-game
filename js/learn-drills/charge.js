@@ -93,8 +93,8 @@ const ChargeDrill = (function () {
     const AO = AppearanceOpts;
     const kmhOf = v => (G.dashKph ? G.dashKph(Math.abs(v)) : Math.abs(v) * 3.6);
     const value = secs > 0 && dist > 0 ? +kmhOf(dist / secs).toFixed(1) : 0;
-    const unit = AO && AO.units && AO.units() === "mph" ? "mph" : "km/h";
-    const shown = AO && AO.speed ? AO.speed(value) : value;
+    // value, best and the medal tiers stay km/h; the card prints them in the player's unit (DrillCard display, #7342).
+    const display = AO && AO.units && AO.units() === "mph" ? { unit: "mph", k: 1 / 1.609344 } : null;
     const clean = !!last.clean && sustaining;
     const reason = !last.clean ? (last.reason || "lap not clean") : sustaining ? "" : "borrowed " + (-net * ES()).toFixed(2) + " MJ";
     const verdict = !last.clean ? "The lap ended: " + reason + ". Drive the lap clean to the gate."
@@ -102,7 +102,7 @@ const ChargeDrill = (function () {
       : L.clippedS > 0.5 ? "Charge-sustaining, +" + mj(net) + " MJ, but " + L.clippedS.toFixed(1) + " s of braking hit a full store: that harvest was lost. DEPLOY earlier to make room."
       : "Charge-sustaining: the store ended " + mj(net, true) + " MJ. Spend any surplus where the push is strongest, and the lap gets quicker.";
     return {
-      value, unit, better: "high", clean, reason, lapS: +secs.toFixed(2), netMJ: +(net * ES()).toFixed(3),
+      value, unit: "km/h", display, better: "high", clean, reason, lapS: +secs.toFixed(2), netMJ: +(net * ES()).toFixed(3),
       metrics: [
         ["Lap to the gate", secs.toFixed(2), "s"],
         ["Store start / end", mj(e0) + " / " + mj(eEnd), "MJ"],
@@ -110,7 +110,7 @@ const ChargeDrill = (function () {
           mj(sectorNet(L.sec[s]), true) + (acc.fc ? " (" + mj(acc.fc[s] - (s ? acc.fc[s - 1] : e0), true) + ")" : ""), "MJ"]),
         ["Braking at a full store", L.clippedS.toFixed(1), "s"],
       ],
-      ledger: L.sec.map(row => ({ ...row })), clippedS: +L.clippedS.toFixed(2), shown, verdict,
+      ledger: L.sec.map(row => ({ ...row })), clippedS: +L.clippedS.toFixed(2), verdict,
     };
   }
 

@@ -162,6 +162,33 @@ test("the timing-loop gap is the time between two cars at the same line, not pro
   assert.ok(Math.abs(out.f.gapA - 1.0) < 0.05, `expected ~1.0 s, got ${out.f.gapA}`);
 });
 
+test("#7321 a forward jump stamps no checkpoints: no 0.0 s gaps, no invented battles", () => {
+  const f = RF.create();
+  const a = car("AAA", 1000, 60), b = car("BBB", 880, 60), c = car("PLY", 760, 60, { isPlayer: true });
+  const G = { state: "race", raceT: 0, cars: [a, b, c], player: c, track: { total: LAP }, cautionInfo: () => ({ level: 0 }), cautionLevel: () => 0 };
+  const tick = () => { G.raceT += 1 / 60; for (const x of G.cars) x.prog += x.speed / 60; return f.observe(G, 1 / 60); };
+  for (let i = 0; i < 600; i++) tick();
+  const before = f.gap(a, b);
+  assert.ok(Math.abs(before - 2) < 0.05, `baseline ~2 s, got ${before}`);
+  assert.equal(f.battles().length, 0, "2 s apart is no fight");
+  // The jump: every car +10 laps in one step (a jump-in place(), a forward re-grid).
+  for (const x of G.cars) x.prog += 10 * LAP;
+  G.raceT += 1 / 60;
+  f.observe(G, 1 / 60);
+  assert.equal(f.battles().length, 0, "the jump invented battles: " + JSON.stringify(f.battles().map((t) => t.gap)));
+  const g = f.gap(a, b);
+  assert.ok(g === null || Math.abs(g - before) < 0.05, `no 0.0 s gap after the jump, got ${g}`);
+  // Until each car crosses one more real line, and after: still no fight, and the gap comes back at ~2 s.
+  const seg = LAP / 32;
+  for (let i = 0; i < Math.ceil((seg + 130) / (60 / 60)) + 10; i++) {
+    tick();
+    assert.equal(f.battles().length, 0, `tick ${i}: battles ${JSON.stringify(f.battles().map((t) => t.gap))}`);
+    const gi = f.gap(a, b);
+    assert.ok(gi === null || gi > 1.5, `tick ${i}: gap ${gi}`);
+  }
+  assert.ok(Math.abs(f.gap(a, b) - 2) < 0.05, `the gap re-reads at the next real crossing, got ${f.gap(a, b)}`);
+});
+
 test("a pass counts only once the new order has HELD", () => {
   const f = RF.create();
   const a = car("AAA", 1000, 60), b = car("BBB", 999, 60), p = car("PLY", 500, 60, { isPlayer: true });

@@ -6,6 +6,9 @@
  * 2. The lesson: TRAIL (bleed the brake as the wheel turns) uses more of the circle than V-LINE, both clean.
  * 3. A fail: stamping the pedal at the turn-in and holding it locks the fronts; no medal.
  * 4. The shipped MEDALS are the tiers the refs give by the documented rule (#6559 §1e rule 4).
+ * 5. A player's Pages build has no __apex (LAZY_AGENT): the host's DrillRegistry.physOf reads the same fields
+ *    __apex.physState() does, and with window.__apex deleted a run still scores, medals and draws its guide (#7342).
+ * 6. The card's NEXT moves the guide's variant: the pressed chip and the task are the run being scored (#7342).
  * Regenerate the refs: node tests/helpers/drill-drive-vm.mjs --write-grip
  *
  * Run: node --test tests/unit/drill-grip-vm.test.mjs
@@ -76,4 +79,41 @@ test("learn-drill-refs.json grip: GRIP_RUNS, the tiers follow by the rule, and g
   assert.ok(A, "the first test booted");
   const { silver, gold } = A.run.ev("GripDrill.MEDALS");
   assert.deepEqual({ silver, gold }, refs.tiers);
+});
+
+test("no __apex: physOf matches __apex.physState() field for field, and a run scores, medals and draws its guide (#7342)", async () => {
+  const run = await drillDrive("grip");
+  runs.push(run);
+  const a = run.g.apex.physState(), b = run.ev("DrillRegistry").physOf(run.G);
+  assert.ok(b && !b.error, "the car is placed");
+  for (const k of Object.keys(b)) assert.equal(b[k], a[k], "physOf." + k + " vs __apex.physState()." + k);
+  run.ev("delete window.__apex");
+  assert.equal(run.ev("typeof window.__apex"), "undefined", "the agent surface is gone, as on a player's build");
+  const r = run.drive(GRIP_SCRIPTS.vline());
+  assert.ok(r, "the run reached the gate and the host scored it");
+  // Again after the run, once player-forces has stored axFrac (the branch the placed car's first read skips).
+  const a2 = run.g.apex.physState(), b2 = run.ev("DrillRegistry").physOf(run.G);
+  assert.ok(run.G.player.axFrac != null, "player-forces stored axFrac");
+  for (const k of Object.keys(b2)) assert.equal(b2[k], a2[k], "after the run: physOf." + k + " vs __apex.physState()." + k);
+  assert.ok(Number.isFinite(r.value) && r.value > 0, "rim use " + r.value);
+  assert.ok(r.medal, "a clean run earns a medal");
+  assert.ok(r.metrics.every(([, v]) => !/NaN|undefined/.test(String(v))), JSON.stringify(r.metrics));
+  const ref = refs.runs.find((x) => x.script === "vline" && !x.args.length);
+  assert.deepEqual({ value: r.value, gateS: r.gateS }, { value: ref.value, gateS: ref.gateS }, "the same run as with __apex");
+  const doc = run.g.sandbox.document;
+  assert.ok(doc.getElementById("drill-card-medal").textContent.includes("%"), "the card is up");
+
+  // 6. The card's NEXT ("TRY TRAIL") is rerun("trail"): the guide follows the host, not its own chip state.
+  const next = doc.getElementById("drill-card-next");
+  assert.equal(next.textContent, "TRY TRAIL");
+  next.click();
+  assert.equal(run.host.state().variant, "trail");
+  run.host.guide().draw();
+  assert.equal(doc.getElementById("learn-grip-guide").hidden, false, "the widget drew with no __apex");
+  const pressed = ["vline", "trail", "free"].filter((v) => doc.getElementById("learn-grip-" + v).getAttribute("aria-pressed") === "true");
+  assert.deepEqual(pressed, ["trail"]);
+  const task = run.ev("GripDrill.VARIANTS.find((v) => v.id === 'trail').task");
+  assert.equal(doc.getElementById("learn-grip-task").textContent, task);
+  const r2 = run.drive(GRIP_SCRIPTS.trail());
+  assert.equal(r2 && r2.variant, "trail", "scored and saved as the variant the guide shows");
 });

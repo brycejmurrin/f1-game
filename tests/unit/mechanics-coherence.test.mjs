@@ -19,7 +19,7 @@ test("the actual collision candidate accepts two rotated humans across the lap s
   const { get } = load(["js/physics/ai-start.js", "js/physics/ai-drive.js", "js/physics/contact-geometry.js", "js/physics/collide.js"], {
     IncidentSim: { owns: () => false }, Tracks: { wallAt: () => 20 },
   });
-  const C = get("Collide").create({ track: { total: 1000 }, player: null, netPlay: { owns: () => false }, PACE: 1, wrapS: s => s }, () => {});
+  const C = get("Collide").create({ track: { total: 1000 }, player: null, netPlay: { owns: () => false }, PACE: 1, pace: { k: Math.max(1, 0.05) }, wrapS: s => s }, () => {});
   C.resolveCollisions([],1/60);
   const yaw = Math.PI - Math.atan(1/2.4);
   for (const [aS,bS] of [[0,5.1],[995,0.1]]) {

@@ -486,11 +486,11 @@ const HELP_VALUES = ["low", "med", "high"].map((n) => [n, HELP_LABEL[n]]).concat
 // sync can write PULL 3 over a deliberate PUSH.
 const LINE_VALUES = [["off", "OFF"], ["corner", "CORNERS"], ["full", "FULL"], ["custom", "CUSTOM", true]];
 function helpBand() {
-  const dh = clamp(store.get("drivingHelp", 1), SLIDER_MIN, SLIDER_MAX);
+  const dh = clamp(numStore.get("drivingHelp", 1), SLIDER_MIN, SLIDER_MAX);   // numStore: the row reads what applySteerTuning runs (#7322 C1)
   return dh <= 1 ? "low" : dh <= 3 ? "custom" : dh <= 7 ? "med" : "high";
 }
 function lineBand() {
-  const rl = clamp(store.get("raceLine", 0), LINE_MIN, LINE_MAX);
+  const rl = clamp(numStore.get("raceLine", 0), LINE_MIN, LINE_MAX);
   if (rl === LINE_LEVELS.off) return "off";
   if (rl === LINE_LEVELS.full) return "full";
   if (rl === LINE_LEVELS.corner) return "corner";
@@ -533,7 +533,7 @@ function matchPreset() {
     // An UNSET key is its effective value (applySteerTuning's fallback = PRESETS.standard), never
     // the candidate's own: on a fresh install FEEL › SIM matched PRO on four keys and lit the
     // PRO chip over STANDARD assists (B·H11 hunt).
-    if (Object.keys(PRESET_STORE).every((k) => store.get(k, PRESETS.standard[k]) === p[k])) return name;
+    if (Object.keys(PRESET_STORE).every((k) => numStore.get(k, PRESETS.standard[k]) === p[k])) return name;
   }
   return null;
 }
@@ -558,7 +558,7 @@ function refreshPresetButtons() {
 function matchSteerLevel() {
   for (const n of STEER_LEVEL_ORDER) {
     const L = STEER_LEVELS[n];
-    if (Object.keys(L).every((k) => store.get(k, STEER_DEFAULTS[k]) === L[k])) return n;
+    if (Object.keys(L).every((k) => numStore.get(k, STEER_DEFAULTS[k]) === L[k])) return n;
   }
   return null;
 }
@@ -855,7 +855,7 @@ $("pm-preset-pro").onclick = handBackPreset("pro");
    moving HAPTICS or the pad DEAD ZONE keeps the chip on PRO; it used to call
    clearPreset() unconditionally and read CUSTOM for settings no preset writes
    (tests/unit/steer-presets.test.mjs pins both directions). */
-function wireTune(id, key, def, lo, hi, push, label) {
+function wireTune(id, key, lo, hi, push, label) {
   const el = $(id);
   if (!el) return;
   el.oninput = (e) => {
@@ -866,20 +866,20 @@ function wireTune(id, key, def, lo, hi, push, label) {
     clearPresetFor(key);
   };
 }
-wireTune("pm-tiltcurve", "tiltCurve", 5, SLIDER_MIN, SLIDER_MAX, (v) => Input.setAnalogTrim("tilt", curveTrimFromSlider(v)));
-wireTune("pm-touchcurve", "touchCurve", 5, SLIDER_MIN, SLIDER_MAX, (v) => Input.setAnalogTrim("touch", curveTrimFromSlider(v)));
-wireTune("pm-padcurve", "padCurve", 5, SLIDER_MIN, SLIDER_MAX, (v) => Input.setAnalogTrim("pad", curveTrimFromSlider(v)));
-wireTune("pm-touchrange", "touchRange", 5, SLIDER_MIN, SLIDER_MAX, (v) => Input.setTouchRange(touchRangeFromSlider(v)));
-wireTune("pm-touchdragspeed", "touchDragSpeed", 1, SLIDER_MIN, SLIDER_MAX, (v) => {
+wireTune("pm-tiltcurve", "tiltCurve", SLIDER_MIN, SLIDER_MAX, (v) => Input.setAnalogTrim("tilt", curveTrimFromSlider(v)));
+wireTune("pm-touchcurve", "touchCurve", SLIDER_MIN, SLIDER_MAX, (v) => Input.setAnalogTrim("touch", curveTrimFromSlider(v)));
+wireTune("pm-padcurve", "padCurve", SLIDER_MIN, SLIDER_MAX, (v) => Input.setAnalogTrim("pad", curveTrimFromSlider(v)));
+wireTune("pm-touchrange", "touchRange", SLIDER_MIN, SLIDER_MAX, (v) => Input.setTouchRange(touchRangeFromSlider(v)));
+wireTune("pm-touchdragspeed", "touchDragSpeed", SLIDER_MIN, SLIDER_MAX, (v) => {
   if (Input.setTouchSpeedMix) Input.setTouchSpeedMix(touchSpeedFromSlider(v));
 }, adaptLabel);
-wireTune("pm-dragsmooth", "dragSmooth", 1, SLIDER_MIN, SLIDER_MAX, (v) => Input.setDragSmoothing(dragCutoffFromSlider(v)), dragSmoothLabel);
-wireTune("pm-steerrate", "digitalRate", 5, SLIDER_MIN, SLIDER_MAX, (v) => Input.setKeyRampIn(steerRateFromSlider(v)));
-wireTune("pm-steerreturn", "digitalRecenterRate", 0, 0, SLIDER_MAX, (v) => Input.setKeyRampOut?.(steerReturnRateFromSlider(v)), steerReturnLabel);
-wireTune("pm-analogspeed", "analogSpeedSteer", 1, SLIDER_MIN, SLIDER_MAX, (v) => Input.setAnalogSpeedMix(analogSpeedFromSlider(v)), adaptLabel);
-wireTune("pm-haptics", "haptics", 6, SLIDER_MIN, SLIDER_MAX, (v) => Input.setHaptics(v <= 1 ? 0 : (v - 1) / 9), adaptLabel);
-wireTune("pm-paddz", "padDeadzone", 5, 0, 30, (v) => Input.setPadDeadzone(v / 100), pctLabel);
-wireTune("pm-padsat", "padSaturation", 0, 0, 30, (v) => Input.setPadSaturation(v / 100), pctLabel);
+wireTune("pm-dragsmooth", "dragSmooth", SLIDER_MIN, SLIDER_MAX, (v) => Input.setDragSmoothing(dragCutoffFromSlider(v)), dragSmoothLabel);
+wireTune("pm-steerrate", "digitalRate", SLIDER_MIN, SLIDER_MAX, (v) => Input.setKeyRampIn(steerRateFromSlider(v)));
+wireTune("pm-steerreturn", "digitalRecenterRate", 0, SLIDER_MAX, (v) => Input.setKeyRampOut?.(steerReturnRateFromSlider(v)), steerReturnLabel);
+wireTune("pm-analogspeed", "analogSpeedSteer", SLIDER_MIN, SLIDER_MAX, (v) => Input.setAnalogSpeedMix(analogSpeedFromSlider(v)), adaptLabel);
+wireTune("pm-haptics", "haptics", SLIDER_MIN, SLIDER_MAX, (v) => Input.setHaptics(v <= 1 ? 0 : (v - 1) / 9), adaptLabel);
+wireTune("pm-paddz", "padDeadzone", 0, 30, (v) => Input.setPadDeadzone(v / 100), pctLabel);
+wireTune("pm-padsat", "padSaturation", 0, 30, (v) => Input.setPadSaturation(v / 100), pctLabel);
 (function ensurePedalDeadzoneRows() {
   if ($("pm-padgasdz") || typeof document === "undefined") return;
   const host = $("pm-padsat")?.closest?.(".adv-item");
@@ -908,8 +908,8 @@ wireTune("pm-padsat", "padSaturation", 0, 0, 30, (v) => Input.setPadSaturation(v
     host.parentNode.insertBefore(row, next);
   }
 })();
-wireTune("pm-padgasdz", "padGasDeadzone", 12, 0, 30, (v) => Input.setPadPedalDeadzone("throttle", v / 100), pctLabel);
-wireTune("pm-padbrakedz", "padBrakeDeadzone", 12, 0, 30, (v) => Input.setPadPedalDeadzone("brake", v / 100), pctLabel);
+wireTune("pm-padgasdz", "padGasDeadzone", 0, 30, (v) => Input.setPadPedalDeadzone("throttle", v / 100), pctLabel);
+wireTune("pm-padbrakedz", "padBrakeDeadzone", 0, 30, (v) => Input.setPadPedalDeadzone("brake", v / 100), pctLabel);
 
 function paintTriggerHapRow() {
   const item = $("pm-triggerhap-item");

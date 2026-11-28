@@ -170,7 +170,7 @@ function bootTuning(input = {}, disk = {}, g = {}, initStore) {
     Math, Object, Array, Number, String, JSON, isFinite,
     Log: { info: noop, warn: noop, debug: noop, error: noop },
     Input: new Proxy(input, { get: (target, key) => target[key] || noop }),
-    SettingRow: { wire: (id, o) => { wires[typeof id === "string" ? id : id && id.id] = o; }, paint: noop }, Dom: { paintFold: noop }, GameAudio: { uiSelect: noop },
+    SettingRow: { wire: (id, o) => { wires[typeof id === "string" ? id : id && id.id] = o; }, paint: (el, v) => { if (el) el.painted = v; } }, Dom: { paintFold: noop }, GameAudio: { uiSelect: noop },
   };
   const listeners = {};
   sb.window = { matchMedia: () => ({ matches: false }), addEventListener: (t, f) => { (listeners[t] ||= []).push(f); } };
@@ -385,7 +385,7 @@ test("FEEL › SIM on a fresh install does not light a preset its unset keys do 
 const PRESET_STORE = table("PRESET_STORE");
 const presetOwned = (key) => Object.prototype.hasOwnProperty.call(PRESET_STORE, key);
 // Every wireTune row, read from the source so a row added later is covered too.
-const WIRED = [...SRC.matchAll(/wireTune\("([^"]+)", "([^"]+)", [^,]+, ([^,]+),/g)]
+const WIRED = [...SRC.matchAll(/wireTune\("([^"]+)", "([^"]+)", ([^,]+),/g)]
   .map((m) => ({ id: m[1], key: m[2], lo: m[3].trim() }));
 
 test("a row no preset writes (HAPTICS, pad DEAD ZONE, WEIGHT, …) keeps the preset chip", () => {
@@ -452,11 +452,13 @@ test("DRIVING HELP reads OFF exactly when ROAD_FOLLOW is 0, at every notch", () 
     return SRC.slice(at, end + 1);
   };
   const HELP_LABEL = table("HELP_LABEL");
+  const NUM_STORE = SRC.match(/^const numStore = .*$/m)?.[0];
+  assert.ok(NUM_STORE, "numStore is gone from js/input/steer-tuning.js");
   const seen = {};
   for (let notch = 1; notch <= 10; notch++) {
     // eslint-disable-next-line no-new-func
     const run = Function("store", "clamp", "SLIDER_MIN", "SLIDER_MAX",
-      `"use strict"; ${fn("helpFromSlider")} ${fn("helpBand")} return { band: helpBand(), gain: helpFromSlider(store.get("drivingHelp", 1)) };`);
+      `"use strict"; ${NUM_STORE} ${fn("helpFromSlider")} ${fn("helpBand")} return { band: helpBand(), gain: helpFromSlider(store.get("drivingHelp", 1)) };`);
     const { band, gain } = run({ get: () => notch }, (v, a, b) => Math.max(a, Math.min(b, v)), 1, 10);
     assert.ok(HELP_LABEL[band], `notch ${notch}: band "${band}" has no label`);
     assert.equal(HELP_LABEL[band] === "OFF", gain === 0, `notch ${notch}: label ${HELP_LABEL[band]} with ROAD_FOLLOW gain ${gain}`);
@@ -553,4 +555,15 @@ test("onAssistBundle re-reads the throttle, shows the pedals again and only anno
   const entering = run(true);
   assert.equal(entering.out, true);
   assert.equal(entering.names[entering.names.length - 1], "announce");
+});
+
+// Hunt #7320 C1: a string in storage (an imported backup, a hand edit) is what
+// applySteerTuning ignores (numStore), so the rows must not read it either.
+test("string-stored values paint the rows the physics runs, not their coerced look (#7322 C1)", () => {
+  const { $, disk, apply } = bootTuning({}, { drivingHelp: "5", raceLine: "1", steerRate: "7" });
+  apply();
+  assert.equal($("pm-helplevel").painted, "low", "drivingHelp \"5\" runs notch 1 (OFF), so the row reads OFF");
+  assert.equal($("pm-linemode").painted, "off", "raceLine \"1\" runs 0");
+  assert.equal($("pm-feel").painted, "normal", "steerRate \"7\" runs 2: FEEL is NORMAL, not SIM or CUSTOM");
+  assert.equal(disk.preset ?? "standard", "standard", "the preset chip follows the effective values (not CUSTOM)");
 });

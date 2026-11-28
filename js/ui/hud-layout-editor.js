@@ -344,7 +344,7 @@ const HudLayoutEditor = (() => {
       const out = el("b");
       const paintValue = n => { out.textContent = txt(k, n, sel, editing, editingProf); };
       const inp = el("input", { type: "number", step: "any",
-        attrs: { "aria-label": NAMES[k].toLowerCase() } });
+        attrs: { "aria-label": NAMES[k].toLowerCase() + " of selected element" } });
       inp.id = "pm-hl-" + k;
       sliders.push(inp);
       let dirty = false;

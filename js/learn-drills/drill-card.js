@@ -33,6 +33,7 @@ const DrillCard = (function () {
   /** Persist one run. Returns the saved row and whether it beat the old best. */
   function record(store, key, r) {
     const all = read(store), old = all[key];
+    if (!Number.isFinite(r.value)) return { row: old || null, improved: false };   // NaN/Infinity would store null and wipe the best
     const hadBest = !!(old && Number.isFinite(old.best));
     const best = hadBest ? Math.max(old.best, r.value) : r.value;
     const oldMedal = old && RANK[old.medal] ? old.medal : null;
@@ -62,7 +63,7 @@ const DrillCard = (function () {
     card = null;
   }
 
-  /** r: {title, value, unit, clean, reason, medal, metrics: [[label, value, unit]], verdict, improved, best}. */
+  /** r: {title, value, unit, display?: {unit, k}, clean, reason, medal, metrics: [[label, value, unit]], verdict, improved, best}. */
   function show(r, actions) {
     hide();
     card = document.createElement("div");
@@ -77,8 +78,10 @@ const DrillCard = (function () {
     medal.id = "drill-card-medal";
     medal.setAttribute("role", "status");
     medal.dataset.medal = r.medal || "none";
-    medal.textContent = (r.medal ? LABEL[r.medal] : "NO MEDAL") + " · " + r.value.toFixed(1) + " " + r.unit
-      + (r.improved ? " · NEW BEST" : Number.isFinite(r.best) ? " · best " + r.best.toFixed(1) + " " + r.unit : "");
+    // r.display {unit, k}: the value and best are in r.unit (the medal tiers' unit), printed as value x k in display.unit.
+    const k = r.display ? r.display.k : 1, unit = r.display ? r.display.unit : r.unit;
+    medal.textContent = (r.medal ? LABEL[r.medal] : "NO MEDAL") + " · " + (r.value * k).toFixed(1) + " " + unit
+      + (r.improved ? " · NEW BEST" : Number.isFinite(r.best) ? " · best " + (r.best * k).toFixed(1) + " " + unit : "");
     const rows = document.createElement("dl");
     rows.id = "drill-card-metrics";
     for (const [label, value, unit] of (r.metrics || []).slice(0, 6)) {
@@ -118,6 +121,10 @@ const DrillCard = (function () {
     // Desktop keys (#6559 §1e rule 5): R retries, Esc goes back to the lesson. Capture phase, before the race's
     // Escape-to-pause, only while the card is up.
     onKey = (e) => {
+      const t = e.target;
+      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName || ""))) return;   // typing, not the card
+      const pm = document.getElementById?.("pausemenu");
+      if ((pm && !pm.hidden) || (actions.paused && actions.paused())) return;   // the pause menu owns Escape and R
       if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); back.click(); }
       else if ((e.key === "r" || e.key === "R") && !e.repeat) { e.preventDefault(); e.stopPropagation(); retry.click(); }
     };

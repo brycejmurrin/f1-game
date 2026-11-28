@@ -1296,25 +1296,8 @@ const AiDrive = (function () {
   // runs wide, fronts locked for the render) then a GATHER phase (85 % pace
   // while the car is collected) — half a second to a second and a half lost,
   // and never while alongside another car.
-  // Tyre-wear pace and the stint planner live in AiStrategy. Names stay here so
-  // game.js and pit-lane.js keep calling AiDrive.*. bindTraits runs on the first
-  // call, not at eval, so a VM that loads only this file for racecraft still evaluates.
-  let _stratBound = false;
-  function bindStrat() {
-    if (_stratBound) return;
-    _stratBound = true;
-    AiStrategy.bindTraits(traits);
-  }
-  function tyreClass(roll, laps) { bindStrat(); return AiStrategy.tyreClass(roll, laps); }
-  function tyrePace(cls, lapsDone) { bindStrat(); return AiStrategy.tyrePace(cls, lapsDone); }
-  function degCost(n, life) { bindStrat(); return AiStrategy.degCost(n, life); }
-  function splitStints(laps, lives, fuelWear) { bindStrat(); return AiStrategy.splitStints(laps, lives, fuelWear); }
-  function stintPlan(ctx) { bindStrat(); return AiStrategy.stintPlan(ctx); }
-  function compoundFor(lapsLeft, lifeLaps) { bindStrat(); return AiStrategy.compoundFor(lapsLeft, lifeLaps); }
-  function strategyTemper(c) { bindStrat(); return AiStrategy.strategyTemper(c); }
-  function tasteRoll(roll, c) { bindStrat(); return AiStrategy.tasteRoll(roll, c); }
-  function wornPays(ctx) { bindStrat(); return AiStrategy.wornPays(ctx); }
-  function pitNow(ctx) { bindStrat(); return AiStrategy.pitNow(ctx); }
+  // Tyre-wear pace and the stint planner live in AiStrategy; callers use AiStrategy.* directly. Its traits are
+  // bound once, at the end of this file's eval (below).
 
   // errMul = DIFF[d].err (not ctx.errMul, the brake-limit scale once a mistake fired); <=0 or
   // undefined reads as 1.
@@ -1727,6 +1710,7 @@ const AiDrive = (function () {
   }
 
   try { Log.info("game", "AiDrive ready"); } catch (_) { /* Log absent in isolated VM */ }
+  if (typeof AiStrategy !== "undefined") AiStrategy.bindTraits(traits);   // the one bind (ai-strategy.js loads first); a racecraft-only VM has no AiStrategy
   return {
     lateralScale, paceTrim, diffCorner, laneClear, slowHazard, SLOW_V_FRAC, aiErs, aeroGrip, AERO_GRIP_K, AI_ERS_SPAN, PACE_GAIN, PACE_REF, yawScale, lateralScales, sbsLimits, cornerSpeed, traits, houseStyle, stuckThreshold, followGap, towGain, queueBrake, queueReach, sepClamp,
     humanInvMass, contactGive, steerDamp, unstuckPull, otFireRate,
@@ -1741,9 +1725,8 @@ const AiDrive = (function () {
     launchPlan, launchMul, launchDone, startCalm, startCalmS, startGapT, pacePhase, trailStep, trailYieldStep, trailYieldEase, trailYieldCorner, squeezeEase, squeezeBrake,
     holdLineGap, defendOnce, lineFollow, attackOK, sideLevel,
     mistakeChance, mistakeTotal, mistakePhase, mistakeBrakeMul, mistakeGatherMul,
-    tyreClass, tyrePace, stintPlan, pitNow, wornPays, degCost, splitStints, compoundFor, strategyTemper, tasteRoll, lodLab,
+    lodLab,
     // Internals pinned only by tests/unit/ai-drive.test.mjs — no game caller (audit4 P4/F8). Not API.
     _t: Object.freeze({ isMate, ordersMul, followTime, followBase, streetOtScale, defendWindowT, queuePatience, trailCase, trailTime, trailPush, trailYield }),
-    get STRAT() { bindStrat(); return AiStrategy.STRAT; },
   };
 })();

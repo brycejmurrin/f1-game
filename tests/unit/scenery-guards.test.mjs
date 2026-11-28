@@ -461,3 +461,23 @@ test("abudhabi Yas hotel bridges are pale steel, not near-black (#2258)", () => 
     assert.ok(mean >= 0.4 && mean <= 0.65, `${id} albedo ${mean.toFixed(2)} should be pale steel (0.4-0.65)`);
   }
 });
+
+test("conifer, kerb strips and bowl walls forced onto the road are counted, not dropped silently (#7243 member 2)", () => {
+  const { buildContext: vmContext } = require("../../tools/lib/track-build-vm.cjs");
+  const env = vmContext();
+  const base = env.Tracks.LIST.find((d) => d.id === "bahrain");
+  const def = Object.assign({}, base, {
+    scenery(api) {
+      const k = Math.round(api.n * 0.3), k2 = Math.round(api.n * 0.5);
+      api.conifer(k, 1, -2, 10, [0.1, 0.3, 0.1]);          // lateral -2: the trunk stands in the carriageway
+      api.bankedKerbStrip(k2, k2 + 6, 1, { saferGap: -3 }); // safer strip 3 m inside the road
+      api.bowlSeatWall(k, k + 6, 1, -2, {});               // seating mass over the tarmac
+    },
+  });
+  const track = env.Tracks.build(def, {});
+  const c = { ...track.modelDiagnostics.suppressedCounts };
+  env.release(track);
+  assert.ok(c.conifer >= 1, `conifer on the road is counted (${JSON.stringify(c)})`);
+  assert.ok(c.saferStrip >= 1, `safer strip on the road is counted (${JSON.stringify(c)})`);
+  assert.ok(c.bowlSeatWall >= 1, `bowl wall on the road is counted (${JSON.stringify(c)})`);
+});

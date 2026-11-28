@@ -295,7 +295,7 @@ const FULL = [
   "js/physics/wheel-state.js", // opt-in torque-balanced κ / lockup / wheelspin (#1628); default OFF
   "js/physics/vehicle.js", // tick scratch bags; loads before player-forces.js
   "js/physics/player-forces.js", // human combined-slip / Fy / yaw integrate (carve-headroom A); uses GripSteer after muF
-  "js/physics/ai-strategy.js", // tyre-wear pace + stint planner; AiDrive re-exports the names
+  "js/physics/ai-strategy.js", // tyre-wear pace + stint planner; called directly (AiStrategy.*)
   "js/physics/ai-start.js",   // AiStart: launch plan + lap-1 calm policy (AiDrive re-exports)
   "js/physics/ai-drive.js",
   "js/physics/ai-band.js",   // gap catch-up vs scripted fixed pace (carve-headroom D)
@@ -322,6 +322,7 @@ const FULL = [
   "js/ui/survey-hud.js",   // APEX_SURVEY_HUD=1: cockpit HUD fixture without race/scenery warm
   "js/ui/scroll-fade.js",
   "js/ui/css-zoom.js",
+  "js/ui/ui-shape.js",       // UiShape: the one phone / screen-shape answer (scale, hud-layout, screen-placement, sheet-shape read it)
   "js/ui/sheet-shape.js",
   "js/ui/layers.js",
   "js/ui/modal.js",
@@ -914,7 +915,7 @@ const HARD_EDGES = [
   ["js/ui/onboard.js", "js/game.js"],    // game.js calls Onboard.create(G) at eval time
   // reliability → LAZY_RACE_SESSION (Career/Parts are FULL; call-time reads OK after ensure)
   ["js/core/mat4.js", "js/physics/ai-strategy.js"],     // AiStrategy binds M4.clamp at eval
-  ["js/physics/ai-strategy.js", "js/physics/ai-drive.js"], // wrappers call AiStrategy.* (call time; bindTraits on first use)
+  ["js/physics/ai-strategy.js", "js/physics/ai-drive.js"], // AiDrive binds AiStrategy.bindTraits(traits) at eval; callers use AiStrategy.* directly
   ["js/core/mat4.js", "js/physics/ai-drive.js"],         // AiDrive binds M4.clamp/lerp at eval
   ["js/core/mat4.js", "js/physics/ai-start.js"],         // AiStart binds M4.clamp/lerp at eval
   ["js/physics/ai-start.js", "js/physics/ai-drive.js"],  // AiDrive destructures AiStart at eval
@@ -1591,6 +1592,7 @@ const CONTROLLER = [
   "js/input/phone-pad.js",
   "js/career/save-migrate.js",
   "js/core/store.js",
+  "js/ui/ui-shape.js",   // UiShape: screen-placement reads it at eval (the phone / screen-shape answer)
   "js/ui/screen-regions.js",
   "js/ui/screen-placement.js",
   "js/ui/screen-arranger.js",
@@ -2161,6 +2163,7 @@ const FULL_TIERS = {
     "js/ui/survey-hud.js": "race",
     "js/ui/scroll-fade.js": "menu",
     "js/ui/css-zoom.js": "menu",
+    "js/ui/ui-shape.js": "menu",
     "js/ui/sheet-shape.js": "menu",
     "js/ui/layers.js": "menu",
     "js/ui/modal.js": "menu",

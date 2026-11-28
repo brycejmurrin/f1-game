@@ -722,7 +722,8 @@
       {
         const a = anchor(K(0.4725), -1, 62);
         if (a) {
-          const y = terrainYAt ? terrainYAt(a.c[0], a.c[2]) : a.c[1];
+          const ty = terrainYAt ? terrainYAt(a.c[0], a.c[2]) : null;
+          const y = ty == null ? a.c[1] : ty;   // null off the ribbon (#7292)
           ridge(a.c[0], a.c[2], y, Math.atan2(a.t[2], a.t[0]), 74, 18, 5.0, SAND_DUSK);
         }
       }
@@ -966,7 +967,8 @@
       {
         const a = anchor(K(0.140), -1, 280);
         if (a) {
-          const y = terrainYAt ? terrainYAt(a.c[0], a.c[2]) : a.c[1];
+          const ty = terrainYAt ? terrainYAt(a.c[0], a.c[2]) : null;
+          const y = ty == null ? a.c[1] : ty;   // null off the ribbon (#7292)
           mountain(a.c[0], a.c[2], y - 2, 120, 42, {
             rough: 0.28,
             forest: [0.18, 0.28, 0.16],

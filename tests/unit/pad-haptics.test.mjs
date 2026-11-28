@@ -348,3 +348,30 @@ test("hot-unplug stops the actuator instead of letting the last effect run out (
   Input.poll();
   assert.equal(calls.length, n, "no further playEffect after the pad is gone");
 });
+
+// Hunt #7320 C4: with a phone steering, the buzz goes to the phone only; the host stays still.
+function hapticsUnit(remoteOn) {
+  const local = [], remote = [];
+  const ctx = vm.createContext({ Math, isFinite, navigator: { vibrate: (d) => { local.push(d); return true; } } });
+  vm.runInContext(read("js/input/haptics.js"), ctx, { filename: absSrc("js/input/haptics.js") });
+  const H = vm.runInContext("InputHaptics", ctx).create({
+    clamp: (v, lo, hi) => Math.min(hi, Math.max(lo, v)), activePad: () => null, padConnected: () => false,
+    remoteActive: () => remoteOn, remoteHaptics: () => (d) => remote.push(d), now: () => 0,
+  });
+  return { H, local, remote };
+}
+test("a remote pad owns the buzz: no local navigator.vibrate on the host (#7322 C4)", () => {
+  const on = hapticsUnit(true);
+  on.H.vibrate(40);
+  assert.deepEqual(on.remote, [40]);
+  assert.deepEqual(on.local, [], "the host does not buzz too");
+  const off = hapticsUnit(false);
+  off.H.vibrate(40);
+  assert.deepEqual(off.local, [40], "no remote: the device itself buzzes");
+  assert.deepEqual(off.remote, []);
+});
+test("a non-number duration is not a buzz (#7322 C4)", () => {
+  const u = hapticsUnit(false);
+  u.H.vibrate(NaN); u.H.vibrate(undefined); u.H.vibrate("x");
+  assert.deepEqual(u.local, []);
+});

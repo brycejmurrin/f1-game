@@ -552,11 +552,13 @@
       "script": "test:audio-unit",
       "kind": "node",
       "files": [
+        "tests/unit/activation-gesture-table.test.mjs",
         "tests/unit/announcer.test.mjs",
         "tests/unit/asset-credits.test.mjs",
         "tests/unit/audio-low-tier.test.mjs",
         "tests/unit/audio-mix-improvements.test.mjs",
         "tests/unit/audio-panel-boot.test.mjs",
+        "tests/unit/audio-rebuild-contract.test.mjs",
         "tests/unit/audio-recovery.test.mjs",
         "tests/unit/audio-sample-upgrade.test.mjs",
         "tests/unit/audio-scope-once-vm.test.mjs",
@@ -790,6 +792,7 @@
         "tests/unit/ai-vmax-stage-trace-vm.test.mjs",
         "tests/unit/ai-wing-spread-vm.test.mjs",
         "tests/unit/apex-car-placement-pin-vm.test.mjs",
+        "tests/unit/apex-hook-guards-vm.test.mjs",
         "tests/unit/apex-surface-pin-vm.test.mjs",
         "tests/unit/boost-hold-restart-vm.test.mjs",
         "tests/unit/cam-avoid-vm.test.mjs",
@@ -946,6 +949,7 @@
         "tests/unit/ai-vmax-stage-trace-vm.test.mjs",
         "tests/unit/ai-wing-spread-vm.test.mjs",
         "tests/unit/apex-car-placement-pin-vm.test.mjs",
+        "tests/unit/apex-hook-guards-vm.test.mjs",
         "tests/unit/apex-surface-pin-vm.test.mjs",
         "tests/unit/boost-hold-restart-vm.test.mjs",
         "tests/unit/cam-avoid-vm.test.mjs",
@@ -1084,6 +1088,7 @@
         "tests/unit/ai-trail-yield-vm.test.mjs",
         "tests/unit/ai-vmax-stage-trace-vm.test.mjs",
         "tests/unit/apex-car-placement-pin-vm.test.mjs",
+        "tests/unit/apex-hook-guards-vm.test.mjs",
         "tests/unit/apex-surface-pin-vm.test.mjs",
         "tests/unit/cam-avoid-vm.test.mjs",
         "tests/unit/collisions-deep-vm.test.mjs",
@@ -1755,6 +1760,7 @@
         "tests/unit/hud-status-stack.test.mjs",
         "tests/unit/hud-strategy.test.mjs",
         "tests/unit/hud-tyres.test.mjs",
+        "tests/unit/hud-widgets.test.mjs",
         "tests/unit/layout-presets.test.mjs",
         "tests/unit/legend-parts-seed.test.mjs",
         "tests/unit/legends-team.test.mjs",
@@ -5609,6 +5615,11 @@
     {
       "path": "js/ui/track-maps.js",
       "global": "TrackMaps",
+      "roster": "tag"
+    },
+    {
+      "path": "js/ui/ui-shape.js",
+      "global": "UiShape",
       "roster": "tag"
     },
     {

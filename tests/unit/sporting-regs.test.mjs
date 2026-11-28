@@ -622,6 +622,17 @@ test("#6630 hysteresis: a flagged lapper drifting to 1.4 s keeps the watch's clo
   assert.deepEqual(evs.map((e) => e.type), ["warn", "penalty"], "the watch did not reset on the flicker: " + JSON.stringify(w.info()));
 });
 
+test("#7321 M3: the HUD blue-flag hold is SportingRegs.BLUE_KEEP_S, read at call time", () => {
+  const hctx = vm.createContext({});
+  vm.runInContext(readFileSync(join(ROOT, "js/ui/hud-readouts.js"), "utf8") + ";this.HudReadouts=HudReadouts;", hctx,
+    { filename: absSrc("js/ui/hud-readouts.js") });
+  // The race bundle lands after the menu bundle: a stub set after HudReadouts evaluated must still be read.
+  hctx.SportingRegs = { BLUE_KEEP_S: 7.25, blueFlagCar: (...a) => a[4] };
+  assert.equal(hctx.HudReadouts.blueFlag({}, [], L, 1, null), 7.25, "HudReadouts passes SportingRegs.BLUE_KEEP_S as the hold");
+  assert.equal(typeof R.BLUE_KEEP_S, "number");
+  assert.doesNotMatch(readFileSync(join(ROOT, "js/ui/hud-readouts.js"), "utf8"), /BLUE_HOLD_S/, "one source for the hold");
+});
+
 test("SKIP after a player DNF under red applies the suspended-race compound tariff", async () => {
   const game = await createGame({ track: "monza", carMeshes: false });
   try {

@@ -69,10 +69,11 @@ const InputHaptics = (function () {
     function vibrate(ms) {
       if (hapticScale <= 0) return;
       const d = Math.round(ms * hapticScale);
-      if (d <= 0) return;
-      // The phone that is steering feels the kerb, not the desk the laptop sits on.
+      if (!(d > 0)) return;   // NaN (a non-number ms) is not a buzz either
+      // The phone that is steering feels the kerb, not the desk the laptop sits on:
+      // the host itself stays still while a remote pad owns the buzz.
       const remote = remoteHaptics();
-      if (remote && remoteActive()) { try { remote(d); } catch (_) { /* the link's problem */ } }
+      if (remote && remoteActive()) { try { remote(d); } catch (_) { /* the link's problem */ } return; }
       if (typeof navigator === "undefined" || !navigator.vibrate) return;
       try { navigator.vibrate(d); } catch (_) { /* advisory only */ }
     }

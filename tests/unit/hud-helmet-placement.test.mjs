@@ -7,6 +7,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { cssRules, decl } from "../helpers/css-rules.mjs";
 import { readCssSource } from "../helpers/css-source.mjs";
+import { loadUiShape } from "../helpers/ui-shape-load.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const CAMG = fs.readFileSync(path.join(ROOT, "js/camera/cam-groups.js"), "utf8");
@@ -21,6 +22,7 @@ function loadHudLayout() {
     GameStore: { store: { get: (_k, d) => d, set() {} } },
   };
   vm.createContext(ctx);
+  loadUiShape(ctx);
   vm.runInContext(LAYOUT_SRC + "; this.HudLayout = HudLayout;", ctx);
   return ctx.HudLayout;
 }

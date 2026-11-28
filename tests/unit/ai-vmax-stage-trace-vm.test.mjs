@@ -7,7 +7,7 @@
  * What it records, at full float precision, per AI car per 1/60 step on bahrain and monza, seeds 1-2:
  *   - each AiDrive stage multiplier/ease as game.js (or AiPace) calls it: pacePhase, trailStep,
  *     mistakeGatherMul, tyrePace, trailYieldEase, letPassEase, squeezeEase, towGain, queueFloor
- *     (spied in place on the AiDrive object, so the call order is pinned too);
+ *     (spied in place on AiDrive, tyrePace on AiStrategy, so each stage's call order is pinned too);
  *   - the vmax every tick hands AiDrive.paceSample (the stamped stage output), c._vmaxNow and c._bandNow;
  *   - the car's speed, s and x (what the brake-plan stages feed).
  * Seed 1 runs TYRE WEAR off (the AiDrive.tyrePace curve), seed 2 runs it real (the shared wear model), so both
@@ -21,7 +21,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
-import vm from "node:vm";
 import { createRequire } from "node:module";
 
 const { createGame } = createRequire(import.meta.url)("../../tools/lib/game-vm.cjs");
@@ -30,6 +29,8 @@ const CASES = [["bahrain", 1], ["bahrain", 2], ["monza", 1], ["monza", 2]];
 const FRAMES = 3600;   // 60 s of race: the launch, the band, the first corners, traffic and a mistake or two
 const DT = 1 / 60;
 const SPIED = ["pacePhase", "trailStep", "mistakeGatherMul", "tyrePace", "trailYieldEase", "letPassEase", "squeezeEase", "towGain", "queueFloor", "paceSample"];
+// Where each stage lives: tyrePace is AiStrategy's, called directly since #7247 dropped AiDrive's forwarders.
+const OWNER = { "js/physics/ai-drive.js": ["AiDrive", SPIED.filter((n) => n !== "tyrePace")], "js/physics/ai-strategy.js": ["AiStrategy", ["tyrePace"]] };
 
 // Captured on 3c41affc (the tip before the move), 2026-11-27.
 const GOLDEN = {
@@ -46,11 +47,14 @@ async function trace(track, seed) {
   const counts = Object.fromEntries([...SPIED, "car"].map((k) => [k, 0]));
   let live = false;
   const onEval = (f, ctx) => {
-    if (f !== "js/physics/ai-drive.js") return;
-    const A = vm.runInContext("AiDrive", ctx);
-    for (const name of SPIED) {
+    const own = OWNER[f];
+    if (!own) return;
+    const mod = ctx[own[0]];   // game-vm evals top-level const as var, so a module global is a context property
+    // A frozen module (AiStrategy) cannot take the wrapper: rebind its global to a copy (game-vm turns top-level const into var).
+    const A = Object.isFrozen(mod) ? (ctx[own[0]] = Object.assign({}, mod)) : mod;
+    for (const name of own[1]) {
       const orig = A[name];
-      assert.equal(typeof orig, "function", "AiDrive." + name);
+      assert.equal(typeof orig, "function", own[0] + "." + name);
       A[name] = function () {
         const r = orig.apply(this, arguments);
         if (live) {
@@ -61,6 +65,7 @@ async function trace(track, seed) {
         return r;
       };
     }
+    if (A !== mod) Object.freeze(A);
   };
   const g = await createGame({ track, carMeshes: false, onEval, storage: { difficulty: "hard", tyreWear: seed === 1 ? "off" : "real", raceGrid: null } });
   try {

@@ -372,14 +372,13 @@ const SceneryPits = (function () {
         // End caps, so the strip is closed where it starts and stops.
         for (const [k, flip] of [[ks[0], sd < 0], [ks[ks.length - 1], sd > 0]]) {
           const base = out.pos.length / 3;
-          const u = upOf(track, k), t = [tx[k], ty[k], tz[k]];
+          const t = [tx[k], ty[k], tz[k]];
           const nrm = flip ? t : [-t[0], -t[1], -t[2]];
           for (const q of profile) { const P = at(k, latOf(k, q), q[1]); out.pos.push(P[0], P[1], P[2]); out.nrm.push(nrm[0], nrm[1], nrm[2]); out.col.push(col[0], col[1], col[2]); }
           pushMat(m, mat);
           for (let e = 1; e + 1 < m; e++) {
             if (flip) out.idx.push(base, base + e + 1, base + e); else out.idx.push(base, base + e, base + e + 1);
           }
-          void u;
         }
         // S4: tag the strip so clip/coplanar/float can name pit-wall / etc.
         // Keep tip winding (TrackGeom.emit here coplanar-fought bay panels and

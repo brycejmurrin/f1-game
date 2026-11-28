@@ -16,8 +16,7 @@ window.ScreenPlacement = (function () {
   let garageRevision = 0, garagePanelMoved = false;
   let editorZoom = new WeakMap();
   const registry = () => typeof ScreenRegions === "undefined" ? {} : ScreenRegions;
-  const media = typeof window !== "undefined" && window.matchMedia ? window.matchMedia("(orientation: portrait)") : null;
-  const orientation = () => media && media.matches ? "portrait" : "landscape";
+  const orientation = () => UiShape.orientation();
   function shape(value) {
     if (!value) return orientation();
     if (value === "wide") return "landscape";
@@ -376,7 +375,7 @@ window.ScreenPlacement = (function () {
       });
     }
     window.addEventListener?.("resize", resized);
-    media?.addEventListener("change", restoreAll);
+    UiShape.orientationMedia?.addEventListener("change", restoreAll);
     GameStore.store.subscribe(change => {
       if (change.key === KEY || change.key === null) restoreAll();
       else if (change.key === "uiScale") resized();

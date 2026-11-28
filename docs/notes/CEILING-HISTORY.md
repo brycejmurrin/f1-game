@@ -1,5 +1,12 @@
 # Ceiling history — the module-size ratchet, 2026-08 → 2026-09-03
 
+## 2026-11-27 — PR #7284 (claude/ui-shape-7259): one UiShape module for the phone / screen-shape predicates (#7259)
+
+`(tree) eagerScripts` +1 and `(tree) eagerCodeBytes` +195. Deliberate raise, which needs a `ratchet-raise` label (D-042);
+`eagerScripts` has no absorb. `js/ui/ui-shape.js` is eager by design (the issue, decision 7234-P3 B): scale.js,
+hud-layout.js, screen-placement.js and sheet-shape.js read it on the first frame, so there is no lazy home. It replaces the
+per-file copies of the touch / ≤500 px rule; no behaviour change. Fragment: `ratchets.d/claude--ui-shape-7259.json`.
+Human step: `ratchet-raise`.
 ## 2026-11-27 — PR #7278 (claude/ai-pace-stage-7258): AiPace, the AI-only vmax stages of updateCar (#7258)
 
 `(tree) eagerScripts` 292 → **293** (+1) and `eagerCodeBytes` +638: `js/physics/ai-pace.js` is a new pure module (Bryce's
@@ -4198,3 +4205,12 @@ Fragment: `ratchets.d/claude--career-refused-calendar-7069.json`.
 ## 2026-11-27 — claude/g-pace-7129: one `G.pace` member (#7129 a; #6483 row 1)
 
 `js/game.js gMembers` 279 → **280** (+1, at slack 0): `G.pace`, PaceMath's vStd/aStd/vScale/k as ONE façade member (Bryce D2 b, on #6495) in place of the four #6483 proposed. A deliberate raise, Bryce's to accept (#7129: "at slack 0 the +1 is a Bryce raise"). Lowers in the same fragment: `(tree) eagerCodeBytes` −31, `typeofGuards` −3 (the `typeof PhysicsConsts` guards at the re-pointed vScale sites). Fragment: `ratchets.d/claude--g-pace-7129.json`.
+## 2026-11-27 — PR #7279 (claude/tlx-post-rt-lifetimes-7229): TLX post render-target lifetimes (#7229, #7219 R5/R6/R7)
+
+`(tree) assertPins` +8 / `assertPinsAll` +11, past the absorb of 5: the new `tests/unit/tlx-post-rt-lifetimes.test.mjs`. The pins are
+the only node-side canaries for three live behaviours the CI gfx-probe (`--tlx-webgpu --lavapipe`, gpuErrors 0) cannot isolate:
+R6 `cinemaPost` allocates no closure on its live path (no arrow, no `next(`, the two `cineA/cineB` swaps); R5 the capture RTs
+(`cap8RT`, `fxaaCaptureRT`) shed only after `SHED_FRAMES` presents AND `CAP_HOLD_MS` (30000) since the last request, with the idle
+reset ahead of the 8-bit early return and both `dropRT` sites; R7 the TAA history resize goes through `ctx.rtSetSize` so `rtResizes`
+counts it. Trimming to the absorb would drop one of the three. Fragment: `ratchets.d/claude--tlx-post-rt-lifetimes-7229.json`.
+Human step: `ratchet-raise`.

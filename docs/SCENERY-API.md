@@ -92,7 +92,6 @@ returns null — and still sinks the base ~0.8 m against any residual gap.
 TrackSpace.toRacingFrac(def, sourceFrac);
 TrackSpace.toSourceFrac(def, racingFrac);
 TrackSpace.sourceNodeToRacing(def, sourceNode, nodeCount);
-TrackSpace.sampleSource(def, racingFrac, sourceSampler);
 ```
 
 Legacy scenery remains unchanged. New migrations should set

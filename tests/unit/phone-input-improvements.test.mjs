@@ -29,8 +29,8 @@ function boot() {
     RTCPeerConnection: class { constructor() { this.connectionState = 'new'; } close() {} },
   });
   for (const f of ['js/net/bytes.js', 'js/net/ice.js', 'js/net/transport.js', 'js/input/tilt-roll.js', 'js/input/pedal-travel.js', 'js/input/touch-button-actions.js', 'js/input/phone-pad-codec.js', 'js/input/phone-pad-page.js', 'js/input/phone-pad.js']) vm.runInContext(read(f), ctx, { filename: absSrc(f) });
-  const { P, T } = vm.runInContext('({P:PhonePad,T:NetTransport})', ctx);
-  return { ctx, P, T, clock, document, window, beat: () => { for (const fn of intervals.values()) fn(); } };
+  const { P, C, HELD, T } = vm.runInContext('({P:PhonePad,C:PhonePadCodec,HELD:PhonePadPage.HELD,T:NetTransport})', ctx);
+  return { ctx, P, C, HELD, T, clock, document, window, beat: () => { for (const fn of intervals.values()) fn(); } };
 }
 function wire() {
   const cb = {}, sent = [];
@@ -53,14 +53,14 @@ async function page(h, controls = {}) {
   const ctl = h.P.pad(dom, { now: () => h.clock.t, deps: { rtc: () => w, prefetchIce: async () => null, normalise: c => c, valid: () => true, privateRelay: () => false,
     acceptInvite: async () => ({ ok: true, code: 'ANSWER' }), swap: async (o) => { await o.reply('OFFER'); return { ok: true }; } } });
   await ctl.connect('ABC234');
-  return { w, dom, ctl, actions: () => w.sent.filter((m) => m.c === 'event').map((m) => h.P.decodeEvent(m.data)).filter((e) => e?.t === 'ev').map((e) => e.k) };
+  return { w, dom, ctl, actions: () => w.sent.filter((m) => m.c === 'event').map((m) => h.C.decodeEvent(m.data)).filter((e) => e?.t === 'ev').map((e) => e.k) };
 }
 test('actual RTC backpressure preserves phone edge FIFO and retries hello without double delivery', () => {
   const h = boot(), { w, channels } = rtc(h); channels.event.bufferedAmount = 999999;
   const s = h.P.padSession(w, src, { now: () => h.clock.t, heartbeat: false });
   s.event('pause'); s.event('shiftUp'); assert.equal(s.stats().queued, 2); assert.equal(channels.event.sent.length, 0);
   channels.event.bufferedAmount = 0; channels.event.onbufferedamountlow(); s.pump(); s.pump();
-  const ev = channels.event.sent.map((x) => h.P.decodeEvent(x));
+  const ev = channels.event.sent.map((x) => h.C.decodeEvent(x));
   assert.deepEqual(ev.map((x) => x.t === 'ev' ? x.k : x.t), ['hi', 'pause', 'shiftUp']); assert.equal(s.stats().queued, 0); s.close();
 });
 test('queue expires old actions and coalesces nav repeats; long stall never floods', () => {
@@ -69,7 +69,7 @@ test('queue expires old actions and coalesces nav repeats; long stall never floo
   for (let i = 0; i < 100; i++) s.event('navDown');
   s.event('pause'); assert.equal(s.stats().queued, 2);
   h.clock.t += 300; w.blocked = false; s.pump();
-  assert.deepEqual(w.sent.map((m) => h.P.decodeEvent(m.data)).filter((e) => e?.t === 'ev').map((e) => e.k), ['pause']);
+  assert.deepEqual(w.sent.map((m) => h.C.decodeEvent(m.data)).filter((e) => e?.t === 'ev').map((e) => e.k), ['pause']);
   w.blocked = true; for (let i = 0; i < 40; i++) s.event('shiftUp'); assert.equal(s.stats().queued, 24); assert.equal(s.stats().rejected, 16);
   h.clock.t += 1300; w.blocked = false; s.pump(); assert.equal(s.stats().queued, 0); assert.equal(s.stats().expired, 25); s.close();
 });
@@ -92,27 +92,27 @@ test('semantic activation fires once; pointer-generated click does not double-fi
 });
 test('old peer keeps v1 samples; touch requires explicit advertised capability, then centers on release', async () => {
   const h = boot(), { ctl, dom, w } = await page(h);
-  w.receive('event', h.P.encodeHello('host'));
+  w.receive('event', h.C.encodeHello('host'));
   assert.equal(ctl.setSteeringMode('touch'), false);
   emit(dom.gas, 'pointerdown', { pointerId: 1, clientY: 100 });
   assert.equal(JSON.parse(w.sent.filter((m) => m.c === 'state').at(-1).data)[0], 1);
-  w.receive('event', h.P.encodeHello('host', false, true)); assert.equal(ctl.setSteeringMode('touch'), true);
+  w.receive('event', h.C.encodeHello('host', false, true)); assert.equal(ctl.setSteeringMode('touch'), true);
   emit(dom.steer, 'pointerdown', { pointerId: 2, clientX: 50 }); emit(dom.steer, 'pointermove', { pointerId: 2, clientX: 110 });
   // A drag is coalesced under the 15 ms sample gap (audit4 UB4): the next frame's pump sends it.
   h.clock.t += 16; ctl.pump();
-  let sample = h.P.decodeSample(w.sent.filter((m) => m.c === 'state').at(-1).data); assert.equal(sample.steer, 0.75); assert.equal(sample.roll, null);
-  emit(h.document, 'pointerup', { pointerId: 2 }); sample = h.P.decodeSample(w.sent.filter((m) => m.c === 'state').at(-1).data); assert.equal(sample.steer, 0);
+  let sample = h.C.decodeSample(w.sent.filter((m) => m.c === 'state').at(-1).data); assert.equal(sample.steer, 0.75); assert.equal(sample.roll, null);
+  emit(h.document, 'pointerup', { pointerId: 2 }); sample = h.C.decodeSample(w.sent.filter((m) => m.c === 'state').at(-1).data); assert.equal(sample.steer, 0);
   emit(dom.steer, 'keydown', { key: 'ArrowLeft' }); assert.equal(ctl.state().steer, -1);
   emit(dom.steer, 'keyup', { key: 'ArrowLeft' }); assert.equal(ctl.state().steer, 0);
   ctl.cancel(); assert.equal(ctl.state().steer, 0); assert.equal(ctl.state().thr, 0);
 });
 test('input health requires an ACK for an actual sent sequence; HUD traffic cannot fake freshness', () => {
   const h = boot(), w = wire(); const s = h.P.padSession(w, src, { now: () => h.clock.t, heartbeat: false });
-  s.sample(true); w.receive('state', h.P.encodeHud({ gear: 4 })); assert.equal(s.health().state, 'unavailable');
-  w.receive('event', h.P.encodeHello('host', false, true)); assert.equal(s.health().state, 'waiting');
+  s.sample(true); w.receive('state', h.C.encodeHud({ gear: 4 })); assert.equal(s.health().state, 'unavailable');
+  w.receive('event', h.C.encodeHello('host', false, true)); assert.equal(s.health().state, 'waiting');
   w.receive('state', '["A",999]'); assert.equal(s.health().state, 'waiting');
   w.receive('state', '["A",0]'); assert.equal(s.health().state, 'good');
-  h.clock.t += 450; w.receive('state', h.P.encodeHud({ gear: 5 })); assert.equal(s.health().state, 'degraded');
+  h.clock.t += 450; w.receive('state', h.C.encodeHud({ gear: 5 })); assert.equal(s.health().state, 'degraded');
   h.clock.t += 1200; assert.equal(s.health().state, 'reconnecting');
   s.sample(true); w.receive('state', '["A",1]'); assert.equal(s.health().state, 'good'); s.close();
 });
@@ -120,10 +120,10 @@ test('desktop ACKs only accepted fresh samples and tags phone ownership', () => 
   const h = boot(), w = wire(), samples = [], lost = [];
   const input = { remoteSample(s) { samples.push(s); return s.thr !== 1; }, remoteLost(s) { lost.push(s); }, remoteEvent() {}, setRemoteHaptics() {} };
   const link = h.P.link(w, { input, doc: null, now: () => h.clock.t, pump: false });
-  w.receive('event', h.P.encodeHello('pad', false, true)); w.sent.length = 0;
-  w.receive('state', h.P.encodeSample({ seq: 0, thr: 1 })); assert.equal(w.sent.length, 0);
-  w.receive('state', h.P.encodeSample({ seq: 1, thr: 0 })); assert.deepEqual(JSON.parse(w.sent[0].data), ['A', 1]);
-  w.receive('state', h.P.encodeSample({ seq: 0 })); assert.equal(w.sent.length, 1); assert.equal(samples[1].source, 'phone');
+  w.receive('event', h.C.encodeHello('pad', false, true)); w.sent.length = 0;
+  w.receive('state', h.C.encodeSample({ seq: 0, thr: 1 })); assert.equal(w.sent.length, 0);
+  w.receive('state', h.C.encodeSample({ seq: 1, thr: 0 })); assert.deepEqual(JSON.parse(w.sent[0].data), ['A', 1]);
+  w.receive('state', h.C.encodeSample({ seq: 0 })); assert.equal(w.sent.length, 1); assert.equal(samples[1].source, 'phone');
   link.close(); assert.deepEqual(lost, ['phone']);
 });
 test('new phone and actual desktop link negotiate touch/ACK over the real loopback transport', () => {
@@ -137,7 +137,7 @@ test('new phone and actual desktop link negotiate touch/ACK over the real loopba
   assert.equal(accepted[0].steer, -.5); assert.equal(accepted[0].source, 'phone'); assert.equal(s.health().state, 'good'); s.close(); link.close();
 });
 test('window release, backgrounding and disconnect center touch steering without clearing another pointer early', async () => {
-  const h = boot(), { ctl, dom, w } = await page(h); w.receive('event', h.P.encodeHello('host', false, true)); ctl.setSteeringMode('touch');
+  const h = boot(), { ctl, dom, w } = await page(h); w.receive('event', h.C.encodeHello('host', false, true)); ctl.setSteeringMode('touch');
   emit(dom.steer, 'pointerdown', { pointerId: 1, clientX: 50 }); emit(dom.steer, 'pointermove', { pointerId: 1, clientX: 130 });
   emit(h.window, 'pointerup', { pointerId: 2 }); assert.equal(ctl.state().steer, 1);
   emit(h.window, 'pointerup', { pointerId: 1 }); assert.equal(ctl.state().steer, 0);
@@ -429,11 +429,11 @@ test("Utility wheel dispatches the released choice once, cancels outside, and ti
     emit(h.document, 'keydown', {key:'Escape'});
     assert.equal(panel.hidden, true);
     start(); pointer('pointerup', 220, 145);
-    assert.equal(ctl.state().held, h.P.HELD.lookBack);
+    assert.equal(ctl.state().held, h.HELD.lookBack);
     pointer('pointerdown', 0, 0, 12, dom.lookBack);
     const glance = [...timers.values()].find(t => t.ms === 1000);
     assert.ok(glance); glance.fn();
-    assert.equal(ctl.state().held, h.P.HELD.lookBack, 'direct Look owns its own hold');
+    assert.equal(ctl.state().held, h.HELD.lookBack, 'direct Look owns its own hold');
     pointer('pointerup', 0, 0, 12, dom.lookBack);
     assert.equal(ctl.state().held, 0);
     start(); pointer('pointerup', 220, 145);
@@ -535,7 +535,7 @@ test("Menu Pad (#6291): Wheel Layout and the steering pick are on the Menu Pad t
   assert.match(page6291, /body\.linked\.menu\.arranging #ctl \{ display: grid; \}/, 'MOVE & SIZE from a menu shows the wheel it arranges');
   const h = boot(), wheelPick = element(), menuPick = element();
   const { ctl, w } = await page(h, { steeringMode: [wheelPick, menuPick] });
-  w.receive('event', h.P.encodeHello('host', false, true));
+  w.receive('event', h.C.encodeHello('host', false, true));
   menuPick.value = 'touch'; emit(menuPick, 'change');
   assert.deepEqual([ctl.state().steeringMode, wheelPick.value, menuPick.value], ['touch', 'touch', 'touch'], 'the Menu Pad pick sets the mode and the wheel shows it');
   wheelPick.value = 'tilt'; emit(wheelPick, 'change');
