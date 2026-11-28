@@ -122,19 +122,25 @@ const OverlayPublisher = (function () {
   // loaded (GameMetrics holds game.js's memoised loader) and publish; stop at none.
   function boot() {
     if (typeof document === "undefined" || !document.getElementById("announce") || typeof OverlayBridge === "undefined") return null;
-    let pub = null;
+    let pub = null, askedFor = null;
+    const loader = () => (typeof GameMetrics !== "undefined" && GameMetrics.agentLoader && GameMetrics.agentLoader()) || null;
+    // An overlay that connects before game.js installs the loader (boot) has none to ask: the tick asks once it exists.
+    const ask = () => {
+      const load = window.__apex ? null : loader();
+      if (!load || load === askedFor) return Promise.resolve();
+      askedFor = load;
+      return Promise.resolve().then(load).catch(() => Log.warn("ui", "overlay: the agent surface did not load"));
+    };
+    const apex = () => { if (window.__apex) return window.__apex; ask(); return null; };
     const bridge = OverlayBridge.host({
       onPeers(n) {
         if (n > 0 && !pub) {
-          const ready = window.__apex ? Promise.resolve()
-            : typeof GameMetrics !== "undefined" && GameMetrics.agentLoader && GameMetrics.agentLoader()
-              ? Promise.resolve(GameMetrics.agentLoader()()) : Promise.resolve();
-          ready.then(() => {
+          ask().then(() => {
             if (pub || bridge.peers() === 0) return;
             Log.info("ui", "overlay listener connected: publishing");
-            pub = start({ bridge, apex: () => window.__apex || null, document,
+            pub = start({ bridge, apex, document,
               teams: typeof Teams !== "undefined" ? Teams.LIST : [] });
-          }, () => Log.warn("ui", "overlay: the agent surface did not load"));
+          });
         } else if (n === 0 && pub) {
           pub.stop(); pub = null;
           Log.info("ui", "overlay listeners gone: stopped publishing");
