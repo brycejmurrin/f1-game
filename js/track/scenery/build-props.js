@@ -1443,9 +1443,9 @@ const TrackBuildProps = (function () {
             { kind: "streetBarrier", k: kA, side });
           return [cx, cz];
         }
-        instance(`street-barrier|${col.join(",")}`,
-          { o: [cx, cy + (WH - drop) / 2, cz], r: rr, u: [0, 1, 0], t: f, s: [1, (WH + drop) / WH, len] },
-          (rec) => rec.box([0, 0, 0], [WT, WH, 1], col),
+        instance("street-barrier",
+          { o: [cx, cy + (WH - drop) / 2, cz], r: rr, u: [0, 1, 0], t: f, s: [1, (WH + drop) / WH, len], col },
+          (rec) => rec.box([0, 0, 0], [WT, WH, 1], TrackGraph.NODE_COLOR),
           { kind: "streetBarrier", k: kA, side });
         return [cx, cz];
       };
