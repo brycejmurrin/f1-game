@@ -75,6 +75,7 @@ const SimDrill = (function () {
       busy: () => queue.length > 0,
       /** Tests and tools: run every queued branch now. */
       drain() { while (queue.length) { const q = queue[0]; df.run(q.job); queue.shift(); q.done(q.job); } },
+      slice(ms) { const q = queue[0]; if (q && df.step(q.job, ms || 0)) { queue.shift(); q.done(q.job); } },
       cancel() { const q = queue; queue = []; for (const x of q) df.cancel(x.job); },
       capture: () => G.coach.captureWorld(),
       restore: (w) => G.coach.restoreWorld(w, exact),

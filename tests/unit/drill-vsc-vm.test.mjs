@@ -79,10 +79,26 @@ test("score() and the medal tiers are pure", () => {
   assert.deepEqual(refs.tiers, { bronze: 1, silver: 2, gold: 3 });
 });
 
-test("end() releases the VSC hold and the held race, and restores the player's settings; other drills run 1 lap", async () => {
+test("a quit while a branch is half run still releases the hold, the freeze and the drill's settings", () => {
   const { G, g } = d;
+  assert.ok(d.retry(), "RETRY");
+  assert.equal(d.V.state().phase, "decide");
+  assert.ok(d.V.choose("box"));
+  d.V.slice(0);
+  assert.equal(d.V.state().phase, "running");
+  assert.equal(G.cautionInfo().level > 0 || G.headlessMode === true, true, "the branch is live mid-way (VSC raised or headless)");
   const end = g.apex.drillEnd();
   assert.equal(end.ok, true, JSON.stringify(end));
+  assert.equal(G.frozen, false);
+  assert.equal(G.headlessMode, false, "the branch handed the headless flag back");
+  assert.equal(G.cautionInfo().level, 0);
+  assert.equal(G.drills().active(), null);
+  assert.equal(G.raceTyreWear, d.before.tyreWear, "stage()'s tyre wear is undone");
+  assert.equal(d.V.state(), null);
+});
+
+test("after end(): no hold, no freeze, no card; other drills still run 1 lap", async () => {
+  const { G, g } = d;
   assert.equal(G.state, "menu");
   assert.equal(G.frozen, false, "the race hold is released");
   assert.equal(G.cautionInfo().level, 0);

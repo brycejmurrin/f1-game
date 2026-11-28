@@ -21,6 +21,7 @@ export async function vscDrill() {
   const { createGame } = require(ROOT + "tools/lib/game-vm.cjs");
   const g = await createGame({ carMeshes: false });
   const G = g.G;
+  const before = { tyreWear: G.raceTyreWear };
   const launched = await g.apex.drillLaunch("vsc");
   if (!launched.ok) throw new Error("vsc-drill-vm: launch refused " + JSON.stringify(launched));
   const up = await g.stepUntil(() => G.state === "race" && g.apex.drillState().staging === false, { maxSteps: 900 });
@@ -40,7 +41,7 @@ export async function vscDrill() {
     const r = G.drills().lastResult();
     return r && r !== before ? r : null;
   }
-  return { g, G, V, S, play, retry: () => g.apex.drillRetry().ok, close: () => g.close() };
+  return { g, G, V, S, before, play, retry: () => g.apex.drillRetry().ok, close: () => g.close() };
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url) && process.argv.includes("--write")) {

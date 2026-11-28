@@ -47,10 +47,23 @@ const VscDrill = (function () {
   function teardown(G) {
     const r = run;
     run = null;
-    SimDrill.hide();
-    if (r && r.sim) r.sim.cancel();
-    if (G.holdCaution) G.holdCaution(0, "DRILL");
-    if (G.agentCtl) G.agentCtl.freeze(false);
+    // Every step runs even when one throws (a quit mid-branch restores the world onto a torn-down session): the hold
+    // and the freeze must always be released, and the registry's own restore runs after this.
+    const safe = (f) => { try { f(); } catch (e) { Log.warn("ui", "vsc drill teardown: " + (e && e.message || e)); } };
+    safe(() => SimDrill.hide());
+    if (r && r.sim) safe(() => r.sim.cancel());
+    safe(() => { if (G.holdCaution) G.holdCaution(0, "DRILL"); });
+    safe(() => { if (G.agentCtl) G.agentCtl.freeze(false); });
+  }
+
+  /** A round that cannot go on (the what-if service did not load, a branch failed or missed the flag): never a held
+   *  race with no way out. RETRY replays the rounds; QUIT ends the drill (game.js quitToMenu → end()). */
+  function failed(r, why) {
+    Log.warn("ui", "vsc drill: " + why);
+    r.phase = "failed";
+    try { r.sim.cancel(); } catch (_) { /* the panel below is the way out */ }
+    SimDrill.panel({ title: "THE STRATEGY DRILL COULD NOT RUN THAT ROUND", lines: [why],
+      buttons: [{ label: "RETRY", key: "r", side: "left", run: () => retry() }, { label: "QUIT", key: "q", side: "right", run: () => r.G.quitToMenu() }] });
   }
 
   function begin(G, port) {
@@ -63,9 +76,10 @@ const VscDrill = (function () {
     const r = run;
     sim.ready().then((ok) => {
       if (run !== r) return;
-      if (!ok) { port.announce("STRATEGY DRILLS NEED THE WHAT-IF SERVICE: IT DID NOT LOAD", 3, "info"); return; }
+      if (!ok) { failed(r, "The what-if service (DrillFork) did not load."); return; }
+      r.phase = "ready";
       startRound(0);
-    });
+    }).catch((e) => { if (run === r) failed(r, "Could not start: " + (e && e.message || e)); });
     return true;
   }
 
@@ -140,8 +154,7 @@ const VscDrill = (function () {
     if (run !== r) return;
     const G = r.G, box = timeToFlag(G, jobs.box, k), stay = timeToFlag(G, jobs.stay, k);
     if (!box || !stay) {
-      Log.warn("ui", "vsc drill: a branch did not reach the flag " + JSON.stringify([jobs.box.state, jobs.stay.state, jobs.box.error, jobs.stay.error]));
-      r.port.announce("THE STRATEGY DRILL COULD NOT FINISH THAT ROUND", 3, "info");
+      failed(r, "A branch did not reach the flag: " + JSON.stringify([jobs.box && jobs.box.state, jobs.stay && jobs.stay.state, jobs.box && jobs.box.error, jobs.stay && jobs.stay.error]));
       return;
     }
     r.sim.restore(r.base);   // the held race shows the start of the drill again, not a branch's last frame
@@ -188,11 +201,11 @@ const VscDrill = (function () {
   /** RETRY: the three rounds again from the drill's start. */
   function retry() {
     const r = run;
-    if (!r) return false;
+    if (!r || r.phase === "loading") return false;   // the first round has not been staged yet
     r.sim.cancel();
     r.picks = [];
     r.results = [];
-    startRound(0);
+    try { startRound(0); } catch (e) { failed(r, "Could not restart: " + (e && e.message || e)); }
     return true;
   }
 
@@ -210,6 +223,8 @@ const VscDrill = (function () {
 
   /** Tests (SimDrill.sync(true)): run the round's queued branches now. */
   const drain = () => { if (run) run.sim.drain(); return state(); };
+  /** Tests: one time slice of the round's first queued branch (a branch left running mid-way). */
+  const slice = (ms) => { if (run) run.sim.slice(ms); return state(); };
 
-  return Object.freeze({ define, choose, next, drain, state, score, ROUNDS, MEDALS, VSC_S });
+  return Object.freeze({ define, choose, next, drain, slice, state, score, ROUNDS, MEDALS, VSC_S });
 })();
