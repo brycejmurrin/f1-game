@@ -936,9 +936,9 @@ const SceneryNature = (function () {
         const riserC = vadd(vadd(a.c, a.u, up), a.r, side * back);
         if (rejBox(riserC, [1.3, 1.5, len], b)) continue;
         placed++;
-        ctx.instance(`crowd-riser|${riser.join(",")}`,
-          { o: riserC, r: a.r, u: a.u, t: a.t, s: [1, 1, len] },
-          (rec) => { rec.mat(MAT.CONCRETE); rec.box([0, 0, 0], [1.3, 1.5, 1], riser); },
+        ctx.instance("crowd-riser",
+          { o: riserC, r: a.r, u: a.u, t: a.t, s: [1, 1, len], col: riser },
+          (rec) => { rec.mat(MAT.CONCRETE); rec.box([0, 0, 0], [1.3, 1.5, 1], TrackGraph.NODE_COLOR); },
           { kind: "crowdRiser", k, side }, { unguarded: true });
         out._mat = MAT.FABRIC;
         // The seated crowd reaches ~0.35 m over the riser rejBox passed as
