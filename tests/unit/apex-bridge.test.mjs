@@ -1248,11 +1248,12 @@ test("#6581 review: a rate-limited status edit (403 / 429) slows the cadence ins
     ? { status: 429, ok: false, json: async () => ({}), headers: { get: () => null } } : gh.fetch(url, opts));
   const b = load({ tok: "tok", gh: { fetch }, extra: { setTimeout: (fn, ms) => { timers.push({ fn, ms }); return timers.length; } } });
   await flush();
+  const last = () => timers.filter((t) => t.ms !== b.api.REQ_MS).at(-1);   // not a request's own ceiling (#7491)
   await timers.find((t) => t.ms === 5000).fn();
-  assert.equal(timers.at(-1).ms, 300000, "the next edit waits 5 min");
+  assert.equal(last().ms, 300000, "the next edit waits 5 min");
   gh.thread.push(cmd(80, { cmd: "ping" }));
   await b.api.pollOnce();
-  assert.equal(timers.at(-1).ms, 300000, "a command does not pull a rate-limited edit back to 15 s");
+  assert.equal(last().ms, 300000, "a command does not pull a rate-limited edit back to 15 s");
 });
 
 test("#6581 review: tap waitMs is capped at 30 s; a link end mid-drive removes the banner", async () => {
@@ -1453,7 +1454,8 @@ test("#6582 AP-b schedule: fast after the hello and while a command runs, idle a
   const b = load({ tok: "tok", gh: { ...gh, fetch }, extra: { Date: FakeDate, setTimeout: (fn, ms) => { timers.push({ fn, ms }); return timers.length; } } });
   await flush();
   const pollTimer = () => timers.filter((t) => [b.api.POLL_MS, b.api.POLL_BUSY_MS].includes(t.ms) || t.ms > 60000 || t.ms === 30000).at(-1);
-  assert.equal(timers[0].ms, b.api.POLL_BUSY_MS, "the first poll after the hello is fast");
+  const firstPoll = timers.filter((t) => t.ms !== b.api.REQ_MS)[0];   // not the hello's own request ceiling (#7491)
+  assert.equal(firstPoll.ms, b.api.POLL_BUSY_MS, "the first poll after the hello is fast");
   // Idle past the tail: 4 s.
   now += b.api.BUSY_TAIL_MS + 1;
   assert.deepEqual(plain(b.api.pollPlan()), { ms: b.api.POLL_MS, busy: false, why: null });
@@ -1469,7 +1471,7 @@ test("#6582 AP-b schedule: fast after the hello and while a command runs, idle a
   assert.equal(b.api.pollPlan().ms, b.api.POLL_MS, "the tail is over");
   // A 429 with retry-after on the read: the chain waits for it, whatever the cadence.
   limit = { status: 429, ok: false, json: async () => ({}), headers: { get: (k) => (k === "retry-after" ? "30" : null) } };
-  await timers[0].fn();
+  await firstPoll.fn();
   assert.equal(pollTimer().ms, 30000, "the next poll waits retry-after");
   assert.equal(b.api.pollPlan().why, "rate limited (429)");
   limit = null;
@@ -1552,4 +1554,129 @@ test("#6941 ledger verb: reads PerfSpans phases; on/reset change the recorder", 
   const r2 = await api.handle({ cmd: "ledger", args: { on: true, reset: true } });
   assert.equal(r2.value.on, true);
   assert.deepEqual(calls, ["reset", "on:true"]);
+});
+
+// #7491 — a fake clock for the page's setTimeout and Date.now: the bridge's timers fire only when a test advances it.
+function fakeClock() {
+  let now = Date.parse("2026-10-30T20:00:00Z"), seq = 0;
+  const timers = new Map();
+  const D = class extends Date {};
+  D.now = () => now;
+  const clock = {
+    Date: D,
+    setTimeout: (fn, ms) => { const id = ++seq; timers.set(id, { fn, at: now + Math.max(0, Number(ms) || 0) }); return id; },
+    clearTimeout: (id) => { timers.delete(id); },
+    async advance(ms) {
+      const end = now + ms;
+      for (;;) {
+        let id = null;
+        for (const [k, t] of timers) if (t.at <= end && (id == null || t.at < timers.get(id).at)) id = k;
+        if (id == null) break;
+        const t = timers.get(id);
+        timers.delete(id);
+        now = t.at;
+        t.fn();
+        for (let i = 0; i < 5; i++) await flush();
+      }
+      now = end;
+      for (let i = 0; i < 5; i++) await flush();
+    },
+  };
+  return clock;
+}
+const hang = () => new Promise(() => {});
+
+test("#7491: a reply POST that never settles times out at 20 s, so the next ACTION is served", async () => {
+  const clock = fakeClock(), real = fakeGitHub();
+  let posts = 0;
+  const gh = { ...real, fetch: (url, opts) => (opts.method === "POST" && ++posts === 2 ? hang() : real.fetch(url, opts)) };
+  real.thread.push(cmd(1, { cmd: "call", args: { method: "poke" } }), cmd(2, { cmd: "call", args: { method: "poke" } }));
+  const b = load({ tok: "tok", gh, apex: { poke: () => "poked" }, extra: { setTimeout: clock.setTimeout, clearTimeout: clock.clearTimeout, Date: clock.Date } });
+  await flush();
+  // the fake stamps a hello posted into a non-empty thread 20:00:09: date both commands after it
+  real.thread.forEach((c) => { if (c.id === 1 || c.id === 2) c.created_at = "2026-10-30T20:00:10Z"; });
+  await clock.advance(1500);   // first poll: both dispatched; #1's reply hangs, #2 waits behind it
+  assert.deepEqual(replies(real).map((r) => r.re), []);
+  await clock.advance(19000);
+  assert.deepEqual(replies(real).map((r) => r.re), [], "still inside the 20 s ceiling");
+  await clock.advance(1500);
+  assert.deepEqual(replies(real).map((r) => r.re), [2], "#1's reply aborted, run.acting cleared, #2 answered");
+  assert.equal(b.api.outbox(), 1, "the timed-out reply waits in the outbox");
+  b.api.stop();
+});
+
+test("#7491: a poll that never settles times out and the poll chain re-arms", async () => {
+  const clock = fakeClock(), real = fakeGitHub();
+  let gets = 0;   // poll reads only (the status edit is its own request)
+  const gh = { ...real, fetch: (url, opts) => (opts.method !== "POST" && /comments\?per_page/.test(url) && ++gets === 1 ? hang() : real.fetch(url, opts)) };
+  const b = load({ tok: "tok", gh, extra: { setTimeout: clock.setTimeout, clearTimeout: clock.clearTimeout, Date: clock.Date } });
+  await flush();
+  await clock.advance(1500);
+  assert.equal(gets, 1, "the first poll is in flight (hung)");
+  await clock.advance(25000);
+  assert.equal(b.api.active(), true);
+  await clock.advance(60000);
+  assert.ok(gets >= 2, "polling resumed after the timeout: " + gets + " GETs");
+  b.api.stop();
+});
+
+test("#7491: stop + start during a hung hello: the old hello cannot take over the new run", async () => {
+  const clock = fakeClock(), real = fakeGitHub();
+  let posts = 0, oldHello = null;
+  const gh = { ...real, fetch: (url, opts) => {
+    if (opts.method === "POST" && ++posts === 1) return new Promise((res) => { oldHello = res; });
+    return real.fetch(url, opts);
+  } };
+  const b = load({ tok: "tok", gh, extra: { setTimeout: clock.setTimeout, clearTimeout: clock.clearTimeout, Date: clock.Date } });
+  await flush();
+  b.api.stop("test");
+  assert.equal(await b.api.start(42, "tok"), true);   // the second hello lands at HELLO_AT (the fake's first comment)
+  const json = (body) => ({ status: 201, ok: true, json: async () => body, headers: { get: () => null } });
+  oldHello(json({ id: 1, created_at: "2026-10-30T19:00:00Z", author_association: "OWNER", body: "" }));
+  for (let i = 0; i < 5; i++) await flush();
+  const getsAt = () => real.calls.filter((c) => c.opts.method !== "POST" && /\/comments\?/.test(c.url)).map((c) => decodeURIComponent(c.url.split("since=")[1]));
+  await clock.advance(1000);   // one busy-cadence interval
+  assert.deepEqual(getsAt(), [HELLO_AT], "exactly one poll chain, on the new run's cutoff");
+  await clock.advance(1000);
+  assert.equal(getsAt().length, 2);
+  b.api.stop();
+});
+
+test("#7491: a batch reply over the cap keeps every step's ok (fitSteps), not {value:null}", async () => {
+  const big = "x".repeat(40000);
+  const { api } = load({ search: "", apex: { big: () => big } });
+  const r = await api.handle({ cmd: "batch", args: { steps: [{ cmd: "call", args: { method: "big" } }, { cmd: "call", args: { method: "big" } }] } });
+  assert.equal(r.ok, true);
+  assert.ok(Array.isArray(r.value), "a non-null array");
+  assert.deepEqual(r.value.map((s) => s.ok), [true, true]);
+  assert.ok(JSON.stringify(r.value).length <= 58000);
+});
+
+const GPU_SRC = fs.readFileSync(new URL("../../js/agent/apex-gpu-capture.js", import.meta.url), "utf8");
+test("#7491: gpuCapture turned on over the link ends with the link; one stored before the link stays", async () => {
+  for (const before of [null, "webgl-lint"]) {
+    const store = new Map(before ? [["apex26.gpuCapture", before]] : []);
+    store.set("apex26.bridgeToken", "tok");
+    const apex = {};
+    const ctx = vm.createContext({
+      window: { __apex: apex, devicePixelRatio: 3, innerWidth: 844, innerHeight: 390 },
+      location: { search: "?apex=1&bridge=42", href: "https://brycejmurrin.github.io/f1-game/?apex=1&bridge=42", reload() {} },
+      navigator: { userAgent: "test", gpu: {} },
+      localStorage: { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, v), removeItem: (k) => store.delete(k) },
+      performance: { now: () => 0 }, setTimeout: () => 0, clearTimeout() {}, fetch: fakeGitHub().fetch, Log: { info() {} },
+      Object, Array, JSON, Math, Number, String, Set, Promise, Error, Date, encodeURIComponent,
+    });
+    loadDom(ctx);
+    vm.runInContext(GPU_SRC, ctx, { filename: absSrc("js/agent/apex-gpu-capture.js") });
+    apex.gpuCapture = vm.runInContext("ApexGpuCapture.api", ctx);
+    vm.runInContext(SRC, ctx, { filename: absSrc("js/agent/apex-bridge.js") });
+    const api = vm.runInContext("ApexBridge", ctx);
+    await flush();
+    assert.equal(api.active(), true);
+    await api.handle({ cmd: "call", args: { method: "gpuCapture", args: [true] } });   // no document here: the load fails, the mode is stored
+    assert.equal(store.get("apex26.gpuCapture"), "spector");
+    api.stop("test");
+    if (before) assert.equal(store.get("apex26.gpuCapture"), "spector", "a capture on before the link is the player's: left alone");
+    else assert.equal(store.has("apex26.gpuCapture"), false, "the link's capture is off and its stored mode cleared");
+  }
 });
