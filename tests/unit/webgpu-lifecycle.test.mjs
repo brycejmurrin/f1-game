@@ -1964,7 +1964,7 @@ test("Safari/compat: depth is textureLoad, adapter retries, lite stack skips tim
   // IS_MOBILE alone. Safari Mac is not a phone; GLX still runs the desktop
   // stack there. WGX cannot: timestamp-query + multisampled rgba16float is what
   // painted one frame then lost the device. Phone ULTRA also matches GLX
-  // here — js/render/glx/post.js keys MSAA on IS_MOBILE (never MOBILE_TIER).
+  // here — js/render/glx/post.js keys MSAA on IS_MOBILE.
   // sampleCount must be 1 or 4 in WebGPU (not GLX's 2×).
   assert.match(WGX_SOURCE, /WGX_LITE = !!\(IS_MOBILE \|\| IS_WEBKIT \|\| _litePref\)/);
   assert.match(WGX_SOURCE, /WGX_LITE \? "low-power" : "high-performance"/);
@@ -2281,14 +2281,14 @@ test("clean sessions heal the ladder: minimal steps back to lite after a streak"
   assert.equal(storage.get("apex26.gfxWgxOk"), "0", "streak restarts for the next rung");
 });
 
-test("phone WGX matches GLX: no MSAA even when the memory tier is HIGH", async () => {
+test("phone WGX matches GLX: no MSAA on a phone (mobileTier is isMobile, #6519)", async () => {
   // GLX: msaaSamples = IS_MOBILE ? 0 : min(4, …) (js/render/glx/post.js). WGX used to
-  // key MSAA on MOBILE_TIER, so GRAPHICS: ULTRA on a phone took multisampled
-  // rgba16float and lost the device after one frame.
-  const h = makeGpuHarness({ glx: { isMobile: true, mobileTier: false } });
+  // key MSAA on a separate tier flag, so GRAPHICS: ULTRA on a phone took multisampled
+  // rgba16float and lost the device after one frame. The two flags are now one (#6519).
+  const h = makeGpuHarness({ glx: { isMobile: true, mobileTier: true } });
   const gfx = await h.create();
   assert.equal(gfx.isMobile, true);
-  assert.equal(gfx.mobileTier, false);
+  assert.equal(gfx.mobileTier, true);
   assert.equal(gfx.msaa(), 1);
   assert.equal(gfx.gpuTimer().supported, false);
   assert.equal(gfx.carShadowState().enabled, false);

@@ -342,7 +342,7 @@ function mountControl() {
 function init() {
   Log.info("game", "GfxQuality.init");
   // GLX.isMobile is the device class, NOT GLX.mobileTier — the tier is already
-  // downstream of apex26.gfxHigh (glx.js: MOBILE_TIER = IS_MOBILE && !_gfxHigh),
+  // downstream of apex26.gfxHigh (glx.js: mobileTier === isMobile),
   // so reading it would make the control's default depend on its own last
   // setting. The typeof guard is the standalone-harness fallback
   isMobile = typeof GLX !== "undefined" && !!GLX.isMobile;

@@ -74,7 +74,7 @@ test("GRAPHICS presets on a phone: HIGH lifts TLX's cap to 2, MEDIUM and LOW kee
 
 test("every backend caps the device pixel ratio at 1.5 on mobileTier and 2 elsewhere", () => {
   // GLX: the same cap, raised only by RESOLUTION MAX's boost (setDprBoost; audit item 74).
-  assert.match(read("js/render/glx/glx.js"), /Math\.min\(window\.devicePixelRatio \|\| 1, Math\.max\(MOBILE_TIER \? 1\.5 : 2, _dprBoost, _dprPreset\)\)/);
+  assert.match(read("js/render/glx/glx.js"), /Math\.min\(window\.devicePixelRatio \|\| 1, Math\.max\(IS_MOBILE \? 1\.5 : 2, _dprBoost, _dprPreset\)\)/);
   assert.match(read("js/render/webgpu/wgx.js"), /Math\.min\(window\.devicePixelRatio \|\| 1, WGX_MINIMAL \? 1 : \(WGX_LITE \? 1\.5 : 2\)\)/);
   assert.match(read("docs/GFX-CONTRACT.md"), /capped 1\.5 mobile \/ 2/);   // the seam's contract doc
 });
@@ -99,10 +99,10 @@ test("each backend's resize() sizes the present buffer from the CAPPED dpr (eval
   assert.deepEqual([852, 368].map((c) => Math.round(c * tlxAt(true, 3))), [2556, 1104]);
   assert.deepEqual([852, 368].map((c) => Math.round(c * tlxAt(true))), [1278, 552]);
   const glx = resizeDpr("js/render/glx/glx.js");
-  assert.equal(evalAt(glx, { MOBILE_TIER: true, _dprBoost: 0, _dprPreset: 0 }), 1.5, "GLX phone at DPR 3");
-  assert.equal(evalAt(glx, { MOBILE_TIER: false, _dprBoost: 0, _dprPreset: 0 }), 2, "GLX desktop at DPR 3");
+  assert.equal(evalAt(glx, { IS_MOBILE: true, _dprBoost: 0, _dprPreset: 0 }), 1.5, "GLX phone at DPR 3");
+  assert.equal(evalAt(glx, { IS_MOBILE: false, _dprBoost: 0, _dprPreset: 0 }), 2, "GLX desktop at DPR 3");
   // RESOLUTION MAX on GLX too (audit item 74: it was silently HIGH there): the device's own DPR, never above it.
-  const glxAt = (mobile, boost, dpr, preset = 0) => vm.runInNewContext(glx, { window: { devicePixelRatio: dpr }, MOBILE_TIER: mobile, _dprBoost: boost, _dprPreset: preset }, { filename: "vm-page:evaluate" });
+  const glxAt = (mobile, boost, dpr, preset = 0) => vm.runInNewContext(glx, { window: { devicePixelRatio: dpr }, IS_MOBILE: mobile, _dprBoost: boost, _dprPreset: preset }, { filename: "vm-page:evaluate" });
   assert.deepEqual([glxAt(true, 3, 3), glxAt(true, 3, 2), glxAt(false, 3, 1)], [3, 2, 1], "GLX MAX = the device's own DPR");
   // GRAPHICS presets on GLX (#5222): HIGH (preset 2) lifts the phone to 2, MEDIUM/LOW (0) keep 1.5, MAX still 3.
   assert.deepEqual([glxAt(true, 0, 3, 2), glxAt(true, 0, 3, 0), glxAt(true, 3, 3, 2), glxAt(true, 0, 1, 2)], [2, 1.5, 3, 1], "GLX HIGH / MED-LOW / MAX / a DPR-1 device");
@@ -157,4 +157,48 @@ test("renderScale().effective never throws before the canvas is laid out", () =>
     canvas: { clientWidth: 0, clientHeight: 0 }, player: null, cars: [], track: {} }, { PerfGov: perfGov(), window: {} });
   const e = JSON.parse(JSON.stringify(api.renderScale({ lite: true }).effective));
   assert.deepEqual(e, { css: [0, 0], dpr: 1, dprCap: null, present: [0, 0], buffer: [0, 0], pxPerCss: null, ofDevice: null });
+});
+
+// #6519 — GLX.mobileTier and GLX.isMobile are one predicate (the renderers key off IS_MOBILE only).
+const facadeSrc = fs.readFileSync(new URL("../../js/render/shared/glx-facade.js", import.meta.url), "utf8");
+const bootFacade = (ua, touch = 0, ls = {}) => {
+  const sb = { navigator: { userAgent: ua, maxTouchPoints: touch }, localStorage: { getItem: (k) => ls[k] ?? null } };
+  sb.window = sb;
+  vm.createContext(sb);
+  vm.runInContext(facadeSrc + "\nthis.__glx = GLX;", sb);
+  return sb.__glx;
+};
+const IPHONE = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1";
+const ANDROID = "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/130 Mobile Safari/537.36";
+const MAC = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Safari/605.1.15";
+const WIN = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/130 Safari/537.36";
+
+test("phone UAs: mobileTier === isMobile === true", () => {
+  for (const ua of [IPHONE, ANDROID]) {
+    const g = bootFacade(ua);
+    assert.equal(g.isMobile, true, ua);
+    assert.equal(g.mobileTier, true, ua);
+  }
+});
+
+test("desktop UAs: mobileTier === isMobile === false", () => {
+  for (const ua of [MAC, WIN]) {
+    const g = bootFacade(ua);
+    assert.equal(g.isMobile, false, ua);
+    assert.equal(g.mobileTier, false, ua);
+  }
+});
+
+test("iPadOS desktop-class UA (touch Mac) and forceMobileTier take the phone tier together", () => {
+  for (const g of [bootFacade(MAC, 5), bootFacade(WIN, 0, { "apex26.forceMobileTier": "1" })]) {
+    assert.equal(g.isMobile, true);
+    assert.equal(g.mobileTier, g.isMobile);
+  }
+});
+
+test("renderer sources carry no separate MOBILE_TIER constant", () => {
+  for (const f of ["glx/glx.js", "glx/post.js", "webgpu/wgx.js", "webgpu/wgx-shadow.js"]) {
+    const s = fs.readFileSync(new URL(`../../js/render/${f}`, import.meta.url), "utf8");
+    assert.ok(!/\bMOBILE_TIER\b/.test(s), `${f} still names MOBILE_TIER`);
+  }
 });

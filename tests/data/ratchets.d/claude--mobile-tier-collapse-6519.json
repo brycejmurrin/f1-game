@@ -1,0 +1,12 @@
+{
+  "files": {
+    "js/render/glx/glx.js": {
+      "lines": -2
+    }
+  },
+  "tree": {
+    "assertPinsAll": 1,
+    "typeofGuards": -1,
+    "vmSrcLoads": 1
+  }
+}

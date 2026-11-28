@@ -15,7 +15,6 @@ const WGX = (function () {
   // at boot, long after glx.js's <script> tag — so GLX is always present here;
   // the typeof guard is belt-and-braces for a standalone harness.
   const IS_MOBILE = typeof GLX !== "undefined" && !!GLX.isMobile;
-  const MOBILE_TIER = typeof GLX !== "undefined" && !!GLX.mobileTier;
   let _grLite = true;   // godray: lamp beams alone take one blur pair (GLX/TLX parity)
   try { _grLite = localStorage.getItem("apex26.grLite") !== "0"; } catch (_) { /* no storage: on */ }
   // Safari Mac is NOT IS_MOBILE. Its WebGPU still sheds the device on the
@@ -1180,7 +1179,7 @@ const WGX = (function () {
         get lost() { return _lost; },
         DEPTH_FORMAT, SCENE_FORMAT, IDENT, Z01,
         SHADOW_VERTEX_LAYOUT, SHADOW_INSTANCE_LAYOUT,
-        WGX_LITE, IS_MOBILE, MOBILE_TIER,
+        WGX_LITE, IS_MOBILE,
         SHADOW_SLOTS,
         mul4: _mul4,
         onBlockerFallback() { _rebuildFrameBG(); },   // async blocker refusal: rebind binding 7
@@ -5925,7 +5924,7 @@ const WGX = (function () {
       msaa: () => _msaaCount,
       pcss: () => true,              // Poisson-8 + far 4-tap + blocker search (GLX parity)
       isMobile: IS_MOBILE,
-      mobileTier: MOBILE_TIER,
+      mobileTier: IS_MOBILE,
 
       chunkedTrackCoords: true,
       hasPerChunkLights: true,       // consumes the LampChunks bake (trackLightSBO/chunkIdxSBO)

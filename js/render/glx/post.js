@@ -15,7 +15,6 @@ const GLXPost = (function () {
   function init(core) {
     const gl = core.gl;
     const { useProg, bindVAO, setBlend, setDepthMask, setCull, link, locs, beginLinks, resolveLinks } = core;
-    const MOBILE_TIER = core.MOBILE_TIER;
     const IS_MOBILE = core.IS_MOBILE;
     const { POST_VS, BRIGHT_FS, BLUR_FS, DOWN_FS, UP_FS, SSAO_FS, GODRAY_FS, SSR_FS,
             COMPOSITE_FS, FXAA_FS, SGSR_FS, MIRROR_FS, DECAL_VS, MIRROR_GLASS_FS } = GLXShaders;
@@ -331,7 +330,7 @@ const GLXPost = (function () {
       msaaSamples = requestedSamples;
       // Phone / mobile-tier: allocate a square cover of max(w,h) so the first
       // portrait↔landscape flip never rebuilds (#3311). Desktop keeps exact size.
-      const cover = (IS_MOBILE || MOBILE_TIER) ? Math.max(1, width, height) : 0;
+      const cover = IS_MOBILE ? Math.max(1, width, height) : 0;
       const aw = cover || width, ah = cover || height;
       const internal = colorType === gl.HALF_FLOAT ? gl.RGBA16F : gl.RGBA8;
       // Slimmer formats where full RGBA16F is waste (bandwidth is the tiled-GPU
