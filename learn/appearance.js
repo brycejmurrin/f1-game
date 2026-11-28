@@ -77,7 +77,9 @@ const LearnAppearance = (function () {
       if (event.origin !== window.location.origin || event.source !== window.parent || data?.type !== "apex-learn-result" ||
           data.id !== id || !data.result) return;
       const r = data.result, k = r.display?.k ?? 1, unit = r.display?.unit ?? r.unit ?? "";
-      const num = v => (Number(v) * k).toFixed(Number.isInteger(Number(v)) ? 0 : 1) + (unit ? " " + unit : "");
+      // One precision per result: whole numbers (the Lines stage, "2 / 3") stay whole; a scaled or fractional one keeps 1 dp.
+      const dp = k === 1 && [r.value, r.best].every(v => v == null || Number.isInteger(Number(v))) ? 0 : 1;
+      const num = v => (Number(v) * k).toFixed(dp) + (unit ? " " + unit : "");
       result.textContent = "Your last drill: " + (r.medal ? r.medal.toUpperCase() : "No medal") + " · " + num(r.value)
         + (Number.isFinite(r.best) ? " (best " + num(r.best) + ")" : "") + ". " + (r.verdict || "");
       result.hidden = false;
