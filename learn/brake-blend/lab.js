@@ -149,3 +149,5 @@
     });
   }
 })();
+// TRY IT IN THE CAR: Torque Fill Exit (js/learn-drills/torque.js); BACK TO LESSON posts its last run beside the button.
+if (typeof LearnAppearance !== "undefined") LearnAppearance.drill?.("torque", "Torque Fill Exit");

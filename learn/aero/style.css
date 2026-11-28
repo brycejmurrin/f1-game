@@ -69,7 +69,7 @@ main {
   #learn-studio .legend span:first-child { margin-right: 0; }
 }
 @media (pointer: coarse) {
-  .settings input[type="range"], #corner-replay input[type="range"], .active-aero summary { min-height: 44px; }
+  .settings input[type="range"], #corner-replay input[type="range"], .active-aero summary, #launch-aero-drill { min-height: 44px; }
   .active-aero summary { align-content: center; }
 }
 
