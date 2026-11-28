@@ -30,9 +30,10 @@ test("R2: sky retire rebinds the cache texture node off the disposed targets", (
       sky[how]();
     } finally { THREE.RenderTarget.prototype.dispose = origDispose; }
     assert.ok(disposed.size >= 2, "both cache render targets were disposed");
-    boundAfter = sky.cacheState().tex;
-    assert.ok(!disposed.has(boundAfter), "C.tex.value is not one of the disposed textures");
-    assert.equal(boundAfter.image.width, 1, "bound to the 1x1 placeholder");
+    boundAfter = sky.cacheState();
+    // The placeholder is a fresh DataTexture, never one of the disposed RT textures (#7451: scalars, not the Texture).
+    assert.equal(boundAfter.texIsPlaceholder, true, "C.tex.value is the placeholder, not a disposed texture");
+    assert.equal(boundAfter.texW, 1, "bound to the 1x1 placeholder");
   }
 });
 
