@@ -3,7 +3,7 @@
 //
 //   node tools/ci/brief.mjs render --spec <spec.json> [--sessions <list_sessions.json>] [--no-dup]
 //   node tools/ci/brief.mjs lint <brief.txt>
-//   node tools/ci/brief.mjs dup --issue <n> | --pr <n> [--sessions <list_sessions.json>]
+//   node tools/ci/brief.mjs dup --issue <n> | --pr <n> | --deploy-red <run id> | --task <slug> [--sessions <list_sessions.json>]
 //   node tools/ci/brief.mjs role <role>          (the environment id to pass to create_session; tests/data/fleet-roles.json)
 //   node tools/ci/brief.mjs reap --triggers <list_triggers.json> --blocks <comments.json|txt> [--sessions <list_sessions.json>]
 //
@@ -12,9 +12,13 @@
 // references/orchestrator-brief.md as code: `render` prints it from task facts and refuses a duplicate launch, `lint`
 // checks a brief written by hand, `dup` answers "is someone already on it?" alone.
 //
-// Spec (JSON): { kind: "ISSUE"|"CONTINUE PR", number, orchestrator, role, ask, askAt, task, evidence, scope,
-//   owned: [paths], forbidden: [paths], stopAt: "start+150k", humanSteps: [lines], tip: { state: "green"|"red"|"paused",
-//   sha, note }, report: [moments], env: "worker", permissionMode: "auto" }.
+// Spec (JSON): { kind: "ISSUE"|"CONTINUE PR"|"DEPLOY-RED"|"TASK", number (issue / PR / run id; a TASK's slug
+//   [a-z0-9-]+ goes in `slug` or `number`), orchestrator, role, ask, askAt, task, evidence, state, profile, stopAndTell,
+//   scope, owned: [paths] (may be [] only with readOnly: true), readOnly, forbidden: [paths], stopAt: "start+150k",
+//   humanSteps: [lines], tip: { state: "green"|"red"|"paused", sha, note }, report: [moments], subagents,
+//   env: "worker", permissionMode: "auto" }.
+// `render` prints the brief (the text to send), a blank line, then a `LAUNCH:` block: the create_session metadata
+// (env, permission mode, tags), which is not part of the sent text (#7472).
 // `env` is a ROLE from tests/data/fleet-roles.json (or its display name); the brief prints the resolved name, never
 // the id. A literal `env_…` id anywhere in a spec or a brief is refused (#7049): `role` prints the id for the launch.
 // `reap` is the FULL routine's step 0 (lib/roles.mjs reapActs): one `disable trig_…` line per stale routine trigger.
@@ -34,26 +38,31 @@ import { api } from "./github-api.mjs";
 import { findEnvLiterals, resolveRole, loadRoles, parseOrchestratorBlocks, reapActs } from "./lib/roles.mjs";
 import { isConfigPath, isProtectedConfigPath, RATCHET_FILE } from "./merge-gate.mjs";
 
-const USAGE = "usage: node tools/ci/brief.mjs render --spec <spec.json> [--sessions <file>] [--no-dup] | lint <brief.txt> | dup --issue <n>|--pr <n> [--sessions <file>] | role <role> | reap --triggers <file> --blocks <file> [--sessions <file>]";
-export const KINDS = Object.freeze(["ISSUE", "CONTINUE PR"]);
+const USAGE = "usage: node tools/ci/brief.mjs render --spec <spec.json> [--sessions <file>] [--no-dup] | lint <brief.txt> | dup --issue <n>|--pr <n>|--deploy-red <run id>|--task <slug> [--sessions <file>] | role <role> | reap --triggers <file> --blocks <file> [--sessions <file>]";
+export const KINDS = Object.freeze(["ISSUE", "CONTINUE PR", "DEPLOY-RED", "TASK"]);
+export const SLUG_RE = /^[a-z0-9-]+$/;
+/** The default MESSAGE ME ONLY WHEN moments. A worker ends at `land` and never sees the merge (#7409, #7472). */
+export const DEFAULT_REPORT = Object.freeze(["blocked", "refused (facts only)", "a decision is needed", "land added (PR open; GitHub merges)", "handing off"]);
 export const TIP_STATES = Object.freeze(["green", "red", "paused"]);
 export const STOP_AT_RE = /^STOP AT:\s*(start\+\d+k|\d+k)\b/m;
 export const TIP_RE = /^TIP:\s*(green|red|paused)\b/m;
 /** The lines a brief must carry, as [label, regex]; order is print order. */
 export const REQUIRED = Object.freeze([
-  ["address line (ISSUE <n> | CONTINUE PR <n>)", /^(ISSUE|CONTINUE PR) \d+\b/m],
+  ["address line (ISSUE <n> | CONTINUE PR <n> | DEPLOY-RED <run id> | TASK <slug>)", /^(?:(?:ISSUE|CONTINUE PR|DEPLOY-RED) \d+\b|TASK [a-z0-9-]+(?![\w-]))/m],
   ["ROLE:", /^ROLE:\s*\S/m],
   ["SCOPE:", /^SCOPE:\s*\S/m],
   ["OWNED:", /^OWNED:\s*\S/m],
   ["FORBIDDEN:", /^FORBIDDEN:\s*\S/m],
-  ["HUMAN STEPS:", /^HUMAN STEPS:\s*\S/m],
+  ["HUMAN STEPS:", /^HUMAN STEPS(?: ARRANGED)?:\s*\S/m],
   ["TIP: green|red|paused (the deploy tip's state at launch)", TIP_RE],
   ["STOP AT: start+<N>k (context-cap.py reads this form)", STOP_AT_RE],
-  ["ENV: <environment> · permission_mode <mode>", /^ENV:\s*\S.*permission_mode\s+\S/m],
   ["MESSAGE ME ONLY WHEN:", /^MESSAGE ME ONLY WHEN:\s*\S/m],
 ]);
 
-export const sessionTag = (kind, n) => `apex:${kind === "ISSUE" ? "issue" : "pr"}-${n}`;
+const TAG_HEAD = Object.freeze({ "ISSUE": "issue", "CONTINUE PR": "pr", "DEPLOY-RED": "deploy-red", "TASK": "task" });
+export const sessionTag = (kind, n) => `apex:${TAG_HEAD[kind] || "pr"}-${n}`;
+/** The address id: a TASK's slug (`slug`, else `number`), every other kind's number. Pure. */
+export const specId = (s) => (s.kind === "TASK" ? (s.slug ?? s.number) : s.number);
 export const address = (kind, n) => `${kind} ${n}`;
 
 /** Human steps the owned paths predict. Pure. */
@@ -73,12 +82,14 @@ export function specProblems(s, roles = loadRoles()) {
   const p = [];
   if (!s || typeof s !== "object") return ["spec is not an object"];
   if (!KINDS.includes(s.kind)) p.push(`kind must be one of ${KINDS.join(" | ")}`);
-  if (!/^\d{1,7}$/.test(String(s.number ?? ""))) p.push("number must be the issue or PR number");
+  if (s.kind === "TASK") { if (!SLUG_RE.test(String(specId(s) ?? ""))) p.push("a TASK needs a slug ([a-z0-9-]+) in slug or number"); }
+  else if (s.kind === "DEPLOY-RED") { if (!/^\d{1,12}$/.test(String(s.number ?? ""))) p.push("number must be the red run's id"); }
+  else if (!/^\d{1,7}$/.test(String(s.number ?? ""))) p.push("number must be the issue or PR number");
   for (const k of ["orchestrator", "role", "task", "scope"]) if (!String(s[k] || "").trim()) p.push(`${k} is required`);
   if (!/^(start\+\d+k|\d+k)$/.test(String(s.stopAt || ""))) p.push('stopAt must read "start+<N>k" (or "<N>k")');
   if (!TIP_STATES.includes(s.tip?.state)) p.push(`tip.state must be one of ${TIP_STATES.join(" | ")}`);
   if (s.tip?.state && s.tip.state !== "green" && !String(s.tip?.note || "").trim()) p.push("tip.note is required when the tip is not green (what to do until it is)");
-  if (!Array.isArray(s.owned) || !s.owned.length) p.push("owned must list the paths the worker may edit");
+  if (!Array.isArray(s.owned) || (!s.owned.length && s.readOnly !== true)) p.push("owned must list the paths the worker may edit (owned: [] only with readOnly: true)");
   if (s.forbidden != null && !Array.isArray(s.forbidden)) p.push("forbidden must be a list");
   const ids = findEnvLiterals(JSON.stringify(s));
   if (ids.length) p.push(`a literal environment id (${ids.join(", ")}): name the role (env: "worker"); brief.mjs role <role> prints the id`);
@@ -86,28 +97,40 @@ export function specProblems(s, roles = loadRoles()) {
   return p;
 }
 
-/** The brief text. Pure (the spec must be valid). */
+/** The brief text, then a blank line and the `LAUNCH:` block (create_session metadata, not sent). Pure (the spec must be valid). */
 export function renderBrief(s, roles = loadRoles()) {
   const env = resolveRole(s.env || "worker", roles);
   const steps = [...(s.humanSteps || []), ...predictSteps(s.owned).filter((x) => !(s.humanSteps || []).some((h) => h.startsWith(x.split(" ")[0])))];
   const tip = s.tip;
   const lines = [
-    `${address(s.kind, s.number)} for orchestrator ${s.orchestrator}. AGENTS.md and skill \`steward\` bind; this brief adds only task facts.`,
+    `${address(s.kind, specId(s))} for orchestrator ${s.orchestrator}. AGENTS.md and skill \`steward\` bind; this brief adds only task facts.`,
     "",
     `ROLE: ${s.role}`,
     ...(s.ask ? [`ASK (Bryce's words${s.askAt ? `, ${s.askAt}` : ""}): "${s.ask}"`] : []),
     `TASK: ${s.task}`,
     ...(s.evidence ? [`EVIDENCE: ${s.evidence}`] : []),
+    ...(s.state ? [`STATE: ${s.state}`] : []),
+    ...(s.profile ? [`PROFILE: ${s.profile}`] : []),
+    ...(s.stopAndTell ? [`STOP AND TELL ME: ${s.stopAndTell}`] : []),
     `SCOPE: ${s.scope}`,
-    `OWNED: ${s.owned.join(", ")}`,
+    `OWNED: ${s.owned.length ? s.owned.join(", ") : "none"}`,
     `FORBIDDEN: ${(s.forbidden || []).length ? s.forbidden.join(", ") : "everything outside OWNED"}; nothing in PROTECTED_CONFIG_PATH (tools/ci/merge-gate.mjs) without Bryce's tap`,
     `HUMAN STEPS: ${steps.length ? steps.join(" | ") : "none predicted"}`,
     `TIP: ${tip.state}${tip.sha ? ` at ${String(tip.sha).slice(0, 8)}` : ""}${tip.note ? ` — ${tip.note}` : ""}`,
     `STOP AT: ${s.stopAt}`,
-    `ENV: ${env.role} ("${env.name}") · permission_mode ${s.permissionMode || env.permissionMode} · tags ["${sessionTag(s.kind, s.number)}"]`,
-    `MESSAGE ME ONLY WHEN: ${(s.report || ["blocked", "refused (facts only)", "a decision is needed", "merged", "handing off"]).join(", ")} (send_message session_id ${s.orchestrator})`,
+    `MESSAGE ME ONLY WHEN: ${(s.report || DEFAULT_REPORT).join(", ")} (send_message session_id ${s.orchestrator})`,
+    ...(s.subagents ? [`SUBAGENTS: ${s.subagents}`] : []),
+    "",
+    "LAUNCH: (create_session metadata; not part of the sent text)",
+    `  env: ${env.role} ("${env.name}") · permission_mode ${s.permissionMode || env.permissionMode} · tags ["${sessionTag(s.kind, specId(s))}"]`,
   ];
   return lines.join("\n");
+}
+
+/** Split rendered output into the text to send and its `LAUNCH:` block. Pure. */
+export function splitLaunch(text) {
+  const t = String(text || ""), i = t.search(/^LAUNCH:/m);
+  return i < 0 ? { brief: t, launch: "" } : { brief: t.slice(0, i).replace(/\n+$/, ""), launch: t.slice(i) };
 }
 
 /** Lint a written brief: the missing required lines, and any literal env id. Pure. */
@@ -116,7 +139,7 @@ export function lintBrief(text) {
   const missing = REQUIRED.filter(([, re]) => !re.test(t)).map(([label]) => label);
   const tip = TIP_RE.exec(t);
   const ids = findEnvLiterals(t);
-  if (ids.length) missing.push(`no literal environment id (${ids.join(", ")}): name the role on the ENV: line`);
+  if (ids.length) missing.push(`no literal environment id (${ids.join(", ")}): name the role (env: "worker"); brief.mjs role <role> prints the id`);
   if (tip && tip[1] !== "green" && !/^TIP:\s*\S+.*\S\s*[—-]\s*\S/m.test(t)) missing.push("TIP: a red or paused tip names what to do until it is green (`TIP: red — …`)");
   return missing;
 }
@@ -129,11 +152,12 @@ export const isLive = (s) => s && !s.archived && (s.status_bucket ? LIVE_BUCKETS
 /** Duplicate launches for an address. `pulls`: open PR rows (number, body, draft); `sessions`: list_sessions rows. Pure.
  *  @returns {string[]} one line per duplicate */
 export function duplicates({ kind, number, pulls = [], sessions = [], self = "" }) {
-  const n = Number(number);
+  const n = kind === "TASK" ? String(number) : Number(number);
   const out = [];
   if (kind === "ISSUE") for (const p of pulls) if (CLOSES_RE(n).test(String(p.body || ""))) out.push(`open PR #${p.number} already closes issue #${n}: launch CONTINUE PR ${p.number} (if its lease lapsed), not a second ISSUE ${n}`);
   const tag = sessionTag(kind, n), addr = address(kind, n);
-  const titleRe = new RegExp(`(^|\\W)${addr.replace(" ", "\\s+")}(\\D|$)`, "i");
+  const esc = addr.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(" ", "\\s+");
+  const titleRe = new RegExp(`(^|\\W)${esc}${kind === "TASK" ? "(?![\\w-])" : "(\\D|$)"}`, "i");
   for (const s of sessions) {
     if (!isLive(s) || (self && s.id === self)) continue;
     if ((s.tags || []).includes(tag) || titleRe.test(String(s.title || ""))) out.push(`live session ${s.id} (${s.status_bucket || s.status || "?"}) is already on ${addr}${(s.tags || []).includes(tag) ? ` (tag ${tag})` : " (title)"}: message it instead of launching`);
@@ -175,10 +199,14 @@ export function main(argv, { log = console.log, read = (f) => fs.readFileSync(f,
     return m.length ? 1 : 0;
   }
   if (cmd === "dup") {
-    const issue = flag(rest, "--issue"), pr = flag(rest, "--pr");
-    const number = issue || pr;
-    if (!/^\d{1,7}$/.test(number || "")) { log(USAGE); return 2; }
-    return dupCheck({ kind: issue ? "ISSUE" : "CONTINUE PR", number, sessionsFile: flag(rest, "--sessions"), log, listOpen });
+    const issue = flag(rest, "--issue"), pr = flag(rest, "--pr"), red = flag(rest, "--deploy-red"), slug = flag(rest, "--task");
+    if (slug != null) {
+      if (!SLUG_RE.test(slug)) { log(USAGE); return 2; }
+      return dupCheck({ kind: "TASK", number: slug, sessionsFile: flag(rest, "--sessions"), log, listOpen });
+    }
+    const number = issue || pr || red;
+    if (!(red && !issue && !pr ? /^\d{1,12}$/ : /^\d{1,7}$/).test(number || "")) { log(USAGE); return 2; }
+    return dupCheck({ kind: issue ? "ISSUE" : pr ? "CONTINUE PR" : "DEPLOY-RED", number, sessionsFile: flag(rest, "--sessions"), log, listOpen });
   }
   if (cmd === "role") {
     let r;
@@ -220,7 +248,7 @@ export function main(argv, { log = console.log, read = (f) => fs.readFileSync(f,
     const p = specProblems(spec);
     if (p.length) { p.forEach((x) => log(`spec: ${x}`)); log(`= brief spec-refused — ${p.length} problem(s)`); return 1; }
     if (!rest.includes("--no-dup")) {
-      const code = dupCheck({ kind: spec.kind, number: spec.number, sessionsFile: flag(rest, "--sessions"), log, listOpen });
+      const code = dupCheck({ kind: spec.kind, number: specId(spec), sessionsFile: flag(rest, "--sessions"), log, listOpen });
       if (code) return code;
     }
     log(renderBrief(spec));

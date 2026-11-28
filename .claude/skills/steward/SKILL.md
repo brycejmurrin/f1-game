@@ -131,7 +131,7 @@ A fired session gets one line: `ISSUE <n>`, `CONTINUE PR <n>` or `DEPLOY-RED`. I
 3. GitHub MCP `update_pull_request` with `draft: false`, then add `land` (the one-label recipe in
    [`references/labels.md`](references/labels.md)).
 4. Refresh the Hand-off block (`owner: landing <host>:<session>`), `unsubscribe_pr_activity`, and end: no re-subscribe (wake turns were 19% of worker
-   cost, retro 2026-11-25). A later red or conflict is the orchestrator's `CONTINUE PR #<n>` (§After land).
+   cost, retro 2026-11-25). Report "land requested on #<n>"; write "landed" or "merged" only after reading `merged_at` back (#7409). A later red or conflict is the orchestrator's `CONTINUE PR #<n>` (§After land).
    What `land.yml`'s `gate` status does next: [`references/land.md`](references/land.md). "Skip the gate" from the
    user: do it and record it under **Not run** with the user's words and the time; never silently, and never by
    widening a tolerance. A `hold` label vetoes (AGENTS.md §Coordination); body wording vetoes nothing.
