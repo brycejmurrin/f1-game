@@ -816,6 +816,7 @@
         "tests/unit/drill-aero-medals-vm.test.mjs",
         "tests/unit/drill-aero-vm.test.mjs",
         "tests/unit/drill-charge-vm.test.mjs",
+        "tests/unit/drill-dive-vm.test.mjs",
         "tests/unit/drill-fork-vm.test.mjs",
         "tests/unit/drill-grip-vm.test.mjs",
         "tests/unit/drill-harvest-vm.test.mjs",
@@ -974,6 +975,7 @@
         "tests/unit/drill-aero-medals-vm.test.mjs",
         "tests/unit/drill-aero-vm.test.mjs",
         "tests/unit/drill-charge-vm.test.mjs",
+        "tests/unit/drill-dive-vm.test.mjs",
         "tests/unit/drill-fork-vm.test.mjs",
         "tests/unit/drill-grip-vm.test.mjs",
         "tests/unit/drill-harvest-vm.test.mjs",
@@ -1169,6 +1171,7 @@
         "tests/unit/drill-aero-medals-vm.test.mjs",
         "tests/unit/drill-aero-vm.test.mjs",
         "tests/unit/drill-charge-vm.test.mjs",
+        "tests/unit/drill-dive-vm.test.mjs",
         "tests/unit/drill-fork-vm.test.mjs",
         "tests/unit/drill-grip-vm.test.mjs",
         "tests/unit/drill-harvest-vm.test.mjs",
@@ -3967,6 +3970,11 @@
     {
       "path": "js/learn-drills/charge.js",
       "global": "ChargeDrill",
+      "roster": "LAZY_LEARN"
+    },
+    {
+      "path": "js/learn-drills/dive.js",
+      "global": "DiveDrill",
       "roster": "LAZY_LEARN"
     },
     {

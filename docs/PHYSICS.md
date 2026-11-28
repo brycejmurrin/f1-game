@@ -1376,6 +1376,7 @@ into a copy of `player-forces.js` and require red). Files with hits that are not
 - `js/track/core/spline.js` — **surface** — defines and exports `curvature` itself.
 - `js/learn-drills/aero.js` — **surface** — `TrackLine.at` seats the drill cars at `begin()` and places the braking-zone road strip; no per-frame read.
 - `js/learn-drills/charge.js` — **surface** — `TrackLine.at` seats the car once at `begin()` (placement, #6559 §1e rule 2); never read while driving.
+- `js/learn-drills/dive.js` — **surface** — the same one-shot `begin()` placement.
 - `js/learn-drills/grip.js` — **surface** — the same one-shot `begin()` placement.
 - `js/learn-drills/harvest.js` — **surface** — the same one-shot `begin()` placement.
 - `js/learn-drills/lines.js` — **surface** — the same one-shot `begin()` placement.

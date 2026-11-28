@@ -1,0 +1,1 @@
+New: LEARN → Suspension & Anti-Dive has an on-track drill, Dive Test (#6559 step 9): two full stops at Monza, lower then higher anti-dive, with a prediction first. The nose dips about half as far and the floor stays clear, but the front load and the stopping distance stay the same: in Apex, anti-dive is visual only and the grip model uses the measured deceleration.

@@ -14,7 +14,9 @@
    the lesson with {type:"apex-learn-result"} posted into it (#6559 step 2, #7039). `variants` ([{id, label, cta?,
    dirtyAir?}], the first is the default) are runs of one drill scored and saved apart: the card's NEXT button is
    rerun(next id), which applies the variant's dirtyAir and retries in place (#6559 step 5, A6). `medals` is a tier
-   object or a pure (r, history) function, history this launch's earlier results (#6559 §1a).
+   object or a pure (r, history) function, history this launch's earlier results (#6559 §1a). `vary(G, variant)`
+   (optional) sets the drill-scoped knob a variant names (the Dive Test's pitch scale) at launch and on every rerun();
+   stage()'s undo puts it back.
    THE ARC NEVER REACHES THE DRIVER: nothing in js/learn-drills/ reads curvature or the racing line
    (tests/unit/drill-registry.test.mjs). Not RaceInsights.DRILLS (practice goals): a separate namespace.
    LAZY_LEARN; js/ui/learn-door.js defines the Aero drill lazily (its open()), never at eval: the bundle loads with no
@@ -141,6 +143,7 @@ const DrillRegistry = (function () {
       setDirtyAir(variantOf(d, variant).dirtyAir || s.dirtyAir);
       Wind.setLevel(s.wind);
       if (typeof d.stage === "function") undo = d.stage(G) || null;
+      if (typeof d.vary === "function") d.vary(G, current.variant);
       port.startRace();
       return true;
     }
@@ -177,13 +180,14 @@ const DrillRegistry = (function () {
       if (v.id !== variant) return false;
       current.variant = v.id;
       setDirtyAir(v.dirtyAir || current.d.setup.dirtyAir);
+      if (typeof current.d.vary === "function") current.d.vary(G, v.id);
       return retry();
     }
 
     /** One finished run: score, medal, save, card. */
     function finish(last) {
       const a = current, d = a.d;
-      const scored = d.score(G, last, a.run.acc, a.variant);
+      const scored = d.score(G, last, a.run.acc, a.variant, a.history.slice());   // history: a drill that compares runs (the Dive Test)
       const r = { id: d.id, variant: a.variant, title: d.title || d.id, attempt: ++a.attempt, ...scored };
       r.medal = typeof d.medals === "function" ? d.medals(r, a.history.slice()) : DrillCard.medalOf(r, d.medals);
       a.history.push(r);
