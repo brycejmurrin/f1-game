@@ -115,6 +115,18 @@ test("ApexXR.detect throw keeps a positive xrCaps latch for bootPick", async () 
   assert.equal(ctx.ApexXR.bootPick(), "three");
 });
 
+test("ApexXR.detect: navigator.xr without isSessionSupported stores no xrCaps \"0\" (#7346 row 9)", async () => {
+  const { ctx, ls } = bootOpts({});
+  // The one xrCaps writer is the eager XrBoot.storeVrCaps (not loaded here): its localStorage write.
+  ctx.XrBoot = { storeVrCaps: (vr) => ls.setItem("apex26.xrCaps", vr ? "1" : "0") };
+  const caps = await ctx.ApexXR.detect(true);
+  assert.equal(caps.vr, false);
+  assert.equal(ls.getItem("apex26.xrCaps"), null, "an xr object that cannot answer is not a definite no");
+  ctx.navigator.xr = undefined;
+  await ctx.ApexXR.detect(true);
+  assert.equal(ls.getItem("apex26.xrCaps"), "0", "no navigator.xr at all is");
+});
+
 test("ApexXR has no rendererMatchesPlan (no caller; it passed a state that cannot attach)", () => {
   const { ctx } = bootOpts({ "apex26.xr": "1", "apex26.xrCaps": "1" });
   assert.equal(ctx.ApexXR.rendererMatchesPlan, undefined);
