@@ -3133,3 +3133,26 @@ test("pin #6496: guest friend-quali start, gate refresh and room close reach rac
     ["setNetRoom", false],                       // cancel()
   ]);
 });
+
+// #7311: releaseEphemeral() (#6632 L6) had no caller, so a guest that joined a
+// room on the host's custom circuit kept that circuit in Tracks.LIST after it
+// left. Stub CustomTracks/TrackDef: this pins the lobby's lifecycle, the
+// real circuit build is lobby-settings.test.mjs.
+test("leaving the room releases the host's custom circuit from Tracks.LIST (#7311)", async () => {
+  const { h, s } = await connectedGuest();
+  try {
+    const ctx = h.context;
+    ctx.CustomTracks = { sanitize: (d) => (d && d.pts ? { id: "custom-hash1", name: d.name, pts: d.pts } : null), toRaw: (it) => it };
+    ctx.TrackDef = { fromRaw: (raw) => ({ id: raw.id, custom: true }) };
+    const before = ctx.Tracks.LIST.length;
+    s.deliver("settings", initialGuestSettings({ track: -1, circuit: { name: "Loop", pts: [[0, 0], [1, 0], [1, 1]] }, revision: 1 }));
+    assert.equal(ctx.Tracks.LIST.length, before + 1, "the host's circuit was installed");
+    assert.equal(h.G.trackIdx, before, "…and picked");
+    h.G.netPlay = { active: () => true };   // mid-race: restoreOwnRules must keep the circuit
+    h.lobby.cancel();
+    assert.equal(ctx.Tracks.LIST.length, before + 1, "never released mid-race");
+    h.G.netPlay = { active: () => false };
+  } finally { h.lobby.cancel(); }
+  assert.equal(h.context.Tracks.LIST.length, 1, "cancel() released the slot");
+  assert.equal(h.G.trackIdx, 0, "the guest's own track is back");
+});
