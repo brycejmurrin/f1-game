@@ -1245,6 +1245,7 @@
         "tests/unit/fill-gating.test.mjs",
         "tests/unit/fin-design.test.mjs",
         "tests/unit/front-wing-decal.test.mjs",
+        "tests/unit/garage-error-paths.test.mjs",
         "tests/unit/garage-followups.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/garage-panel-side.test.mjs",
