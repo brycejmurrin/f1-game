@@ -54,7 +54,7 @@ const CarFields = (function () {
     ["the stopped-car hazard: seconds stationary, the hazard being passed and its committed side (clean-room 39/40)",
       ["stillT", "_hzOf", "_hzSide"]],
     ["body attitude springs (js/physics/body-attitude.js seed())",
-      ["_ba", "baPitch", "baRoll", "baHeave", "baScrape"]],
+      ["_ba", "baPitch", "baRoll", "baHeave", "baScrape", "baClear"]],
     ["render side: LOD tier, wheel spin, wheel visibility",
       ["_lodTier", "wheelSpin", "_whlVis"]],
     ["player force model (js/physics/player-forces.js) and its HUD/coach readouts",
@@ -384,6 +384,7 @@ const CarFields = (function () {
     if (!("baRoll" in c)) c.baRoll = undefined;
     if (!("baHeave" in c)) c.baHeave = undefined;
     if (!("baScrape" in c)) c.baScrape = undefined;
+    if (!("baClear" in c)) c.baClear = undefined;
     if (!("_lodTier" in c)) c._lodTier = undefined;
     if (!("wheelSpin" in c)) c.wheelSpin = undefined;
     if (!("_whlVis" in c)) c._whlVis = undefined;

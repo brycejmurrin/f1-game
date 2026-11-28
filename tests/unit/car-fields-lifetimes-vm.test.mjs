@@ -39,8 +39,10 @@ const CF = new Function(SRC.replace(/^const CarFields\b/m, "var CarFields") + "\
 
 // Captured on the pre-migration tip 16237b50 (node --test this file with APEX_PRINT_DIGEST=1). NEVER regenerate in
 // a refactor: a change here means the migration changed a car field.
-const DIGEST_GRID = "035ff5eb4e69a35dfd26e76301d200ff3549b00d5ddd6206368e447e957a6334";
-const DIGEST_RESCUE = "104b218716076d5c6adbcda2e3217890104d62631d7c7d1580013025a1b8a886";
+// All four digests re-recorded for #7440: body-attitude.js adds c.baClear (floor clearance, seeded in seed() beside
+// baScrape; no RESETS row, same lifetime). With baClear excluded the four old pins still match (verified on 1bf3af1c).
+const DIGEST_GRID = "40a72797e011dacc6f655f8f5727f65e8810f9b0a036792f7559ab95e923d7a4";
+const DIGEST_RESCUE = "bdc44948a51766dea2a7bdf0222e0d0a3488c4cce6cfe29a8dd924932c58cbf8";
 
 /** Object.is-exact serialisation: -0, NaN and undefined kept apart; an object by its own key list; another car by
  * its index; the circuit by name. */
@@ -115,8 +117,8 @@ test("gridUp and rescuePlayer leave every car field byte-identical (digest pinne
 
 // Captured on the pre-migration tip 059e6cff (U1.1 merged; APEX_PRINT_DIGEST=1). NEVER regenerate in a refactor.
 // DIGEST_REDFLAG re-recorded for #7155 (wall and side-rub scrubs scale with PACE: an intended behaviour change, not a refactor; DIGEST_EPISODE unchanged).
-const DIGEST_REDFLAG = "cd4a0b609e13fa9445cda5209008c3fee99f8f9c7804f019f821716a968d768a";
-const DIGEST_EPISODE = "bbb8d11adc2cf50b200a73fa881c0e5200a2e48fb9dc14c4bed1ee32d5efb2e7";
+const DIGEST_REDFLAG = "145d69d00df6cde608eae73f53e47a314573b190eb2e868e695e8076775c4039";
+const DIGEST_EPISODE = "012ca0be35a99080082a9cf9cb0aee351f3fbe310752d75f22f8bca1e4a88bec";
 
 // Stamp a sentinel into every listed field a car HAS (a number 0.37, a boolean true, a car reference the next car),
 // so the digest sees each reset and each survivor, not a coincidental match. Only existing keys: never add one.

@@ -5,6 +5,10 @@ const BodyAttitude = (function () {
 let G = null;                          // game.js ctx façade (live getters: cars, player)
 const LS_KEY = "apex26.bodyAttitude";
 let enabled = true;                    // resolved from localStorage in create()
+// LEARN's Dive Test (js/learn-drills/dive.js, #6559 step 9, #6555 §2): a drill-scoped ANTI-DIVE index on the braking
+// dive alone, 1 = the shipped dive, 0.45 = the lab's higher anti-dive. Cosmetic like everything here: it moves the
+// body, the camera nod and the plank, never a force (load transfer is game.js's axEstSm term). The drill's undo puts 1 back.
+let pitchScale = 1;
 
 // tunables (stiff-suspension feel: small travel, fast settle)
 const PITCH_OMEGA = 9;                 // rad/s spring rate — brake dive / squat
@@ -90,7 +94,7 @@ function ridge(i) {
 
 function seed(c) {
   c._ba = { p: { x: 0, v: 0 }, r: { x: 0, v: 0 }, z: { x: 0, v: 0 }, ygV0: 0, prevYg: null, kerbM: 0, sh: 0 };
-  c.baPitch = 0; c.baRoll = 0; c.baHeave = 0; c.baScrape = 0;
+  c.baPitch = 0; c.baRoll = 0; c.baHeave = 0; c.baScrape = 0; c.baClear = PLANK_Y;
   return c._ba;
 }
 
@@ -112,7 +116,7 @@ function update(c, groundY, dt, ygV, dfFrac, vFrac) {
   if (!enabled) {
     s.p.x = s.p.v = s.r.x = s.r.v = s.z.x = s.z.v = 0;
     s.ygV0 = ygVSafe; s.prevYg = groundY; s.kerbM = 0;
-    c.baPitch = 0; c.baRoll = 0; c.baHeave = 0; c.baScrape = 0;
+    c.baPitch = 0; c.baRoll = 0; c.baHeave = 0; c.baScrape = 0; c.baClear = PLANK_Y;
     return ZERO;
   }
   const dtc = Math.max(0, Math.min(dt || 0, MAX_DT));
@@ -145,7 +149,7 @@ function update(c, groundY, dt, ygV, dfFrac, vFrac) {
   // never dived; corridorAccel is every car's signed observed accel (game.js,
   // updateCar), so since 2026-10-02 the field dives into braking zones too.
   const ax = c.human ? (c.axEstSm || 0) : (c.corridorAccel || 0);
-  const pitchT = clamp(-ax * PITCH_GAIN, -PITCH_MAX, PITCH_MAX);
+  const pitchT = clamp(-ax * PITCH_GAIN * (ax < 0 ? pitchScale : 1), -PITCH_MAX, PITCH_MAX);
   crit(s.p, pitchT, PITCH_OMEGA, dtc, pitchDecay);
 
   // roll ← lateral accel. HUMAN cars: real centripetal speed·yawRate (only they
@@ -185,7 +189,8 @@ function update(c, groundY, dt, ygV, dfFrac, vFrac) {
     shR = KERB_SHIVER_R * vF * ridge(i + 7919);
   }
 
-  c.baPitch = pitch; c.baRoll = roll; c.baHeave = heave; c.baScrape = scrape;
+  // c.baClear: the floor's clearance at its lowest point, m, after the plank stop (never under PLANK_STOP).
+  c.baPitch = pitch; c.baRoll = roll; c.baHeave = heave; c.baScrape = scrape; c.baClear = clear < PLANK_STOP ? PLANK_STOP : clear;
   _out.pitch = pitch; _out.roll = roll + shR; _out.heave = heave + shH;
   return _out;
 }
@@ -209,6 +214,13 @@ function setEnabled(v) {
   return status();
 }
 
+/** The Dive Test's anti-dive index (above): a finite k in [0, 1], anything else is 1. Returns the scale now set. */
+function setPitchScale(k) {
+  pitchScale = Number.isFinite(k) ? clamp(k, 0, 1) : 1;
+  return pitchScale;
+}
+const getPitchScale = () => pitchScale;
+
 function active() { return enabled; }
 function status() { return { enabled, offsets: offsets() }; }
 
@@ -219,6 +231,6 @@ function create(ctx) {
   return { update, reset, offsets, setEnabled, active, status };
 }
 
-return { create, update, reset, offsets, setEnabled, active, status };
+return { create, update, reset, offsets, setEnabled, setPitchScale, pitchScale: getPitchScale, active, status };
 })();
 Object.freeze(BodyAttitude);
