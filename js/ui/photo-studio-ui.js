@@ -9,7 +9,7 @@ const CAPTURE_RETRY_FRAMES = 8, CAPTURE_RETRY_MS = 1000;   // a capture draw ski
 // One frame, or a timer where rAF is paused (a hidden tab), whichever comes first.
 const nextFrame = () => new Promise(resolve => {
   const timer = setTimeout(resolve, CAPTURE_RETRY_MS / CAPTURE_RETRY_FRAMES);
-  requestAnimationFrame(() => { clearTimeout(timer); resolve(); });
+  if (typeof requestAnimationFrame === "function") requestAnimationFrame(() => { clearTimeout(timer); resolve(); });
 });
 // TIME and WEATHER are the engine's own discrete sets (js/race/weather-arc.js VALID, setTimeOfDay): no continuous clock exists.
 const TODS = [["dawn", "Dawn"], ["day", "Day"], ["dusk", "Dusk"], ["night", "Night"], ["default", "Track default"]];
@@ -931,10 +931,13 @@ function create(G, deps) {
    */
   async function frame(pass = null, rendered = null, studioRead = false) {
     const gfx = G.gfx;
-    if (gfx && gfx.invalidateSoftPresent && gfx.softPresent && gfx.softPresent()) gfx.invalidateSoftPresent();
     // Observe the display blit immediately. Its result matters only if the
-    // capture needs to copy the software canvas.
-    const pending = gfx && gfx.softPresent && gfx.softPresent() && gfx.awaitSoftPresent ? Promise.allSettled([gfx.awaitSoftPresent(15000)]) : null;
+    // capture needs to copy the software canvas. Re-armed after a retry wait so a blit during it cannot count.
+    const arm = () => {
+      if (gfx && gfx.invalidateSoftPresent && gfx.softPresent && gfx.softPresent()) gfx.invalidateSoftPresent();
+      return gfx && gfx.softPresent && gfx.softPresent() && gfx.awaitSoftPresent ? Promise.allSettled([gfx.awaitSoftPresent(15000)]) : null;
+    };
+    let pending = arm();
     const draws = pass ? pass.draws : 0;
     if (gfx && gfx.renderCaptureFrame && deps.renderFrame) {
       // A shader warm skips the draw right after a race load or a time change: wait a frame and retry (#7514).
@@ -942,6 +945,7 @@ function create(G, deps) {
         if (tries >= CAPTURE_RETRY_FRAMES || Date.now() - t0 >= CAPTURE_RETRY_MS) throw new Error("The scene is still getting ready");
         await nextFrame();
         if (!st.open || (pass && activePass !== pass)) throw new Error("Capture cancelled");
+        pending = arm();
       }
     } else if (deps.renderFrame) deps.renderFrame();
     if (pass && pass.draws === draws) throw new Error("The scene is not ready to sample");
