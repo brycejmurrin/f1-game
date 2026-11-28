@@ -20,7 +20,11 @@ const trackIndex = (ref) => typeof ref === "number" ? ref : Tracks.LIST.findInde
 const finiteOrNil = (v) => v === undefined || v === null || (typeof v === "number" && isFinite(v));
 // update(NaN) wrote NaN into every car, and an infinite n never returned.
 const stepArgs = (dt, n) => [Number.isFinite(dt) && dt >= 0 ? dt : 1 / 60, Number.isFinite(n) && n >= 0 ? Math.floor(n) : 1];
-const simArgs = (dt, n) => ApexLobby.simSteps(...stepArgs(dt, n));   // whole 1/60 steps (apex-lobby.js)
+const simArgs = (dt, n) => ApexLobby.simSteps(...stepArgs(dt, n));   // whole 1/60 steps (apex-lobby.js), [d, n, capped]
+// race({laps}): `3e9 | 0` went negative, `2**32 + 5 | 0` read 5; the game has no max, so a named one.
+const MAX_AGENT_LAPS = 200, agentLaps = (v) => Number.isFinite(v) && v >= 1 ? Math.min(Math.round(v), MAX_AGENT_LAPS) : null;
+const badArg = (hook, name, v, fix) => ({ ok: false, error: "bad_argument", why: hook + "(): " + name + " must be a finite number",
+  message: hook + "() got " + name + " = " + (typeof v === "string" ? JSON.stringify(v) : String(v)), fix });
 // The three UI scales take a PERCENT. A fraction (1.6) or junk used to be
 // snapped and SAVED: uiScale(1.6) stored 40 %, uiScale("abc") the default.
 // null still resets; undefined reads.
@@ -810,6 +814,8 @@ const api = {
     if (!G.track) return false;
     const ai = G.cars.filter((c) => !c.isPlayer);
     if (ai.length < 2) return false;   // needs ≥2 AI cars — unavailable in time trial; checked BEFORE any state flip
+    if (!finiteOrNil(frac)) return badArg("pair", "frac", frac, "pass a lap fraction, e.g. pair(0.3)");   // was NaN prog
+    if (!finiteOrNil(speed)) return badArg("pair", "speed", speed, "pass m/s, e.g. pair(0.3, 55)");
     G.cmd.setState("race", "agent-pair"); G.raceT = Math.max(G.raceT, 1);
     resetStartLights(true);
     G.lightsLit = 0;   // the DOM alone leaves the counter at 5 — see the façade
@@ -828,6 +834,7 @@ const api = {
     if (!G.track || !G.player) return false;
     const ai = G.cars.filter((c) => !c.isPlayer);
     if (!ai.length) return false;   // no grid (menu / time trial): refuse before any state flip
+    if (!finiteOrNil(n)) return badArg("jam", "n", n, "pass a car count, e.g. jam(5)");   // jam("x") gave m = NaN
     G.cmd.setState("race", "agent-jam"); G.raceT = Math.max(G.raceT, 1);
     resetStartLights(true);
     G.lightsLit = 0;   // the DOM alone leaves the counter at 5 — see the façade
@@ -988,7 +995,7 @@ const api = {
     if (leavingCareer) restoreFreePlaySelection();
     G.trackIdx = i;   // the requested circuit overrides the restored free-play circuit
     G.timeTrial = false;
-    G.raceLaps = (opts && opts.laps > 0) ? (opts.laps | 0) : GAME_LAPS;
+    G.raceLaps = (opts && agentLaps(opts.laps)) || GAME_LAPS;   // rounded, 1..MAX_AGENT_LAPS
     // End the previous session's weather arc FIRST: startRace's restoreBase() puts a live MIXED
     // race's chip weather back over whatever is set below (every in-game exit does this).
     if (G.endWeatherSession) G.endWeatherSession();
@@ -1225,9 +1232,10 @@ const api = {
     G._testInput = next;
   },
   clearInput() { G._testInput = null; },
-  step(dt, n) {
-    const [d, count] = simArgs(dt, n);
+  step(dt, n) {   // undefined, or {capped, steps} when n was cut to ApexLobby.MAX_STEPS
+    const [d, count, capped] = simArgs(dt, n);
     for (let i = 0; i < count; i++) simTick(d);
+    if (capped) return { capped: true, steps: count };
   },
   // Deterministic tilt emulation for the autopilot harness. `step(deg, dt)` runs a
   // raw tilt angle (deg) through the real tilt pipeline (One-Euro filter + dead
@@ -1344,7 +1352,12 @@ const api = {
   // different pixels — the reason tests/manual/tracks-visual.spec.js could never hold a
   // baseline. Setting it makes a capture reproducible; it keeps advancing from
   // the value you set unless `hold` is true (or the scene is headless()).
-  renderClock(t, hold) { if (t !== undefined) { G.skyT = t; G.skyHold = !!hold; } return G.skyT; },
+  // A non-finite t ("noon", NaN) is refused, G.skyT kept; null only sets the hold.
+  renderClock(t, hold) {
+    if (t != null && !Number.isFinite(t)) return badArg("renderClock", "t", t, "pass seconds, e.g. renderClock(100, true)");
+    if (t !== undefined) { if (t !== null) G.skyT = t; G.skyHold = !!hold; }
+    return G.skyT;
+  },
   // The built track's scenery SCENE GRAPH (js/track/scenery/graph.js): the model library
   // + one node per placement, plus batches() — the backend-neutral instanced-draw
   // handoff. Returns null before a track is built. Live object, not a copy: read
@@ -1821,9 +1834,10 @@ const api = {
       G.lightsLit = 0;   // the DOM alone leaves the counter at 5 — see the façade
     }
     if (input !== undefined) G._testInput = input || null;
-    const [d, count] = simArgs(dt, n);
+    const [d, count, capped] = simArgs(dt, n);
     for (let i = 0; i < count; i++) simTick(d);
-    return this.obs();
+    const o = this.obs();
+    return capped && o ? Object.assign(o, { capped: true, steps: count }) : o;
   },
 
     ...ApexCam.hooks(G, { smp, smp2, camVantage, setCamMode, snapGameCam }), // peeled: G.camRoll G.cameraDampingState

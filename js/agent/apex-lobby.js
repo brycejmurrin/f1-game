@@ -51,15 +51,19 @@ const ApexLobby = (function () {
 
   // step()/act() (apex.js): the rAF loop only steps 1/60 (a 22-car race changed winner at 120 Hz), so
   // d*n runs as whole 1/60 steps, the remainder carried like its physAcc, warned once; dt 0 stays a refresh.
+  // MAX_STEPS bounds one call: step(1/60, 1e9) used to run a billion simTicks. One simulated hour (a
+  // full-distance race at 1/60) is far past any caller's need; the third slot says the call was cut.
+  const MAX_STEPS = 60 * 60 * 60;
   let dtWarned = false, dtAcc = 0;
   function simSteps(d, count) {
-    if (d === 0) return [0, count];
+    if (d === 0) return count > MAX_STEPS ? [0, MAX_STEPS, true] : [0, count, false];
     const k = d * 60;
     if (!dtWarned && Math.abs(k - Math.round(k)) > 1e-9) { dtWarned = true; Log.warn("apex", "step/act dt=" + d + " runs as whole 1/60 s steps (the game's only physics step)"); }
     dtAcc += d * count;
     const steps = Math.floor(dtAcc * 60 + 1e-9);
+    if (steps > MAX_STEPS) { dtAcc = 0; return [1 / 60, MAX_STEPS, true]; }   // the cut time is dropped, not carried
     dtAcc = Math.max(0, dtAcc - steps / 60);
-    return [1 / 60, steps];
+    return [1 / 60, steps, false];
   }
   // One step()/act() tick: render anchors first (the rAF loop snapshots them before each step), then update().
   function tick(G, d) {
@@ -238,6 +242,6 @@ carInput(idx, input) {
     };
   }
 
-  return { hooks, afterStep, observeLaps, simSteps, tick };
+  return { hooks, afterStep, observeLaps, simSteps, tick, MAX_STEPS };
 })();
 Object.freeze(ApexLobby);
