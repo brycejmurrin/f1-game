@@ -46,8 +46,8 @@ export function closureViolations(order, scan = scanFile, known = () => false) {
 }
 
 // Names the scanner reports as unguarded load-time reads though the source guards them with
-// `typeof X === "undefined" ? … : X…` (js/ui/screen-regions.js:49) or `typeof X !== "undefined" && X…`
-// (js/input/touch-button-actions.js:122, where GameStore loads later on controller.html). May only shrink;
+// `typeof X === "undefined" ? … : X…` (js/ui/screen-regions.js, SettingsNav.routes) or `typeof X !== "undefined" && X…`
+// (js/input/touch-button-actions.js GameStore guard, where GameStore loads later on controller.html). May only shrink;
 // the scanner fix (tools/check/scan-globals.mjs) is outside this PR's paths.
 const TYPEOF_GUARDED = new Set(["js/ui/screen-regions.js:SettingsNav", "js/input/touch-button-actions.js:GameStore"]);
 const known = (f, nm) => TYPEOF_GUARDED.has(`${f}:${nm}`);
