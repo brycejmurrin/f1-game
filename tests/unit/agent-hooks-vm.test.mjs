@@ -692,3 +692,54 @@ test("tyres({level}) after gridUp plans every car, so a finisher is not DSQ'd (#
   const bare = g.G.cars.filter((c) => !c.pitPlan);
   assert.equal(bare.length, 0, `${bare.length} car(s) have no pit plan after tyres({level})`);
 });
+
+// #7512 row 25: a named policy done on its first tick runs zero ticks. The ±Infinity
+// speed seeds used to come back as a success with min/max of ±Infinity (null in JSON).
+test("rollout with a named policy done on tick 0 reports ran 0 and no Infinity", async () => {
+  await load();
+  const had = Object.prototype.hasOwnProperty.call(g.sandbox, "SoakRun");
+  const prev = g.sandbox.SoakRun;
+  g.sandbox.SoakRun = { POLICY_NAMES: ["stub"],
+    policy: () => ({ name: "stub", step: () => null, done: () => "at-goal", release() {} }) };
+  try {
+    const r = g.apex.rollout({ seconds: 1, policy: "stub" });
+    assert.notEqual(r.ok, false, JSON.stringify(r));
+    assert.equal(r.ran.ticks, 0);
+    assert.equal(r.ran.stoppedEarly.reason, "policy:at-goal");
+    assert.equal(r.speedKph.min, null);
+    assert.equal(r.speedKph.max, null);
+    assert.equal(r.speedKph.mean, null);
+    assert.equal(r.minClearanceM, null);
+    assert.match(r.why, /no physics tick ran/);
+    const walk = (v) => { if (typeof v === "number") assert.ok(Number.isFinite(v), `non-finite ${v}`);
+      else if (v && typeof v === "object") Object.values(v).forEach(walk); };
+    walk(r);
+  } finally { if (had) g.sandbox.SoakRun = prev; else delete g.sandbox.SoakRun; }
+  const normal = g.apex.rollout({ seconds: 1, input: { steer: 0, throttle: true } });
+  gt(normal.ran.ticks, 0);
+  assert.equal(normal.why, undefined);
+  assert.equal(typeof normal.speedKph.min, "number");
+  assert.equal(typeof normal.minClearanceM, "number");
+});
+
+// #7512 row 24: a window of a full lap wrapped to s0 == s1 and matched one point.
+test("query with a full-lap window matches the same props as no window", async () => {
+  await load();
+  const total = g.G.track.total;
+  const all = g.apex.query({ limit: 1 }).matched;
+  gt(all, 0);
+  assert.equal(g.apex.query({ fromS: 0, toS: total, limit: 1 }).matched, all);
+  assert.equal(g.apex.query({ fromS: 100, toS: 100 + 2 * total, limit: 1 }).matched, all);
+  const part = g.apex.query({ fromS: 0, toS: 300, limit: 1 }).matched;
+  lt(part, all);
+  const wrapped = g.apex.query({ fromS: total - 200, toS: 200, limit: 1 }).matched;   // fromS > toS: still a window
+  gt(wrapped, 0); lt(wrapped, all);
+});
+
+// #7512 row 27: "use strict" is a directive only as the IIFE's first statement.
+test("agentview.js opens its IIFE with the use-strict directive", async () => {
+  const fs = await import("node:fs");
+  const src = fs.readFileSync(new URL("../../js/agent/agentview.js", import.meta.url), "utf8");
+  assert.match(src, /const AgentView = \(function \(\) \{\s*"use strict";/);
+  assert.equal(src.split('"use strict"').length - 1, 1);
+});
